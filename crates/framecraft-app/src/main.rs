@@ -95,18 +95,9 @@ fn App() -> Element {
         }
     });
 
-    // Closing with unsaved changes asks first: while there are any, the
-    // window hides instead of closing, and the close request shows it again
-    // with the prompt.
+    // Closing with unsaved changes asks first: the window hides instead of
+    // closing and is shown again with the prompt.
     let mut close_prompt = use_signal(|| false);
-    use_effect(move || {
-        let behaviour = if (ui.dirty)() {
-            dioxus::desktop::WindowCloseBehaviour::WindowHides
-        } else {
-            dioxus::desktop::WindowCloseBehaviour::WindowCloses
-        };
-        dioxus::desktop::window().set_close_behavior(behaviour);
-    });
     // Dioxus hides the window right after this handler sees the close
     // request (app handlers run first), so the window is shown again on the
     // next event the loop delivers.
@@ -122,6 +113,13 @@ fn App() -> Element {
             if state::debug() {
                 eprintln!("[close] requested, unsaved changes: {dirty}");
             }
+            // Decided here, just before Dioxus handles the request: close
+            // (and exit), or hide and come back with the prompt.
+            dioxus::desktop::window().set_close_behavior(if dirty {
+                dioxus::desktop::WindowCloseBehaviour::WindowHides
+            } else {
+                dioxus::desktop::WindowCloseBehaviour::WindowCloses
+            });
             if dirty {
                 close_prompt.set(true);
                 reshow.set(true);
