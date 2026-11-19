@@ -85,14 +85,14 @@ pub trait Command {
     fn label(&self, doc: &Document) -> String;
 }
 
-fn item_mut<'a>(doc: &'a mut Document, id: &str) -> Result<&'a mut Item, CommandError> {
+pub(crate) fn item_mut<'a>(doc: &'a mut Document, id: &str) -> Result<&'a mut Item, CommandError> {
     doc.items
         .iter_mut()
         .find(|i| i.id == id)
         .ok_or_else(|| CommandError::NoSuchItem(id.to_string()))
 }
 
-fn item_name(doc: &Document, id: &str) -> String {
+pub(crate) fn item_name(doc: &Document, id: &str) -> String {
     doc.items
         .iter()
         .find(|i| i.id == id)
@@ -104,7 +104,7 @@ pub const TRANSFORM_LANES: [&str; 8] = [
     "x", "y", "width", "height", "rotation", "scaleX", "scaleY", "opacity",
 ];
 
-fn set_number(item: &mut Item, field: &str, v: f64) -> Result<(), CommandError> {
+pub(crate) fn set_number(item: &mut Item, field: &str, v: f64) -> Result<(), CommandError> {
     match field {
         "x" => item.x = v,
         "y" => item.y = v,
@@ -116,6 +116,8 @@ fn set_number(item: &mut Item, field: &str, v: f64) -> Result<(), CommandError> 
         "opacity" => item.opacity = v.clamp(0.0, 1.0),
         "pivotX" => item.pivot_x = Some(v),
         "pivotY" => item.pivot_y = Some(v),
+        "fontSize" => item.font_size = Some(v.max(1.0)),
+        "borderWidth" => item.border_width = v.max(0.0),
         _ => return Err(CommandError::UnknownField(field.to_string())),
     }
     Ok(())
@@ -276,7 +278,7 @@ impl Command for SetLocked {
 /// Keys closer than this (ms) count as the same key.
 const SAME_TIME_MS: f64 = 0.5;
 
-fn track_mut<'a>(doc: &'a mut Document, item: &str) -> &'a mut ItemTrack {
+pub(crate) fn track_mut<'a>(doc: &'a mut Document, item: &str) -> &'a mut ItemTrack {
     let tracks = &mut doc.timeline.item_tracks;
     let i = match tracks.iter().position(|t| t.item_id == item) {
         Some(i) => i,
@@ -711,7 +713,11 @@ fn set_path(
     Ok(())
 }
 
-fn with_json<T>(target: &mut T, path: &str, value: serde_json::Value) -> Result<(), CommandError>
+pub(crate) fn with_json<T>(
+    target: &mut T,
+    path: &str,
+    value: serde_json::Value,
+) -> Result<(), CommandError>
 where
     T: serde::Serialize + serde::de::DeserializeOwned,
 {

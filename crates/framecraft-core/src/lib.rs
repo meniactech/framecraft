@@ -15,6 +15,7 @@ pub mod commands;
 pub mod easing;
 pub mod export;
 pub mod js;
+pub mod keys;
 pub mod layers;
 pub mod manipulate;
 pub mod model;
