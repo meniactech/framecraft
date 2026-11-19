@@ -1,0 +1,17 @@
+[workspace]
+resolver = "3"
+members = ["crates/framecraft-core", "crates/framecraft-app"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+license = "AGPL-3.0-or-later"
+repository = "https://github.com/meniactech/FrameCraft"
+authors = ["MENiAC"]
+rust-version = "1.85"
+
+[workspace.dependencies]
+framecraft-core = { path = "crates/framecraft-core" }
+
+[profile.release]
+lto = "thin"

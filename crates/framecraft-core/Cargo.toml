@@ -1,0 +1,11 @@
+[package]
+name = "framecraft-core"
+description = "FrameCraft core: document model, timeline evaluation and HTML graphics export. No UI."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[dependencies]

@@ -1,0 +1,17 @@
+[package]
+name = "framecraft-app"
+description = "FrameCraft desktop app."
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+rust-version.workspace = true
+
+[[bin]]
+name = "framecraft"
+path = "src/main.rs"
+
+[dependencies]
+framecraft-core.workspace = true
+# The Dioxus desktop UI is added in step 4 (UI test build).
