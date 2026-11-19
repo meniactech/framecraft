@@ -406,6 +406,39 @@ fn empty_node(el: &Element, children: &str) -> String {
     )
 }
 
+/// One layer's markup with `inner` as its nested layers.
+fn node_html(el: &Element, inner: &str) -> String {
+    match el.kind.as_str() {
+        "shape" => shape_node(el, inner),
+        "text" => text_node(el, inner),
+        "image" => image_node(el, inner),
+        "imageSlot" => image_slot_node(el, inner),
+        "chart" => chart_node(el, inner),
+        "qr" => qr_node(el, inner),
+        "particles" => canvas_node(el, "particlesItem", "prt", inner),
+        "lightning" => canvas_node(el, "lightningItem", "ltn", inner),
+        "pattern" => canvas_node(el, "patternItem", "pat", inner),
+        "lottie" => canvas_node(el, "lottieItem", "lot", inner),
+        "video" => video_node(el, inner),
+        "empty" => empty_node(el, inner),
+        _ => String::new(),
+    }
+}
+
+/// One layer's own markup, without its nested layers (an editor swaps it
+/// in and keeps the existing children). Rendered as if the children were
+/// there, since some types wrap differently when they have children.
+pub fn element_html(t: &TemplateExport, id: &str) -> Option<String> {
+    const MARK: &str = "<!--framecraft-children-->";
+    let el = t.elements.iter().find(|e| e.id == id)?;
+    let has_children = t
+        .elements
+        .iter()
+        .any(|e| e.parent_id.as_deref() == Some(id));
+    let html = node_html(el, if has_children { MARK } else { "" });
+    Some(html.replace(MARK, "").trim().to_string())
+}
+
 /// Layer markup, nested by parent so a parent's crop and mask also clip its
 /// children. Elements whose parent was not exported are left out, as in
 /// FRAME.
@@ -425,21 +458,7 @@ pub fn layers_html(t: &TemplateExport) -> String {
             .map(|c| render(c, children))
             .collect();
         let inner = inner.join("\n");
-        match el.kind.as_str() {
-            "shape" => shape_node(el, &inner),
-            "text" => text_node(el, &inner),
-            "image" => image_node(el, &inner),
-            "imageSlot" => image_slot_node(el, &inner),
-            "chart" => chart_node(el, &inner),
-            "qr" => qr_node(el, &inner),
-            "particles" => canvas_node(el, "particlesItem", "prt", &inner),
-            "lightning" => canvas_node(el, "lightningItem", "ltn", &inner),
-            "pattern" => canvas_node(el, "patternItem", "pat", &inner),
-            "lottie" => canvas_node(el, "lottieItem", "lot", &inner),
-            "video" => video_node(el, &inner),
-            "empty" => empty_node(el, &inner),
-            _ => String::new(),
-        }
+        node_html(el, &inner)
     }
     children
         .get(&None)

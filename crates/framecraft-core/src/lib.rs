@@ -17,6 +17,7 @@ pub mod js;
 pub mod model;
 pub mod normalize;
 pub mod pack;
+pub mod preview;
 pub mod profile;
 pub mod project;
 pub mod ramp;

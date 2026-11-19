@@ -149,7 +149,7 @@ pub fn suite_template_js_path(graphic_id: &str) -> String {
     )
 }
 
-fn export_for(req: &ExportRequest, fallback_id: &str, p: &Profile) -> TemplateExport {
+pub(crate) fn export_for(req: &ExportRequest, fallback_id: &str, p: &Profile) -> TemplateExport {
     let opts = ExportOptions {
         template_id: template_slug(req.graphic_name, fallback_id),
         palette_colors: req.palette_colors.to_vec(),
