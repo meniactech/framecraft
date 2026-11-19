@@ -57,6 +57,7 @@ pub enum CommandError {
     },
     UnknownField(String),
     WouldCreateCycle(String),
+    InvalidValue(String),
 }
 
 impl std::fmt::Display for CommandError {
@@ -70,6 +71,7 @@ impl std::fmt::Display for CommandError {
             } => write!(f, "{item} has no {lane} keyframe at {time_ms} ms"),
             Self::UnknownField(name) => write!(f, "unknown field {name}"),
             Self::WouldCreateCycle(id) => write!(f, "{id} cannot be moved inside itself"),
+            Self::InvalidValue(msg) => write!(f, "invalid value: {msg}"),
         }
     }
 }
@@ -572,6 +574,257 @@ impl Command for MoveItem {
     }
 }
 
+/// Which part of the graphic a field belongs to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum FieldTarget {
+    Item(String),
+    Scene,
+    Timeline,
+}
+
+/// How much of the preview a field affects (see [`Change`]).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Update {
+    None,
+    Pose,
+    Layer,
+    Rebuild,
+}
+
+/// Sets one field by its JSON path (`fontSize`, `shadow.x`,
+/// `borderRadius.0`). It goes through the model's own JSON form, so any
+/// field of a layer, the scene or the timeline can be set; a value of the
+/// wrong type is refused. `null` removes an optional field.
+pub struct SetField {
+    pub target: FieldTarget,
+    pub path: String,
+    pub value: serde_json::Value,
+    pub update: Update,
+}
+
+fn set_path(
+    root: &mut serde_json::Value,
+    path: &str,
+    value: serde_json::Value,
+) -> Result<(), String> {
+    use serde_json::Value;
+    let parts: Vec<&str> = path.split('.').collect();
+    let mut node = root;
+    for (i, part) in parts.iter().enumerate() {
+        let last = i + 1 == parts.len();
+        node = match node {
+            Value::Object(map) => {
+                if last {
+                    if value.is_null() {
+                        map.remove(*part);
+                    } else {
+                        map.insert(part.to_string(), value);
+                    }
+                    return Ok(());
+                }
+                map.entry(part.to_string())
+                    .or_insert_with(|| Value::Object(Default::default()))
+            }
+            Value::Array(list) => {
+                let index: usize = part
+                    .parse()
+                    .map_err(|_| format!("{part} is not an index"))?;
+                let slot = list
+                    .get_mut(index)
+                    .ok_or_else(|| format!("no element {index}"))?;
+                if last {
+                    *slot = value;
+                    return Ok(());
+                }
+                slot
+            }
+            _ => return Err(format!("{path}: {part} is inside a plain value")),
+        };
+    }
+    Ok(())
+}
+
+fn with_json<T>(target: &mut T, path: &str, value: serde_json::Value) -> Result<(), CommandError>
+where
+    T: serde::Serialize + serde::de::DeserializeOwned,
+{
+    let mut json = serde_json::to_value(&*target).expect("model serializes");
+    set_path(&mut json, path, value).map_err(CommandError::InvalidValue)?;
+    *target = serde_json::from_value(json)
+        .map_err(|e| CommandError::InvalidValue(format!("{path}: {e}")))?;
+    Ok(())
+}
+
+impl Command for SetField {
+    fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
+        match &self.target {
+            FieldTarget::Item(id) => with_json(item_mut(doc, id)?, &self.path, self.value.clone())?,
+            FieldTarget::Scene => with_json(&mut doc.scene, &self.path, self.value.clone())?,
+            FieldTarget::Timeline => with_json(&mut doc.timeline, &self.path, self.value.clone())?,
+        }
+        Ok(match (self.update, &self.target) {
+            (Update::None, _) => Change::None,
+            (Update::Pose, _) => Change::Pose,
+            (Update::Layer, FieldTarget::Item(id)) => Change::Layer(vec![id.clone()]),
+            (Update::Layer | Update::Rebuild, _) => Change::Rebuild,
+        })
+    }
+    fn label(&self, doc: &Document) -> String {
+        let field = self.path.split('.').next().unwrap_or(&self.path);
+        match &self.target {
+            FieldTarget::Item(id) => format!("Change {field} of {}", item_name(doc, id)),
+            FieldTarget::Scene => format!("Change scene {field}"),
+            FieldTarget::Timeline => format!("Change timeline {field}"),
+        }
+    }
+}
+
+/// Adds a layer on top (last in drawing order), with its parent set.
+pub struct AddItem {
+    pub item: Item,
+}
+
+impl Command for AddItem {
+    fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
+        if let Some(p) = self.item.parent_id.clone().flatten()
+            && !doc.items.iter().any(|i| i.id == p)
+        {
+            return Err(CommandError::NoSuchItem(p));
+        }
+        doc.items.push(self.item.clone());
+        Ok(Change::Rebuild)
+    }
+    fn label(&self, _doc: &Document) -> String {
+        format!("Add {}", self.item.name)
+    }
+}
+
+/// Duplicates layers with everything under them and their keyframes. Copies
+/// go on top, 20 px down and right, named "… Copy" (as in FRAME). Masks and
+/// path follows between copied layers point at the copies.
+pub struct DuplicateItems {
+    pub items: Vec<String>,
+    /// New ids, in the order the copies are made (filled by
+    /// [`DuplicateItems::new`] so that redo makes the same ids).
+    ids: Vec<String>,
+}
+
+impl DuplicateItems {
+    pub fn new(doc: &Document, items: Vec<String>) -> Self {
+        let roots = Self::roots(doc, &items);
+        let count = roots.iter().map(|r| subtree(doc, r).len()).sum();
+        Self {
+            items,
+            ids: (0..count).map(|_| crate::layers::new_id()).collect(),
+        }
+    }
+
+    /// Selected layers that are not inside another selected layer.
+    fn roots(doc: &Document, items: &[String]) -> Vec<String> {
+        items
+            .iter()
+            .filter(|id| {
+                !items
+                    .iter()
+                    .any(|other| other != *id && subtree(doc, other).contains(id))
+            })
+            .cloned()
+            .collect()
+    }
+
+    /// Ids of the copies of the selected layers, after [`Command::apply`].
+    pub fn copy_ids(&self, doc: &Document) -> Vec<String> {
+        let roots = Self::roots(doc, &self.items);
+        let mut out = Vec::new();
+        let mut next = 0;
+        for r in &roots {
+            if let Some(id) = self.ids.get(next) {
+                out.push(id.clone());
+            }
+            next += subtree(doc, r).len();
+        }
+        out
+    }
+}
+
+impl Command for DuplicateItems {
+    fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
+        for id in &self.items {
+            if !doc.items.iter().any(|i| &i.id == id) {
+                return Err(CommandError::NoSuchItem(id.clone()));
+            }
+        }
+        let roots = Self::roots(doc, &self.items);
+        let mut map: Vec<(String, String)> = Vec::new();
+        let mut fresh = self.ids.iter();
+        for r in &roots {
+            for old in subtree(doc, r) {
+                let new = fresh.next().cloned().unwrap_or_else(crate::layers::new_id);
+                map.push((old, new));
+            }
+        }
+        let lookup = |id: &str| map.iter().find(|(o, _)| o == id).map(|(_, n)| n.clone());
+        let mut copies = Vec::new();
+        // In drawing order, so the copies keep the originals' stacking.
+        for item in doc.items.iter().filter(|i| lookup(&i.id).is_some()) {
+            let mut c = item.clone();
+            c.id = lookup(&item.id).expect("mapped");
+            if let Some(p) = item.parent_id.clone().flatten().and_then(|p| lookup(&p)) {
+                c.parent_id = Some(Some(p));
+            }
+            if roots.contains(&item.id) {
+                c.x += 20.0;
+                c.y += 20.0;
+                let base = item.name.trim();
+                let base = if base.is_empty() { "Item" } else { base };
+                c.name = if base.to_lowercase().ends_with(" copy") {
+                    format!("{base} 2")
+                } else {
+                    format!("{base} Copy")
+                };
+            }
+            for m in c.modifiers.iter_mut().flatten() {
+                match m {
+                    crate::model::Modifier::Mask(mask) => {
+                        mask.id = crate::layers::new_id();
+                        if let Some(n) = mask.source_element_id.as_deref().and_then(lookup) {
+                            mask.source_element_id = Some(n);
+                        }
+                    }
+                    crate::model::Modifier::PathFollow(pf) => {
+                        pf.id = crate::layers::new_id();
+                        if let Some(n) = lookup(&pf.source_element_id) {
+                            pf.source_element_id = n;
+                        }
+                    }
+                    _ => {}
+                }
+            }
+            copies.push(c);
+        }
+        let tracks: Vec<ItemTrack> = doc
+            .timeline
+            .item_tracks
+            .iter()
+            .filter_map(|t| {
+                lookup(&t.item_id).map(|n| ItemTrack {
+                    item_id: n,
+                    ..t.clone()
+                })
+            })
+            .collect();
+        doc.items.extend(copies);
+        doc.timeline.item_tracks.extend(tracks);
+        Ok(Change::Rebuild)
+    }
+    fn label(&self, doc: &Document) -> String {
+        match self.items.as_slice() {
+            [one] => format!("Duplicate {}", item_name(doc, one)),
+            many => format!("Duplicate {} layers", many.len()),
+        }
+    }
+}
+
 /// One undo step.
 struct Step {
     label: String,
@@ -1000,6 +1253,92 @@ mod tests {
             Some(Some("a".into()))
         );
         assert_eq!(ids(&d), vec!["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn set_field_by_path() {
+        use serde_json::json;
+        let mut d = doc();
+        let mut h = History::default();
+        let set = |path: &str, value: serde_json::Value| SetField {
+            target: FieldTarget::Item("a".into()),
+            path: path.into(),
+            value,
+            update: Update::Layer,
+        };
+        assert_eq!(
+            h.execute(&mut d, &set("shadow.x", json!(4))).unwrap(),
+            Change::Layer(vec!["a".into()])
+        );
+        h.execute(&mut d, &set("borderRadius.2", json!(9))).unwrap();
+        h.execute(&mut d, &set("textColor", json!("#ff0000")))
+            .unwrap();
+        let a = d.items.iter().find(|i| i.id == "a").unwrap();
+        assert_eq!(
+            (a.shadow.x, a.border_radius[2], a.text_color.as_deref()),
+            (4.0, 9.0, Some("#ff0000"))
+        );
+        // Wrong types are refused and change nothing.
+        let before = d.clone();
+        assert!(h.execute(&mut d, &set("opacity", json!("high"))).is_err());
+        assert!(h.execute(&mut d, &set("borderRadius.9", json!(1))).is_err());
+        assert_eq!(d, before);
+        // null removes an optional field.
+        h.execute(&mut d, &set("textColor", serde_json::Value::Null))
+            .unwrap();
+        assert_eq!(
+            d.items.iter().find(|i| i.id == "a").unwrap().text_color,
+            None
+        );
+        // Scene and timeline fields.
+        let scene = SetField {
+            target: FieldTarget::Scene,
+            path: "width".into(),
+            value: json!(1280),
+            update: Update::Rebuild,
+        };
+        assert_eq!(h.execute(&mut d, &scene).unwrap(), Change::Rebuild);
+        assert_eq!(d.scene.width, 1280.0);
+        let tl = SetField {
+            target: FieldTarget::Timeline,
+            path: "duration".into(),
+            value: json!(5000),
+            update: Update::Rebuild,
+        };
+        h.execute(&mut d, &tl).unwrap();
+        assert_eq!(d.timeline.duration, 5000.0);
+    }
+
+    #[test]
+    fn add_and_duplicate() {
+        let mut d = doc();
+        let mut h = History::default();
+        let item = crate::layers::new_layer(crate::layers::NewLayer::Text, Some("a"));
+        let new_id = item.id.clone();
+        h.execute(&mut d, &AddItem { item }).unwrap();
+        assert_eq!(d.items.last().unwrap().id, new_id);
+        // Duplicate "a" with its children b, d and the new text; c is not copied.
+        let dup = DuplicateItems::new(&d, vec!["a".into(), "b".into()]);
+        h.execute(&mut d, &dup).unwrap();
+        assert_eq!(d.items.len(), 5 + 4);
+        let copies = dup.copy_ids(&d);
+        assert_eq!(copies.len(), 1);
+        let copy = d.items.iter().find(|i| i.id == copies[0]).unwrap();
+        assert_eq!((copy.name.as_str(), copy.x), ("A Copy", 20.0));
+        // The copy of b sits under the copy of a.
+        let b_copy = d
+            .items
+            .iter()
+            .find(|i| i.name == "B" && i.id != "b")
+            .unwrap();
+        assert_eq!(b_copy.parent_id, Some(Some(copies[0].clone())));
+        // Undo and redo make the same ids.
+        let after = d.clone();
+        h.undo(&mut d);
+        h.redo(&mut d);
+        assert_eq!(d, after);
+        // c's keyframes were copied for... nothing: c was not duplicated.
+        assert_eq!(d.timeline.item_tracks.len(), 1);
     }
 
     #[test]
