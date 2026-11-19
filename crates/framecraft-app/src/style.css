@@ -58,7 +58,8 @@ button.active { background: var(--accent); border-color: var(--accent); }
 .stage iframe.active { visibility: visible; }
 button:disabled { opacity: .45; cursor: default; }
 
-.properties { background: var(--panel); border-left: 1px solid var(--line); padding: 12px; overflow: auto; }
+.properties { background: var(--panel); border-left: 1px solid var(--line); display: flex; min-height: 0; overflow: hidden; }
+.prop-body { flex: 1; min-width: 0; padding: 12px; overflow: auto; }
 .properties h3 { margin: 4px 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
 .layer-name { margin: 0 0 12px; font-weight: 600; }
 .field { display: grid; grid-template-columns: 80px 1fr 16px; align-items: center; gap: 8px; margin-bottom: 6px; }
@@ -144,9 +145,6 @@ button:disabled { opacity: .45; cursor: default; }
 .row-toggle:hover { opacity: 1; }
 body.row-dragging, body.row-dragging * { cursor: grabbing !important; }
 
-.tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
-.tab { padding: 3px 10px; }
-.tab.active { background: var(--accent); border-color: var(--accent); }
 .properties h3 { margin-top: 14px; }
 .field { grid-template-columns: 90px minmax(0, 1fr) 22px; }
 .field.wide { grid-template-columns: 1fr; }
@@ -337,8 +335,6 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .context-catcher { position: fixed; inset: 0; z-index: 29; }
 .context-menu { position: fixed; z-index: 30; display: flex; flex-direction: column; min-width: 170px; }
 /* Tab icons, easing picker, plates */
-.tab { display: inline-flex; align-items: center; gap: 4px; }
-.tab-icon { width: 14px; height: 14px; object-fit: contain; }
 .easing-button { display: inline-flex; align-items: center; gap: 6px; }
 .easing-button img { width: 18px; height: 18px; border-radius: 3px; }
 .easing-palette { width: min(720px, 92vw); max-height: 85vh; display: flex; flex-direction: column; gap: 8px; padding: 12px; }
@@ -386,3 +382,10 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .export-row button { flex: none; }
 .export-missing { border: 1px solid #f59e0b; border-radius: 6px; padding: 8px; margin: 6px 0; background: #2a2416; font-size: 12px; }
 .export-missing ul { margin: 6px 0; padding-left: 18px; max-height: 140px; overflow: auto; }
+/* Properties tab rail: icon tabs stacked on the left (FRAME, Blender). */
+.tab-rail { flex: none; width: 36px; display: flex; flex-direction: column; gap: 2px; padding: 6px 4px; border-right: 1px solid var(--line); background: var(--bg); overflow-y: auto; }
+.tab { width: 28px; height: 30px; padding: 0; display: flex; align-items: center; justify-content: center; border-color: transparent; background: none; border-radius: 4px; }
+.tab:hover { background: var(--panel); }
+.tab.active { background: var(--panel-2); border-color: var(--line); }
+.tab-icon { width: 20px; height: 20px; object-fit: contain; opacity: .7; pointer-events: none; }
+.tab.active .tab-icon { opacity: 1; }

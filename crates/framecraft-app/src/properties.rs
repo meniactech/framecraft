@@ -250,7 +250,8 @@ pub fn Properties(ui: Ui) -> Element {
 
     rsx! {
         div { class: "properties",
-            div { class: "tabs",
+            // Icon tabs stacked on the left, as in FRAME (and Blender).
+            div { class: "tab-rail", role: "tablist",
                 for t in tabs {
                     button {
                         class: if t == tab { "tab active" } else { "tab" },
@@ -262,13 +263,13 @@ pub fn Properties(ui: Ui) -> Element {
                         img {
                             class: "tab-icon",
                             src: crate::preview::library_url(&format!("/icons/properties/{}.svg", t.icon())),
-                            alt: "",
+                            alt: "{t.label()}",
                             draggable: "false",
                         }
-                        "{t.label()}"
                     }
                 }
             }
+            div { class: "prop-body",
             p { class: "layer-name", "{heading}" }
             if tab == Tab::Script {
                 crate::script_editor::ScriptTab { ui }
@@ -300,6 +301,7 @@ pub fn Properties(ui: Ui) -> Element {
                 for family in schema::builtin_font_families() {
                     option { value: "{family}" }
                 }
+            }
             }
         }
     }
