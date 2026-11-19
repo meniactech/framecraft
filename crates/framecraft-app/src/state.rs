@@ -21,7 +21,10 @@ use std::time::Duration;
 pub struct Editor {
     pub project: Project,
     pub graphic: usize,
+    /// The primary selected layer (properties and timeline show it).
     pub selected: Option<String>,
+    /// Other selected layers (multi-select), primary not included.
+    pub also: Vec<String>,
     /// One undo history per graphic.
     histories: Vec<History>,
     /// What the loaded preview was built from.
@@ -31,6 +34,15 @@ pub struct Editor {
 impl Editor {
     pub fn doc(&self) -> &Document {
         &self.project.docs[self.graphic]
+    }
+
+    /// Every selected layer, the primary first.
+    pub fn selection(&self) -> Vec<String> {
+        self.selected
+            .iter()
+            .chain(self.also.iter())
+            .cloned()
+            .collect()
     }
 
     pub fn history(&self) -> &History {
@@ -278,6 +290,7 @@ impl Ui {
             project,
             graphic: 0,
             selected: None,
+            also: Vec::new(),
             histories,
             preview: None,
         }));
@@ -671,6 +684,7 @@ impl Ui {
         {
             e.graphic = index;
             e.selected = None;
+            e.also.clear();
         }
         self.geometry.set(Vec::new());
         self.keys.set(Vec::new());
@@ -682,25 +696,61 @@ impl Ui {
         self.rebuild();
     }
 
-    pub fn select_layer(mut self, id: Option<String>) {
+    pub fn select_layer(self, id: Option<String>) {
+        self.set_selection(id, Vec::new());
+    }
+
+    /// Sets the selection: the primary layer and the others.
+    pub fn set_selection(mut self, primary: Option<String>, others: Vec<String>) {
+        let others: Vec<String> = others
+            .into_iter()
+            .filter(|o| Some(o) != primary.as_ref())
+            .collect();
         let changed = self
             .editor
             .peek()
             .as_ref()
-            .is_some_and(|e| e.selected != id);
+            .is_some_and(|e| e.selected != primary);
         if let Some(e) = self.editor.write().as_mut() {
-            e.selected = id.clone();
+            e.selected = primary.clone();
+            e.also = if primary.is_some() {
+                others
+            } else {
+                Vec::new()
+            };
         }
         if changed {
-            self.geometry.set(Vec::new());
             self.keys.set(Vec::new());
             self.cue.set(None);
         }
-        bridge::select(&id.into_iter().collect::<Vec<_>>());
+        let all = self.selection();
+        let mut geometry = self.geometry;
+        geometry.set(Vec::new());
+        bridge::select(&all);
     }
 
-    /// Starts an undo gesture (a drag): commands until
-    /// [`Ui::end_gesture`] are one undo step.
+    /// Ctrl+click: adds a layer to the selection (it becomes primary), or
+    /// removes it.
+    pub fn toggle_layer(self, id: &str) {
+        let current = self.selection();
+        if current.iter().any(|x| x == id) {
+            let rest: Vec<String> = current.into_iter().filter(|x| x != id).collect();
+            let primary = rest.first().cloned();
+            self.set_selection(primary, rest);
+        } else {
+            self.set_selection(Some(id.to_string()), current);
+        }
+    }
+
+    /// Every selected layer, the primary first.
+    pub fn selection(&self) -> Vec<String> {
+        self.editor
+            .peek()
+            .as_ref()
+            .map(|e| e.selection())
+            .unwrap_or_default()
+    }
+
     /// Aligns the selected layer (FRAME's align tools). One layer aligns to
     /// its parent's box, or to the scene; positions are set at the
     /// playhead (keys with Auto-key), as one undo step.
@@ -709,6 +759,10 @@ impl Ui {
         use framecraft_core::manipulate::align_box;
         use framecraft_core::timeline::pose_at;
         let (time, auto_key) = (*self.time.peek(), *self.auto_key.peek());
+        if self.selection().len() > 1 {
+            self.align_together(mode);
+            return;
+        }
         let planned = self.editor.peek().as_ref().and_then(|e| {
             let doc = e.doc();
             let id = e.selected.clone()?;
@@ -751,6 +805,8 @@ impl Ui {
         self.end_gesture();
     }
 
+    /// Starts an undo gesture (a drag): commands until
+    /// [`Ui::end_gesture`] are one undo step.
     pub fn begin_gesture(mut self, label: String) {
         if let Some(e) = self.editor.write().as_mut() {
             let g = e.graphic;
@@ -1013,28 +1069,86 @@ impl Ui {
         self.select_layer(Some(id));
     }
 
-    /// Duplicates the selected layer (with its children) and selects the copy.
-    pub fn duplicate_selected(self) {
-        let Some(id) = self.selected() else { return };
-        let cmd = match self.editor.peek().as_ref() {
-            Some(e) => DuplicateItems::new(e.doc(), vec![id]),
-            None => return,
-        };
-        self.execute(&cmd);
-        let copy = self
+    /// Several layers aligned to their joint bounds (FRAME's multi-select
+    /// align), one undo step.
+    fn align_together(self, mode: &str) {
+        use framecraft_core::commands::SetValueAt;
+        use framecraft_core::manipulate::{align_box, bounds_of};
+        use framecraft_core::timeline::pose_at;
+        let (time, auto_key) = (*self.time.peek(), *self.auto_key.peek());
+        let ids = self.selection();
+        let cmds: Vec<Box<dyn Command>> = self
             .editor
             .peek()
             .as_ref()
-            .and_then(|e| cmd.copy_ids(e.doc()).into_iter().next());
-        if copy.is_some() {
-            self.select_layer(copy);
+            .map(|e| {
+                let doc = e.doc();
+                let boxes: Vec<(String, (f64, f64, f64, f64))> = ids
+                    .iter()
+                    .filter_map(|id| {
+                        let item = doc.items.iter().find(|i| &i.id == id)?;
+                        let p = pose_at(doc, item, time);
+                        Some((id.clone(), (p.x, p.y, p.width, p.height)))
+                    })
+                    .collect();
+                let Some(area) = bounds_of(&boxes.iter().map(|(_, b)| *b).collect::<Vec<_>>())
+                else {
+                    return Vec::new();
+                };
+                let mut cmds: Vec<Box<dyn Command>> = Vec::new();
+                for (id, b) in boxes {
+                    let (x, y) = align_box(mode, b, area);
+                    for (lane, from, to) in [("x", b.0, x), ("y", b.1, y)] {
+                        if (from - to).abs() > 1e-9 {
+                            cmds.push(Box::new(SetValueAt {
+                                item: id.clone(),
+                                lane: lane.into(),
+                                time_ms: time,
+                                value: to,
+                                auto_key,
+                            }));
+                        }
+                    }
+                }
+                cmds
+            })
+            .unwrap_or_default();
+        if cmds.is_empty() {
+            return;
+        }
+        self.begin_gesture(format!("Align {} layers", ids.len()));
+        self.execute_all(&cmds);
+        self.end_gesture();
+    }
+
+    /// Duplicates the selected layers (with their children) and selects
+    /// the copies.
+    pub fn duplicate_selected(self) {
+        let ids = self.selection();
+        if ids.is_empty() {
+            return;
+        }
+        let cmd = match self.editor.peek().as_ref() {
+            Some(e) => DuplicateItems::new(e.doc(), ids),
+            None => return,
+        };
+        self.execute(&cmd);
+        let copies = self
+            .editor
+            .peek()
+            .as_ref()
+            .map(|e| cmd.copy_ids(e.doc()))
+            .unwrap_or_default();
+        if let Some(first) = copies.first().cloned() {
+            self.set_selection(Some(first), copies);
         }
     }
 
     pub fn delete_selected(self) {
-        if let Some(id) = self.selected() {
+        let ids = self.selection();
+        if !ids.is_empty() {
             self.select_layer(None);
-            self.execute(&DeleteItems { items: vec![id] });
+            self.execute(&DeleteItems { items: ids });
         }
     }
 

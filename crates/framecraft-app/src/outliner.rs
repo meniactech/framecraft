@@ -145,10 +145,15 @@ pub fn Outliner(ui: Ui) -> Element {
     // Right-click menu: where, and for which layer.
     let mut context = use_signal(|| None::<(f64, f64, String)>);
 
-    let (rows, selected) = match ui.editor.read().as_ref() {
-        Some(e) => (rows(e.doc(), &collapsed.read()), e.selected.clone()),
-        None => (Vec::new(), None),
+    let (rows, selected, selection) = match ui.editor.read().as_ref() {
+        Some(e) => (
+            rows(e.doc(), &collapsed.read()),
+            e.selected.clone(),
+            e.selection(),
+        ),
+        None => (Vec::new(), None, Vec::new()),
     };
+    let order: Vec<String> = rows.iter().map(|r| r.id.clone()).collect();
     let open = ui.editor.read().is_some();
 
     rsx! {
@@ -272,7 +277,8 @@ pub fn Outliner(ui: Ui) -> Element {
                 }
                 for row in rows {
                     {
-                        let is_selected = selected.as_deref() == Some(row.id.as_str());
+                        let is_selected = selection.contains(&row.id);
+                        let order = order.clone();
                         let class = format!(
                             "layer-row{}{}",
                             if is_selected { " selected" } else { "" },
@@ -297,7 +303,27 @@ pub fn Outliner(ui: Ui) -> Element {
                                 class: "{class}",
                                 "data-id": "{id}",
                                 style: "padding-left:{4 + depth * 14}px;",
-                                onclick: move |_| ui.select_layer(Some(id1.clone())),
+                                // Ctrl+click adds or removes; Shift+click
+                                // selects the rows from the primary layer.
+                                onclick: move |evt| {
+                                    let m = evt.modifiers();
+                                    if m.ctrl() || m.meta() {
+                                        ui.toggle_layer(&id1);
+                                    } else if m.shift() {
+                                        let anchor = ui.selected();
+                                        let at = |id: &str| order.iter().position(|x| x == id);
+                                        match anchor.as_deref().and_then(at).zip(at(&id1)) {
+                                            Some((a, b)) => {
+                                                let (lo, hi) = (a.min(b), a.max(b));
+                                                let range: Vec<String> = order[lo..=hi].to_vec();
+                                                ui.set_selection(Some(id1.clone()), range);
+                                            }
+                                            None => ui.select_layer(Some(id1.clone())),
+                                        }
+                                    } else {
+                                        ui.select_layer(Some(id1.clone()));
+                                    }
+                                },
                                 oncontextmenu: move |evt| {
                                     evt.prevent_default();
                                     ui.select_layer(Some(id_ctx.clone()));

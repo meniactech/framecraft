@@ -162,6 +162,9 @@ pub struct Drag {
     points: Option<Vec<framecraft_core::model::PolygonPoint>>,
     /// Where the layer was drawn when the drag began (point drags).
     geom: Option<Geom>,
+    /// Other selected layers moved along (multi-select): id, start pose and
+    /// parent frame.
+    group: Vec<(String, Pose, Frame)>,
 }
 
 fn near(a: Vec2, b: Vec2, reach: f64) -> bool {
@@ -256,6 +259,35 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
     let Some((start, parent, name, points)) = started else {
         return;
     };
+    // A move drags every selected (movable) layer along.
+    let group: Vec<(String, Pose, Frame)> = if mode == Mode::Move {
+        ui.editor
+            .peek()
+            .as_ref()
+            .map(|e| {
+                let doc = e.doc();
+                e.selection()
+                    .into_iter()
+                    .filter(|o| o != id && movable(doc, o))
+                    .filter_map(|o| {
+                        let item = doc.items.iter().find(|i| i.id == o)?;
+                        Some((
+                            o.clone(),
+                            pose_at(doc, item, time),
+                            parent_frame(doc, &o, time),
+                        ))
+                    })
+                    .collect()
+            })
+            .unwrap_or_default()
+    } else {
+        Vec::new()
+    };
+    let name = if group.is_empty() {
+        name
+    } else {
+        format!("{} layers", group.len() + 1)
+    };
     let verb = match mode {
         Mode::Move => "Move",
         Mode::Resize(_) => "Resize",
@@ -273,6 +305,7 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
         from,
         points,
         geom: ui.geometry.peek().iter().find(|g| g.id == id).cloned(),
+        group,
     }));
 }
 
@@ -324,7 +357,23 @@ fn pointer_down(ui: Ui, ev: &Value) {
         .peek()
         .as_ref()
         .and_then(|e| pick(e.doc(), &hits, current.as_deref(), alt));
-    ui.select_layer(picked.clone());
+    // Ctrl+click adds to or removes from the selection.
+    if flag(ev, "ctrl") {
+        if let Some(id) = picked {
+            ui.toggle_layer(&id);
+        }
+        return;
+    }
+    // Pressing a layer that is already selected keeps the selection (to
+    // drag them all); anything else selects just that layer.
+    let selection = ui.selection();
+    match &picked {
+        Some(id) if selection.len() > 1 && selection.contains(id) => {
+            let others = selection.into_iter().filter(|x| x != id).collect();
+            ui.set_selection(Some(id.clone()), others);
+        }
+        _ => ui.select_layer(picked.clone()),
+    }
     if let Some(id) = picked {
         let can_move = ui
             .editor
@@ -438,7 +487,13 @@ fn pointer_move(ui: Ui, ev: &Value) {
     let cmds: Vec<Box<dyn Command>> = match d.mode {
         Mode::Move => {
             let (x, y) = move_by(&d.start, &d.parent, d.from, p, shift);
-            vec![set(id, "x", t, x, auto), set(id, "y", t, y, auto)]
+            let mut cmds = vec![set(id, "x", t, x, auto), set(id, "y", t, y, auto)];
+            for (other, start, parent) in &d.group {
+                let (ox, oy) = move_by(start, parent, d.from, p, shift);
+                cmds.push(set(other, "x", t, ox, auto));
+                cmds.push(set(other, "y", t, oy, auto));
+            }
+            cmds
         }
         Mode::Resize(h) => {
             let (x, y, w, hh) = resize(&d.start, &d.parent, h, d.from, p, shift, alt);
@@ -570,17 +625,29 @@ fn key(ui: Ui, key: &str, shift: bool) {
                 _ => (0.0, step),
             };
             let (t, auto) = (*ui.time.peek(), *ui.auto_key.peek());
-            let target = ui.editor.peek().as_ref().and_then(|e| {
-                let id = e.selected.clone()?;
-                let doc = e.doc();
-                let item = doc.items.iter().find(|i| i.id == id)?;
-                movable(doc, &id).then(|| (id, pose_at(doc, item, t)))
-            });
-            if let Some((id, pose)) = target {
-                let cmds: Vec<Box<dyn Command>> = vec![
-                    set(&id, "x", t, pose.x + dx, auto),
-                    set(&id, "y", t, pose.y + dy, auto),
-                ];
+            // Every selected (movable) layer moves.
+            let cmds: Vec<Box<dyn Command>> = ui
+                .editor
+                .peek()
+                .as_ref()
+                .map(|e| {
+                    let doc = e.doc();
+                    e.selection()
+                        .into_iter()
+                        .filter(|id| movable(doc, id))
+                        .filter_map(|id| {
+                            let item = doc.items.iter().find(|i| i.id == id)?;
+                            let pose = pose_at(doc, item, t);
+                            Some([
+                                set(&id, "x", t, pose.x + dx, auto),
+                                set(&id, "y", t, pose.y + dy, auto),
+                            ])
+                        })
+                        .flatten()
+                        .collect()
+                })
+                .unwrap_or_default();
+            if !cmds.is_empty() {
                 ui.begin_gesture("Nudge".into());
                 ui.execute_all(&cmds);
                 ui.end_gesture();

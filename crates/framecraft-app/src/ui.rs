@@ -215,6 +215,23 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
     let geometry = ui.geometry.read();
     let editor = ui.editor.read();
     // What to draw for the selection, in scene coordinates.
+    // Outlines of the other selected layers (multi-select).
+    let others: Vec<String> = editor
+        .as_ref()
+        .map(|e| {
+            e.also
+                .iter()
+                .filter_map(|id| geometry.iter().find(|g| &g.id == id))
+                .map(|g| {
+                    g.corners
+                        .iter()
+                        .map(|(x, y)| format!("{x},{y}"))
+                        .collect::<Vec<_>>()
+                        .join(" ")
+                })
+                .collect()
+        })
+        .unwrap_or_default();
     let drawn = editor.as_ref().and_then(|e| {
         let id = e.selected.as_ref()?;
         let g: &Geom = geometry.iter().find(|g| &g.id == id)?;
@@ -256,6 +273,9 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 view_box: "0 0 {width} {height}",
                 width: "{width * zoom}",
                 height: "{height * zoom}",
+                for outline in others {
+                    polygon { class: "sel-outline other", points: "{outline}" }
+                }
                 if let Some((outline, handles, pivot, top, rotate, can_move, marks)) = drawn {
                     polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }
                     if can_move {
