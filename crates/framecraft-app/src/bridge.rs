@@ -24,7 +24,7 @@ if (!window.__fc) {
   const fc = (window.__fc = {
     time: 0, playing: false, raf: null, onStop: null,
     labelWidth: 200, pxPerMs: 0.1,
-    active: null, pending: null, retry: null, queue: [], seq: 0,
+    active: null, pending: null, retry: null, queue: [], seq: 0, wanted: null, waiting: null,
     loads: 0, swaps: 0, applied: 0, failed: 0,
     selection: [], send: null, outbox: [], drag: null, down: null,
   });
@@ -44,14 +44,29 @@ if (!window.__fc) {
     fc.post(msg);
     if (fc.pending) fc.queue.push(msg);
   };
-  // Loads a rebuilt preview into the hidden frame.
+  // Loads a rebuilt preview into the hidden frame. At start-up the frames
+  // may not exist yet, or sit in a stage that is not laid out
+  // (`display: none`); a page started there measures everything as zero,
+  // so wait until the frame has a layout box.
   fc.load = (url) => {
-    const all = frames();
-    const next = all.find((f) => f !== fc.active) || all[0];
-    if (!next) return;
-    fc.pending = next;
-    fc.queue = [];
-    next.src = url;
+    fc.wanted = url;
+    if (fc.waiting) return;
+    const t0 = performance.now();
+    const tryLoad = () => {
+      fc.waiting = null;
+      const all = frames();
+      const next = all.find((f) => f !== fc.active) || all[0];
+      const ready = next && next.getClientRects().length > 0 && next.clientWidth > 0;
+      if (!ready && performance.now() - t0 < 10000) {
+        fc.waiting = requestAnimationFrame(tryLoad);
+        return;
+      }
+      if (!next) return;
+      fc.pending = next;
+      fc.queue = [];
+      next.src = fc.wanted;
+    };
+    tryLoad();
   };
   fc.swap = () => {
     const next = fc.pending;
