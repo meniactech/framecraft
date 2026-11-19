@@ -28,13 +28,24 @@ pub fn ProjectView(ui: Ui) -> Element {
     let (name, graphics, current) = match ui.editor.read().as_ref() {
         Some(e) => (
             e.project.name().to_string(),
-            (0..e.project.docs.len())
-                .map(|i| e.project.graphic_name(i).to_string())
+            e.project
+                .media
+                .pack
+                .graphics
+                .iter()
+                .map(|g| {
+                    let thumb = g.thumbnail.as_ref().map(|t| {
+                        format!("data:image/jpeg;base64,{}", crate::export::encode_base64(t))
+                    });
+                    (g.name.clone(), thumb)
+                })
                 .collect::<Vec<_>>(),
             Some(e.graphic),
         ),
         None => (String::new(), Vec::new(), None),
     };
+    let has = !graphics.is_empty();
+    let count = graphics.len();
     let current_tab = tab();
     rsx! {
         div { class: "project-view",
@@ -51,19 +62,43 @@ pub fn ProjectView(ui: Ui) -> Element {
             }
             div { class: "project-body",
                 aside { class: "project-graphics",
-                    h3 { "Graphics" }
+                    div { class: "lib-section-head",
+                        h3 { "Graphics" }
+                        if has {
+                            button { title: "A new empty graphic", onclick: move |_| ui.add_graphic(), "+ New" }
+                        }
+                    }
+                    if has {
+                        div { class: "row-buttons wrap",
+                            button {
+                                title: "Import a .framepack.zip (graphic + images + fonts) into this project",
+                                onclick: move |_| ui.import_graphic_pack(),
+                                "Import Pack…"
+                            }
+                            button {
+                                title: "All graphics as one OGraf suite ZIP (default)",
+                                onclick: move |_| crate::export::export_suite(ui, true),
+                                "OGraf Suite…"
+                            }
+                            button {
+                                title: "All graphics as one SPX suite ZIP",
+                                onclick: move |_| crate::export::export_suite(ui, false),
+                                "SPX Suite…"
+                            }
+                        }
+                    }
                     if graphics.is_empty() {
                         p { class: "dim", "Open a project to see its graphics." }
                     }
-                    for (i , g) in graphics.into_iter().enumerate() {
-                        button {
-                            class: if current == Some(i) { "graphic-card active" } else { "graphic-card" },
-                            title: "Edit this graphic",
-                            onclick: move |_| {
-                                ui.select_graphic(i);
-                                open.set(false);
-                            },
-                            "{g}"
+                    for (i , (g , thumb)) in graphics.into_iter().enumerate() {
+                        GraphicCard {
+                            ui,
+                            index: i,
+                            name: g,
+                            thumb,
+                            current: current == Some(i),
+                            last: i + 1 == count,
+                            only: count == 1,
                         }
                     }
                 }
@@ -150,6 +185,112 @@ fn MediaTab(ui: Ui, category: &'static str) -> Element {
                             }
                         }
                         span { class: "media-name", "{name}" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// One graphic of the project (FRAME's project page card): open, rename,
+/// clone, move, export as a graphic pack, delete.
+#[component]
+fn GraphicCard(
+    ui: Ui,
+    index: usize,
+    name: String,
+    thumb: Option<String>,
+    current: bool,
+    last: bool,
+    only: bool,
+) -> Element {
+    let mut open = ui.project_view;
+    let mut renaming = use_signal(|| false);
+    let mut confirm = use_signal(|| false);
+    let i = index;
+    rsx! {
+        article { class: if current { "graphic-card active" } else { "graphic-card" },
+            button {
+                class: "graphic-thumb",
+                title: "Open in editor",
+                onclick: move |_| {
+                    ui.select_graphic(i);
+                    open.set(false);
+                },
+                if let Some(src) = thumb {
+                    img { src: "{src}", alt: "", draggable: "false" }
+                } else {
+                    span { class: "dim", "No thumbnail" }
+                }
+            }
+            if renaming() {
+                input {
+                    class: "graphic-rename",
+                    r#type: "text",
+                    value: "{name}",
+                    autofocus: true,
+                    onchange: move |evt| {
+                        ui.rename_graphic(i, &evt.value());
+                        renaming.set(false);
+                    },
+                    onkeydown: move |evt| {
+                        if evt.key() == Key::Escape {
+                            renaming.set(false);
+                        }
+                    },
+                }
+            } else {
+                span {
+                    class: "graphic-name",
+                    title: "Double-click to rename",
+                    ondoubleclick: move |_| renaming.set(true),
+                    "{name}"
+                    if current {
+                        span { class: "badge", "Open" }
+                    }
+                }
+            }
+            div { class: "graphic-actions",
+                button { class: "key-button", title: "Rename", onclick: move |_| renaming.set(true), "✎" }
+                button { class: "key-button", title: "Clone", onclick: move |_| ui.clone_graphic(i), "⧉" }
+                button {
+                    class: "key-button",
+                    title: "Move up",
+                    disabled: i == 0,
+                    onclick: move |_| ui.move_graphic(i, i - 1),
+                    "▲"
+                }
+                button {
+                    class: "key-button",
+                    title: "Move down",
+                    disabled: last,
+                    onclick: move |_| ui.move_graphic(i, i + 1),
+                    "▼"
+                }
+                button {
+                    class: "key-button",
+                    title: "Export this graphic as a FRAME graphic pack (.framepack.zip)",
+                    onclick: move |_| ui.export_graphic_pack(i),
+                    "⇩"
+                }
+                if confirm() {
+                    button {
+                        class: "danger",
+                        title: "Delete this graphic for good (not undoable)",
+                        onclick: move |_| {
+                            confirm.set(false);
+                            ui.delete_graphic(i);
+                        },
+                        "Delete?"
+                    }
+                    button { onclick: move |_| confirm.set(false), "Keep" }
+                } else {
+                    button {
+                        class: "key-button",
+                        title: if only { "A project keeps at least one graphic" } else { "Delete" },
+                        disabled: only,
+                        onclick: move |_| confirm.set(true),
+                        "✕"
                     }
                 }
             }

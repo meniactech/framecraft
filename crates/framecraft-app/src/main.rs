@@ -95,6 +95,30 @@ fn App() -> Element {
         }
     });
 
+    // Closing with unsaved changes asks first: while there are any, the
+    // window hides instead of closing, and the close request shows it again
+    // with the prompt.
+    let mut close_prompt = use_signal(|| false);
+    use_effect(move || {
+        let behaviour = if (ui.dirty)() {
+            dioxus::desktop::WindowCloseBehaviour::WindowHides
+        } else {
+            dioxus::desktop::WindowCloseBehaviour::WindowCloses
+        };
+        dioxus::desktop::window().set_close_behavior(behaviour);
+    });
+    dioxus::desktop::use_wry_event_handler(move |event, _| {
+        if let dioxus::desktop::tao::event::Event::WindowEvent {
+            event: dioxus::desktop::WindowEvent::CloseRequested,
+            ..
+        } = event
+            && *ui.dirty.peek()
+        {
+            dioxus::desktop::window().set_visible(true);
+            close_prompt.set(true);
+        }
+    });
+
     // Window title: project name, and • for unsaved changes.
     use_effect(move || {
         let name = ui
@@ -128,6 +152,9 @@ fn App() -> Element {
             components::ComponentNameDialog { ui }
             components::ComponentLibraryDialog { ui }
             RecoveryPrompt { ui }
+            if close_prompt() {
+                ClosePrompt { ui, open: close_prompt }
+            }
             script_editor::ScriptEditor { ui }
         }
     }
@@ -162,6 +189,65 @@ fn RecoveryPrompt(ui: Ui) -> Element {
                         title: "Open the autosaved version (save to keep it)",
                         onclick: move |_| ui.resolve_recovery(true),
                         "Restore"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Closing with unsaved changes: Cancel, Close without saving, or Save and
+/// close (a project not saved as a folder yet asks where first and stays
+/// open).
+#[component]
+fn ClosePrompt(ui: Ui, open: Signal<bool>) -> Element {
+    let has_folder = ui
+        .editor
+        .read()
+        .as_ref()
+        .is_some_and(|e| e.project.folder.is_some());
+    let close_now = move || {
+        let w = dioxus::desktop::window();
+        w.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
+        w.close();
+    };
+    rsx! {
+        div { class: "modal-backdrop",
+            div { class: "modal motion-dialog small",
+                div { class: "modal-head",
+                    div {
+                        span { class: "panel-title", "Unsaved changes" }
+                        p { class: "dim", "This project has changes that are not saved." }
+                    }
+                }
+                div { class: "motion-foot",
+                    span {}
+                    button { onclick: move |_| open.set(false), "Cancel" }
+                    button {
+                        title: "Close and lose the unsaved changes (the autosave copy is deleted too)",
+                        onclick: move |_| {
+                            let folder = ui.editor.peek().as_ref().and_then(|e| e.project.folder.clone());
+                            if let Some(dir) = folder {
+                                let _ = framecraft_core::project::Project::discard_recovery(&dir);
+                            }
+                            close_now();
+                        },
+                        "Close without saving"
+                    }
+                    button {
+                        class: "active",
+                        onclick: move |_| {
+                            open.set(false);
+                            if has_folder {
+                                ui.save();
+                                if !*ui.dirty.peek() {
+                                    close_now();
+                                }
+                            } else {
+                                ui.save_as();
+                            }
+                        },
+                        if has_folder { "Save and close" } else { "Save as…" }
                     }
                 }
             }

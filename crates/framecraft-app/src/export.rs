@@ -53,6 +53,67 @@ fn decode_base64(s: &str) -> Option<Vec<u8>> {
     Some(out)
 }
 
+/// Standard base64 (for small images shown inline, e.g. thumbnails).
+pub fn encode_base64(bytes: &[u8]) -> String {
+    const T: &[u8; 64] = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut out = String::with_capacity(bytes.len().div_ceil(3) * 4);
+    for c in bytes.chunks(3) {
+        let n = (u32::from(c[0]) << 16)
+            | (u32::from(*c.get(1).unwrap_or(&0)) << 8)
+            | u32::from(*c.get(2).unwrap_or(&0));
+        for i in 0..4 {
+            if i <= c.len() {
+                out.push(T[((n >> (18 - 6 * i)) & 63) as usize] as char);
+            } else {
+                out.push('=');
+            }
+        }
+    }
+    out
+}
+
+/// The whole project as an OGraf or SPX suite (Project view, FRAME's
+/// project page). Missing media are named in the status line.
+pub fn export_suite(ui: Ui, ograf: bool) {
+    let Some((project, folder, pkg)) = ui.editor.read().as_ref().map(|e| {
+        (
+            e.project.name().to_string(),
+            e.project.folder(),
+            e.project.suite(ograf),
+        )
+    }) else {
+        return;
+    };
+    let mut status = ui.status;
+    let bytes = match pkg.to_zip() {
+        Ok(b) => b,
+        Err(e) => {
+            status.set(format!("Suite export failed: {e}"));
+            return;
+        }
+    };
+    let base = file_base_name(&project, "project");
+    let file = if ograf {
+        format!("{base}-all-ograf.zip")
+    } else {
+        format!("{base}-all-spx.zip")
+    };
+    let mut missing = pkg.missing.clone();
+    missing.dedup();
+    spawn(async move {
+        save_as(ui, file, bytes, folder).await;
+        if !missing.is_empty() {
+            let mut status = ui.status;
+            let note = status.peek().clone();
+            status.set(format!(
+                "{note} — {} media file(s) missing: {}",
+                missing.len(),
+                missing.join(", ")
+            ));
+        }
+    });
+}
+
 /// Asks where to save (starting in the project's folder) and writes.
 async fn save_as(mut ui: Ui, file: String, bytes: Vec<u8>, folder: PathBuf) {
     let ext = file.rsplit('.').next().unwrap_or("zip").to_string();
@@ -252,6 +313,14 @@ pub fn ExportTab(ui: Ui) -> Element {
 #[cfg(test)]
 mod tests {
     use super::decode_base64;
+
+    #[test]
+    fn base64_round_trip() {
+        for s in [&b""[..], b"h", b"hi", b"hey", b"hello world"] {
+            assert_eq!(super::decode_base64(&super::encode_base64(s)).unwrap(), s);
+        }
+        assert_eq!(super::encode_base64(b"hi"), "aGk=");
+    }
 
     #[test]
     fn base64() {

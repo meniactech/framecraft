@@ -458,6 +458,126 @@ impl Project {
             .is_some_and(framecraft_core::project::Project::has_recovery)
     }
 
+    /// Adds an empty graphic (FRAME's + New Graphic) at the end; returns
+    /// its index.
+    pub fn add_graphic(&mut self) -> usize {
+        let doc = framecraft_core::project::new_graphic(&Profile::framecraft());
+        self.media
+            .pack
+            .graphics
+            .push(framecraft_core::pack::PackedGraphic {
+                id: framecraft_core::project::new_graphic_id(),
+                name: "Untitled Graphic".into(),
+                graphic: doc.to_graphic(),
+                thumbnail: None,
+            });
+        self.docs.push(doc);
+        self.docs.len() - 1
+    }
+
+    /// A copy of graphic `i` after it, named as FRAME does ("… Copy", or
+    /// "… copy 2"); returns the copy's index.
+    pub fn clone_graphic(&mut self, i: usize) -> Option<usize> {
+        let src = self.media.pack.graphics.get(i)?.clone();
+        let base = match src.name.trim() {
+            "" => "Graphic",
+            n => n,
+        };
+        let name = if base.to_lowercase().ends_with(" copy") {
+            format!("{base} 2")
+        } else {
+            format!("{base} Copy")
+        };
+        let doc = self.docs[i].clone();
+        self.media.pack.graphics.insert(
+            i + 1,
+            framecraft_core::pack::PackedGraphic {
+                id: framecraft_core::project::new_graphic_id(),
+                name,
+                graphic: doc.to_graphic(),
+                thumbnail: src.thumbnail,
+            },
+        );
+        self.docs.insert(i + 1, doc);
+        Some(i + 1)
+    }
+
+    pub fn rename_graphic(&mut self, i: usize, name: &str) {
+        if let Some(g) = self.media.pack.graphics.get_mut(i) {
+            let n = name.trim();
+            g.name = if n.is_empty() {
+                "Untitled Graphic".into()
+            } else {
+                n.to_string()
+            };
+        }
+    }
+
+    /// Removes graphic `i` (a project keeps at least one).
+    pub fn delete_graphic(&mut self, i: usize) -> bool {
+        if self.docs.len() <= 1 || i >= self.docs.len() {
+            return false;
+        }
+        self.media.pack.graphics.remove(i);
+        self.docs.remove(i);
+        true
+    }
+
+    /// Moves graphic `from` to place `to`.
+    pub fn move_graphic(&mut self, from: usize, to: usize) -> bool {
+        if from >= self.docs.len() || to >= self.docs.len() || from == to {
+            return false;
+        }
+        let g = self.media.pack.graphics.remove(from);
+        self.media.pack.graphics.insert(to, g);
+        let d = self.docs.remove(from);
+        self.docs.insert(to, d);
+        true
+    }
+
+    /// Adds the graphic of a FRAME graphic pack (`.framepack.zip`), with its
+    /// media; returns its index and any warnings (FRAME's Import Pack).
+    pub fn import_graphic_pack(&mut self, path: &Path) -> Result<(usize, Vec<String>), String> {
+        let bytes =
+            std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+        let (pack, warnings) = read_pack(&bytes).map_err(|e| e.to_string())?;
+        let Pack::Graphic(g) = pack else {
+            return Err("That is a project pack; open it with Open… instead.".into());
+        };
+        for m in g.media {
+            let known = self
+                .media
+                .pack
+                .media
+                .iter()
+                .any(|x| x.entry.url == m.entry.url);
+            if !known {
+                self.media.pack.media.push(m);
+            }
+        }
+        let mut graphic = g.graphic;
+        graphic.id = framecraft_core::project::new_graphic_id();
+        let doc = normalize(&graphic.graphic, &Profile::framecraft());
+        self.media.pack.graphics.push(graphic);
+        self.docs.push(doc);
+        Ok((self.docs.len() - 1, warnings))
+    }
+
+    /// Graphic `i` as a FRAME graphic pack (`.framepack.zip` bytes).
+    pub fn export_graphic_pack(&self, i: usize) -> Result<Vec<u8>, String> {
+        let g = self.media.pack.graphics.get(i).ok_or("No such graphic")?;
+        framecraft_core::pack::write_graphic_pack(
+            &g.name,
+            &self.docs[i],
+            &self.media,
+            &[],
+            g.thumbnail.as_deref(),
+            &now_iso(),
+        )
+        .to_zip()
+        .map_err(|e| e.to_string())
+    }
+
     /// The project as a FRAME project pack (`.frameproject.zip` bytes).
     pub fn export_pack(&self) -> Result<Vec<u8>, String> {
         let sources: Vec<PackSource> = self

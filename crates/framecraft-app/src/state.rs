@@ -125,7 +125,9 @@ impl Ui {
             auto_key: use_signal(|| false),
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),
-            status: use_signal(|| "Open a project or a FRAME pack (Open…), or start one (New)".to_string()),
+            status: use_signal(|| {
+                "Open a project or a FRAME pack (Open…), or start one (New)".to_string()
+            }),
             tab: use_signal(|| Tab::Transform),
             keys: use_signal(Vec::new),
             cue: use_signal(|| None),
@@ -438,6 +440,174 @@ impl Ui {
                 .await;
             if let Some(h) = picked {
                 self.open(h.path().to_path_buf());
+            }
+        });
+    }
+
+    /// Graphics of the project (Project view): add, clone, rename, delete,
+    /// move and import keep each graphic's undo history with it.
+    pub fn add_graphic(mut self) {
+        let index = self.editor.write().as_mut().map(|e| {
+            let i = e.project.add_graphic();
+            e.histories.push(History::default());
+            i
+        });
+        if let Some(i) = index {
+            self.dirty.set(true);
+            self.select_graphic(i);
+        }
+    }
+
+    pub fn clone_graphic(mut self, i: usize) {
+        let done = self.editor.write().as_mut().and_then(|e| {
+            let at = e.project.clone_graphic(i)?;
+            e.histories.insert(at, History::default());
+            if e.graphic >= at {
+                e.graphic += 1;
+            }
+            Some(())
+        });
+        if done.is_some() {
+            self.dirty.set(true);
+        }
+    }
+
+    pub fn rename_graphic(mut self, i: usize, name: &str) {
+        if let Some(e) = self.editor.write().as_mut() {
+            e.project.rename_graphic(i, name);
+        }
+        self.dirty.set(true);
+    }
+
+    pub fn delete_graphic(mut self, i: usize) {
+        let current = self.editor.write().as_mut().and_then(|e| {
+            if !e.project.delete_graphic(i) {
+                return None;
+            }
+            e.histories.remove(i);
+            let was = e.graphic;
+            let next = if was == i {
+                i.min(e.project.docs.len() - 1)
+            } else if was > i {
+                was - 1
+            } else {
+                was
+            };
+            e.graphic = next;
+            Some((was == i, next))
+        });
+        match current {
+            Some((true, next)) => {
+                self.dirty.set(true);
+                self.select_graphic(next);
+            }
+            Some(_) => self.dirty.set(true),
+            None => self.set_status("A project keeps at least one graphic"),
+        }
+    }
+
+    pub fn move_graphic(mut self, from: usize, to: usize) {
+        let moved = self.editor.write().as_mut().is_some_and(|e| {
+            if !e.project.move_graphic(from, to) {
+                return false;
+            }
+            let h = e.histories.remove(from);
+            e.histories.insert(to, h);
+            // The open graphic stays open wherever it moves.
+            e.graphic = follow_move(e.graphic, from, to);
+            true
+        });
+        if moved {
+            self.dirty.set(true);
+        }
+    }
+
+    /// FRAME's Import Pack: a graphic pack (`.framepack.zip`) into this project.
+    pub fn import_graphic_pack(self) {
+        spawn(async move {
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Import graphic pack")
+                .add_filter("FRAME graphic pack", &["zip"])
+                .pick_file()
+                .await;
+            let Some(h) = picked else { return };
+            let mut ui = self;
+            let result = ui.editor.write().as_mut().map(|e| {
+                let r = e.project.import_graphic_pack(h.path());
+                if r.is_ok() {
+                    e.histories.push(History::default());
+                }
+                r
+            });
+            match result {
+                Some(Ok((i, warnings))) => {
+                    let files = ui
+                        .editor
+                        .peek()
+                        .as_ref()
+                        .map(|e| e.project.media_files())
+                        .unwrap_or_default();
+                    STORE.with(|s| {
+                        s.borrow_mut()
+                            .set_library(files, crate::project::builtin_dir())
+                    });
+                    ui.dirty.set(true);
+                    ui.select_graphic(i);
+                    if !warnings.is_empty() {
+                        ui.set_status(format!(
+                            "Imported with warnings: {}",
+                            warnings
+                                .iter()
+                                .take(3)
+                                .cloned()
+                                .collect::<Vec<_>>()
+                                .join("; ")
+                        ));
+                    }
+                }
+                Some(Err(e)) => ui.set_status(e),
+                None => {}
+            }
+        });
+    }
+
+    /// FRAME's Export Pack: one graphic as a `.framepack.zip`.
+    pub fn export_graphic_pack(self, i: usize) {
+        let Some((name, start, bytes)) = self.editor.peek().as_ref().map(|e| {
+            (
+                e.project.graphic_name(i).to_string(),
+                e.project.folder(),
+                e.project.export_graphic_pack(i),
+            )
+        }) else {
+            return;
+        };
+        let mut status = self.status;
+        let bytes = match bytes {
+            Ok(b) => b,
+            Err(e) => {
+                status.set(format!("Could not build the pack: {e}"));
+                return;
+            }
+        };
+        spawn(async move {
+            let file = format!(
+                "{}.framepack.zip",
+                framecraft_core::export::names::file_base_name(&name, "graphic")
+            );
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Export graphic pack")
+                .set_directory(&start)
+                .set_file_name(&file)
+                .add_filter("FRAME graphic pack", &["zip"])
+                .save_file()
+                .await;
+            if let Some(h) = picked {
+                let path = h.path().to_path_buf();
+                match std::fs::write(&path, &bytes) {
+                    Ok(()) => status.set(format!("Exported {}", path.display())),
+                    Err(e) => status.set(format!("Could not write {}: {e}", path.display())),
+                }
             }
         });
     }
@@ -795,5 +965,32 @@ impl Ui {
             }
             playing.set(false);
         });
+    }
+}
+
+/// Where the item at `current` ends up when the item at `from` moves to `to`.
+fn follow_move(current: usize, from: usize, to: usize) -> usize {
+    if current == from {
+        to
+    } else if from < current && to >= current {
+        current - 1
+    } else if from > current && to <= current {
+        current + 1
+    } else {
+        current
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::follow_move;
+
+    #[test]
+    fn open_graphic_follows_moves() {
+        // [a b c d], c open (2).
+        assert_eq!(follow_move(2, 2, 0), 0); // c itself moves to the front
+        assert_eq!(follow_move(2, 0, 3), 1); // a moves past c
+        assert_eq!(follow_move(2, 3, 0), 3); // d moves before c
+        assert_eq!(follow_move(2, 0, 1), 2); // a and b swap, c stays
     }
 }
