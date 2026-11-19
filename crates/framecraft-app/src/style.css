@@ -1,4 +1,5 @@
 :root {
+  color-scheme: dark;
   --bg: #16181d;
   --panel: #1e2128;
   --panel-2: #262a33;
@@ -15,6 +16,17 @@ button, select, .button {
   padding: 4px 10px; font: inherit; cursor: pointer;
 }
 button:hover, .button:hover { border-color: var(--accent); }
+/* WebKitGTK paints a closed <select> with the GTK theme (white on a light
+   theme), so draw it ourselves: dark box, light text, our own arrow. */
+select {
+  -webkit-appearance: none; appearance: none;
+  background-color: var(--panel-2); color: var(--text);
+  padding-right: 22px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%238a90a0'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 7px center;
+}
+select:hover { border-color: var(--accent); }
+select option { background: var(--panel); color: var(--text); }
 button.active { background: var(--accent); border-color: var(--accent); }
 .dim { color: var(--dim); }
 .app { display: grid; grid-template-rows: 44px 1fr 300px; height: 100vh; }
