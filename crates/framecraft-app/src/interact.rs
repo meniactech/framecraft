@@ -37,6 +37,26 @@ impl Geom {
         )
     }
 
+    /// A layer-local point (px in a `w` × `h` box) in scene coordinates.
+    pub fn to_scene(&self, local: Vec2, w: f64, h: f64) -> Vec2 {
+        self.at((local.0 / w.max(1e-9), local.1 / h.max(1e-9)))
+    }
+
+    /// A scene point in layer-local px (the inverse of [`Geom::to_scene`]),
+    /// through rotation, scale and parents as drawn.
+    pub fn to_local(&self, p: Vec2, w: f64, h: f64) -> Vec2 {
+        let [tl, tr, _, bl] = self.corners;
+        let (u, v) = ((tr.0 - tl.0, tr.1 - tl.1), (bl.0 - tl.0, bl.1 - tl.1));
+        let det = u.0 * v.1 - u.1 * v.0;
+        if det.abs() < 1e-12 {
+            return (0.0, 0.0);
+        }
+        let d = (p.0 - tl.0, p.1 - tl.1);
+        let fx = (d.0 * v.1 - d.1 * v.0) / det;
+        let fy = (u.0 * d.1 - u.1 * d.0) / det;
+        (fx * w, fy * h)
+    }
+
     /// The rotate handle: above the top edge's middle, `offset` scene units
     /// out along the layer's own up direction.
     pub fn rotate_handle(&self, offset: f64) -> Vec2 {
@@ -75,6 +95,59 @@ pub enum Mode {
     Resize(Handle),
     Rotate,
     Pivot,
+    /// A polygon / path point (its handles move with it).
+    Point(usize),
+    /// A point's bezier handle: `true` for the out handle.
+    PointHandle(usize, bool),
+}
+
+/// A selected polygon or path's points in scene coordinates, for drawing
+/// and hits: `(point, Some((in, out)) when it shows bezier handles)`.
+pub fn point_marks(
+    g: &Geom,
+    item: &framecraft_core::model::Item,
+    pose: &Pose,
+) -> Vec<(Vec2, Option<(Vec2, Vec2)>)> {
+    use framecraft_core::model::ShapeType;
+    if !matches!(item.shape_type, Some(ShapeType::Polygon | ShapeType::Path)) {
+        return Vec::new();
+    }
+    let bezier = item.polygon_curve.as_deref() == Some("bezier");
+    let (w, h) = (pose.width, pose.height);
+    item.polygon_points
+        .iter()
+        .flatten()
+        .map(|p| {
+            let at = g.to_scene((p.x, p.y), w, h);
+            let handles = (bezier && p.curve.as_deref() == Some("bezier")).then(|| {
+                (
+                    g.to_scene((p.in_x.unwrap_or(p.x), p.in_y.unwrap_or(p.y)), w, h),
+                    g.to_scene((p.out_x.unwrap_or(p.x), p.out_y.unwrap_or(p.y)), w, h),
+                )
+            });
+            (at, handles)
+        })
+        .collect()
+}
+
+/// Which polygon point or handle is under `p`. Handles first (they sit
+/// near their point), then points.
+fn point_at(marks: &[(Vec2, Option<(Vec2, Vec2)>)], p: Vec2, zoom: f64) -> Option<Mode> {
+    let reach = HANDLE_REACH / zoom;
+    for (i, (_, handles)) in marks.iter().enumerate() {
+        if let Some((hin, hout)) = handles {
+            if near(*hout, p, reach) {
+                return Some(Mode::PointHandle(i, true));
+            }
+            if near(*hin, p, reach) {
+                return Some(Mode::PointHandle(i, false));
+            }
+        }
+    }
+    marks
+        .iter()
+        .position(|(at, _)| near(*at, p, reach))
+        .map(Mode::Point)
 }
 
 /// A drag in progress: everything is computed from where it started.
@@ -87,6 +160,8 @@ pub struct Drag {
     from: Vec2,
     /// A polygon / path's points when the drag began (a resize scales them).
     points: Option<Vec<framecraft_core::model::PolygonPoint>>,
+    /// Where the layer was drawn when the drag began (point drags).
+    geom: Option<Geom>,
 }
 
 fn near(a: Vec2, b: Vec2, reach: f64) -> bool {
@@ -162,6 +237,7 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
         Mode::Resize(_) => "Resize",
         Mode::Rotate => "Rotate",
         Mode::Pivot => "Move pivot of",
+        Mode::Point(_) | Mode::PointHandle(..) => "Edit points of",
     };
     ui.begin_gesture(format!("{verb} {name}"));
     let mut drag = ui.drag;
@@ -172,6 +248,7 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
         parent,
         from,
         points,
+        geom: ui.geometry.peek().iter().find(|g| g.id == id).cloned(),
     }));
 }
 
@@ -181,8 +258,14 @@ fn pointer_down(ui: Ui, ev: &Value) {
     let zoom = *ui.zoom.peek();
     let time = *ui.time.peek();
 
-    // The selected layer's own controls come first.
+    // The selected layer's own controls come first: polygon points, then
+    // the box handles.
     let current = ui.editor.peek().as_ref().and_then(|e| e.selected.clone());
+    if let Some(id) = &current
+        && point_edit(ui, id, p, ev)
+    {
+        return;
+    }
     if let Some(id) = &current {
         let control = {
             let editor = ui.editor.peek();
@@ -227,6 +310,86 @@ fn pointer_down(ui: Ui, ev: &Value) {
         if can_move {
             start_drag(ui, &id, Mode::Move, p);
         }
+    }
+}
+
+/// Polygon / path point editing on the selected layer (FRAME's viewport
+/// gestures): drag a point or handle, Ctrl+click a point to smooth or
+/// sharpen it, Alt+click to remove it, Shift+click near an edge to insert
+/// one. Returns whether the click was used.
+fn point_edit(ui: Ui, id: &str, p: Vec2, ev: &Value) -> bool {
+    use framecraft_core::model::ShapeType;
+    use framecraft_core::polygon::{SetPolygon, any_bezier, insert_near, toggle_smooth};
+    let zoom = *ui.zoom.peek();
+    let time = *ui.time.peek();
+    let found = {
+        let editor = ui.editor.peek();
+        let geometry = ui.geometry.peek();
+        editor.as_ref().and_then(|e| {
+            let doc = e.doc();
+            let item = doc.items.iter().find(|i| i.id == id)?;
+            if !movable(doc, id)
+                || !matches!(item.shape_type, Some(ShapeType::Polygon | ShapeType::Path))
+            {
+                return None;
+            }
+            let g = geometry.iter().find(|g| g.id == id)?;
+            let pose = pose_at(doc, item, time);
+            let marks = point_marks(g, item, &pose);
+            let local = g.to_local(p, pose.width, pose.height);
+            let min = if item.shape_type == Some(ShapeType::Path) {
+                2
+            } else {
+                3
+            };
+            Some((
+                point_at(&marks, p, zoom),
+                local,
+                item.polygon_points.clone()?,
+                min,
+            ))
+        })
+    };
+    let Some((hit, local, points, min)) = found else {
+        return false;
+    };
+    let edit = |points: Vec<_>| {
+        let curve = any_bezier(&points).then(|| "bezier".to_string());
+        ui.execute(&SetPolygon {
+            item: id.into(),
+            points: Some(points),
+            curve,
+            to_shape: false,
+        });
+    };
+    match hit {
+        Some(Mode::Point(i)) if flag(ev, "alt") => {
+            if points.len() > min {
+                let mut next = points;
+                next.remove(i);
+                edit(next);
+            }
+            true
+        }
+        Some(Mode::Point(i)) if flag(ev, "ctrl") => {
+            edit(toggle_smooth(&points, i));
+            true
+        }
+        Some(mode) => {
+            start_drag(ui, id, mode, p);
+            true
+        }
+        None if flag(ev, "shift") => {
+            // FRAME: reach 28 local px, more when zoomed out.
+            match insert_near(&points, local.0, local.1, 28f64.max(28.0 / zoom)) {
+                Some(next) => {
+                    edit(next);
+                    true
+                }
+                None => false,
+            }
+        }
+        None => false,
     }
 }
 
@@ -279,6 +442,41 @@ fn pointer_move(ui: Ui, ev: &Value) {
             }
             cmds
         }
+        Mode::Point(i) | Mode::PointHandle(i, _) => {
+            let (Some(points), Some(g)) = (&d.points, &d.geom) else {
+                return;
+            };
+            let (w, h) = (d.start.width, d.start.height);
+            let (a, b) = (g.to_local(d.from, w, h), g.to_local(p, w, h));
+            let (dx, dy) = (b.0 - a.0, b.1 - a.1);
+            let mut next = points.clone();
+            let Some(q) = next.get_mut(i) else { return };
+            let shift = |v: Option<f64>, by: f64| v.map(|v| v + by);
+            match d.mode {
+                Mode::PointHandle(_, true) => {
+                    q.out_x = Some(q.out_x.unwrap_or(q.x) + dx);
+                    q.out_y = Some(q.out_y.unwrap_or(q.y) + dy);
+                }
+                Mode::PointHandle(_, false) => {
+                    q.in_x = Some(q.in_x.unwrap_or(q.x) + dx);
+                    q.in_y = Some(q.in_y.unwrap_or(q.y) + dy);
+                }
+                _ => {
+                    q.x += dx;
+                    q.y += dy;
+                    q.in_x = shift(q.in_x, dx);
+                    q.in_y = shift(q.in_y, dy);
+                    q.out_x = shift(q.out_x, dx);
+                    q.out_y = shift(q.out_y, dy);
+                }
+            }
+            vec![Box::new(framecraft_core::commands::SetField {
+                target: framecraft_core::commands::FieldTarget::Item(id.into()),
+                path: "polygonPoints".into(),
+                value: serde_json::to_value(next).unwrap_or_default(),
+                update: framecraft_core::commands::Update::Layer,
+            })]
+        }
         Mode::Rotate => vec![set(
             id,
             "rotation",
@@ -309,8 +507,19 @@ fn pointer_move(ui: Ui, ev: &Value) {
 
 fn pointer_up(ui: Ui) {
     let mut drag = ui.drag;
-    if drag.peek().is_some() {
+    let ended = drag.peek().clone();
+    if let Some(d) = ended {
         drag.set(None);
+        // After a point drag the box fits the points (FRAME), in the same
+        // undo step.
+        if matches!(d.mode, Mode::Point(_) | Mode::PointHandle(..)) {
+            ui.execute(&framecraft_core::polygon::SetPolygon {
+                item: d.id.clone(),
+                points: None,
+                curve: None,
+                to_shape: false,
+            });
+        }
         ui.end_gesture();
     }
 }
@@ -358,6 +567,34 @@ fn key(ui: Ui, key: &str, shift: bool) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn local_points_round_trip_through_a_rotated_scaled_box() {
+        // A 100 × 50 layer drawn rotated 90° and twice as big.
+        let g = Geom {
+            id: "a".into(),
+            corners: [(200.0, 0.0), (200.0, 200.0), (100.0, 200.0), (100.0, 0.0)],
+        };
+        let s = g.to_scene((25.0, 10.0), 100.0, 50.0);
+        assert_eq!(s, (180.0, 50.0));
+        let l = g.to_local(s, 100.0, 50.0);
+        assert!((l.0 - 25.0).abs() < 1e-9 && (l.1 - 10.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn handles_win_over_their_point() {
+        let marks = vec![
+            ((10.0, 10.0), Some(((0.0, 10.0), (30.0, 10.0)))),
+            ((50.0, 50.0), None),
+        ];
+        assert_eq!(
+            point_at(&marks, (30.0, 11.0), 1.0),
+            Some(Mode::PointHandle(0, true))
+        );
+        assert_eq!(point_at(&marks, (11.0, 10.0), 1.0), Some(Mode::Point(0)));
+        assert_eq!(point_at(&marks, (50.0, 55.0), 1.0), Some(Mode::Point(1)));
+        assert_eq!(point_at(&marks, (80.0, 80.0), 1.0), None);
+    }
 
     fn square() -> Geom {
         Geom {

@@ -138,6 +138,62 @@ pub fn scale_points(
     map_points(points, |x, y| (x * sx, y * sy))
 }
 
+/// Inserts a point on the edge nearest `(x, y)` (local px), as FRAME's
+/// Shift+click: `None` when no edge is within `max_dist` or the spot is at
+/// an edge's very end.
+pub fn insert_near(
+    points: &[PolygonPoint],
+    x: f64,
+    y: f64,
+    max_dist: f64,
+) -> Option<Vec<PolygonPoint>> {
+    let n = points.len();
+    if n < 2 {
+        return None;
+    }
+    let mut best: Option<(usize, f64, f64, f64, f64)> = None;
+    for i in 0..n {
+        let (a, b) = (&points[i], &points[(i + 1) % n]);
+        let (abx, aby) = (b.x - a.x, b.y - a.y);
+        let ab2 = abx * abx + aby * aby;
+        let t = if ab2 <= 1e-9 {
+            0.0
+        } else {
+            (((x - a.x) * abx + (y - a.y) * aby) / ab2).clamp(0.0, 1.0)
+        };
+        let (px, py) = (a.x + abx * t, a.y + aby * t);
+        let dist = (x - px).hypot(y - py);
+        if best.is_none_or(|b| dist < b.1) {
+            best = Some((i, dist, t, px, py));
+        }
+    }
+    let (edge, dist, t, px, py) = best?;
+    if dist > max_dist || t <= 0.02 || t >= 0.98 {
+        return None;
+    }
+    let mut next = points.to_vec();
+    next.insert(edge + 1, pt(px, py));
+    Some(next)
+}
+
+/// Turns point `i` smooth (bezier handles from its neighbours) or sharp
+/// (handles collapsed), as FRAME's Ctrl+click.
+pub fn toggle_smooth(points: &[PolygonPoint], i: usize) -> Vec<PolygonPoint> {
+    let n = points.len();
+    let mut next = points.to_vec();
+    let Some(p) = points.get(i) else {
+        return next;
+    };
+    next[i] = if is_bezier(p) {
+        pt(p.x, p.y)
+    } else {
+        let mut q = p.clone();
+        q.curve = Some("bezier".into());
+        ensure_handles(&q, &points[(i + n - 1) % n], &points[(i + 1) % n])
+    };
+    next
+}
+
 pub fn any_bezier(points: &[PolygonPoint]) -> bool {
     points.iter().any(is_bezier)
 }
@@ -689,6 +745,20 @@ mod tests {
             n += 1;
         }
         assert_eq!(n, 39);
+    }
+
+    #[test]
+    fn viewport_helpers() {
+        let quad = default_polygon_points(100.0, 100.0);
+        // Near the top edge's middle: inserted after point 0.
+        let ins = insert_near(&quad, 50.0, 14.0, 28.0).unwrap();
+        assert_eq!((ins.len(), ins[1].x, ins[1].y), (5, 50.0, 12.0));
+        assert!(insert_near(&quad, 50.0, 50.0, 28.0).is_none());
+        // At a corner: no insert.
+        assert!(insert_near(&quad, 12.0, 12.0, 28.0).is_none());
+        let s = toggle_smooth(&quad, 1);
+        assert!(is_bezier(&s[1]) && s[1].in_x != Some(s[1].x));
+        assert!(!is_bezier(&toggle_smooth(&s, 1)[1]));
     }
 
     #[test]

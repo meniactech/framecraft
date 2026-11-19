@@ -101,6 +101,9 @@ button:disabled { opacity: .45; cursor: default; }
 .sel-stem { stroke: var(--accent); stroke-width: 1px; }
 .sel-rotate { fill: var(--accent); stroke: #fff; stroke-width: 1px; }
 .sel-pivot { fill: none; stroke: #ff5a5a; stroke-width: 1.5px; }
+.poly-point { fill: var(--key); stroke: #1a1d24; stroke-width: 1px; }
+.poly-handle { fill: #fff; stroke: var(--key); stroke-width: 1px; }
+.poly-arm { stroke: var(--key); stroke-width: 1px; opacity: 0.8; }
 
 /* Right column: Outliner above Properties. */
 .side { display: grid; grid-template-rows: minmax(160px, 38%) 1fr; min-height: 0; border-left: 1px solid var(--line); }

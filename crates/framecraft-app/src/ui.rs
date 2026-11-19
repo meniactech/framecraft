@@ -192,7 +192,16 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
         let pivot = g.at((pose.pivot_x / 100.0, pose.pivot_y / 100.0));
         let top = g.at((0.5, 0.0));
         let rotate = g.rotate_handle(ROTATE_OFFSET / zoom);
-        Some((outline, handles, pivot, top, rotate, movable(doc, id)))
+        let marks = crate::interact::point_marks(g, item, &pose);
+        Some((
+            outline,
+            handles,
+            pivot,
+            top,
+            rotate,
+            movable(doc, id),
+            marks,
+        ))
     });
     drop(geometry);
     drop(editor);
@@ -208,7 +217,7 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 view_box: "0 0 {width} {height}",
                 width: "{width * zoom}",
                 height: "{height * zoom}",
-                if let Some((outline, handles, pivot, top, rotate, can_move)) = drawn {
+                if let Some((outline, handles, pivot, top, rotate, can_move, marks)) = drawn {
                     polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }
                     if can_move {
                         line { class: "sel-stem", x1: "{top.0}", y1: "{top.1}", x2: "{rotate.0}", y2: "{rotate.1}" }
@@ -225,6 +234,16 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                         circle { class: "sel-pivot", cx: "{pivot.0}", cy: "{pivot.1}", r: "{hs * 0.55}" }
                         line { class: "sel-pivot", x1: "{pivot.0 - hs}", y1: "{pivot.1}", x2: "{pivot.0 + hs}", y2: "{pivot.1}" }
                         line { class: "sel-pivot", x1: "{pivot.0}", y1: "{pivot.1 - hs}", x2: "{pivot.0}", y2: "{pivot.1 + hs}" }
+                        // Polygon / path points and their bezier handles.
+                        for (at , handles) in marks {
+                            if let Some((hin, hout)) = handles {
+                                line { class: "poly-arm", x1: "{hin.0}", y1: "{hin.1}", x2: "{at.0}", y2: "{at.1}" }
+                                line { class: "poly-arm", x1: "{at.0}", y1: "{at.1}", x2: "{hout.0}", y2: "{hout.1}" }
+                                circle { class: "poly-handle", cx: "{hin.0}", cy: "{hin.1}", r: "{hs * 0.4}" }
+                                circle { class: "poly-handle", cx: "{hout.0}", cy: "{hout.1}", r: "{hs * 0.4}" }
+                            }
+                            circle { class: "poly-point", cx: "{at.0}", cy: "{at.1}", r: "{hs * 0.55}" }
+                        }
                     }
                 }
             }
