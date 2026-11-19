@@ -12,6 +12,8 @@ use serde_json::Value;
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Tab {
     Scene,
+    /// Script functions and globals (FRAME's Js tab).
+    Script,
     Transform,
     Look,
     Text,
@@ -29,6 +31,7 @@ impl Tab {
     pub fn label(self) -> &'static str {
         match self {
             Tab::Scene => "Scene",
+            Tab::Script => "Script",
             Tab::Transform => "Transform",
             Tab::Look => "Look",
             Tab::Text => "Text",
@@ -47,6 +50,7 @@ impl Tab {
     pub fn icon(self) -> &'static str {
         match self {
             Tab::Scene => "scene",
+            Tab::Script => "script",
             Tab::Transform => "transform",
             Tab::Look => "look",
             Tab::Text => "text",

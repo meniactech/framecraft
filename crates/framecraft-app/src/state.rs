@@ -80,6 +80,8 @@ pub struct Ui {
     pub pending_component: Signal<Option<crate::components::PendingComponent>>,
     /// Add → Insert Component… is open.
     pub component_library: Signal<bool>,
+    /// The script editor is open.
+    pub script_editor: Signal<bool>,
 }
 
 /// An open media library: what it lists and where the pick goes.
@@ -139,6 +141,7 @@ impl Ui {
             }),
             pending_component: use_signal(|| None),
             component_library: use_signal(|| false),
+            script_editor: use_signal(|| false),
             user_motions: use_signal(|| {
                 crate::motions::motions_path()
                     .map(|p| framecraft_core::motion::UserMotions::load(&p))

@@ -607,8 +607,25 @@ fn Inspector(ui: Ui) -> Element {
                     }
                 }
                 if cue.kind == CueKind::Script {
-                    label { "Function"
-                        input { r#type: "text", value: "{cue.script_fn.clone().unwrap_or_default()}", onchange: field("scriptFn") }
+                    label { title: "A function from the script editor (Properties → Script)",
+                        "Function"
+                        input {
+                            r#type: "text",
+                            list: "fc-cue-fns",
+                            value: "{cue.script_fn.clone().unwrap_or_default()}",
+                            onchange: field("scriptFn"),
+                        }
+                        datalist { id: "fc-cue-fns",
+                            for name in ui
+                                .editor
+                                .read()
+                                .as_ref()
+                                .map(|e| framecraft_core::script::cue_function_names(&e.doc().template_functions))
+                                .unwrap_or_default()
+                            {
+                                option { value: "{name}" }
+                            }
+                        }
                     }
                 }
                 button {

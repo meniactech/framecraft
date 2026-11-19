@@ -352,3 +352,21 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .plate-tile { display: flex; flex-direction: column; gap: 3px; padding: 4px; font-size: 11px; text-align: left; }
 .plate-tile.active { border-color: var(--accent); }
 .plate-thumb { aspect-ratio: 16 / 9; border-radius: 3px; }
+/* Script tab and editor */
+.script-summary { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 8px 0; font-size: 12px; }
+.script-dialog { width: min(1100px, 94vw); height: min(760px, 88vh); display: flex; flex-direction: column; gap: 10px; padding: 14px; }
+.script-dialog .modal-head { align-items: flex-start; }
+.script-dialog .modal-head > div { flex: 1; }
+.script-dialog .modal-head p { margin: 4px 0 0; font-size: 12px; }
+.script-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 200px 1fr 230px; gap: 10px; }
+.script-col { min-height: 0; display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--line); border-radius: 8px; padding: 8px; overflow: auto; }
+.script-col.grow { overflow: hidden; }
+.script-fns { display: flex; flex-direction: column; gap: 2px; }
+.script-fn { display: flex; justify-content: space-between; align-items: center; font-family: ui-monospace, monospace; font-size: 12px; text-align: left; border-color: transparent; background: none; }
+.script-fn.active { background: var(--panel-2); border-color: var(--line); }
+.script-name { display: flex; gap: 6px; align-items: flex-end; }
+.script-name label { flex: 1; display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.script-name input, .script-name select { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: 12px ui-monospace, monospace; }
+.script-sig { font: 12px ui-monospace, monospace; color: var(--dim); }
+.script-code { flex: 1; min-height: 0; resize: none; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font: 13px/1.45 ui-monospace, monospace; tab-size: 2; -webkit-user-select: text; user-select: text; }
+.script-global { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }

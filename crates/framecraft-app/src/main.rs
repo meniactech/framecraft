@@ -20,6 +20,7 @@ mod preview;
 mod project;
 mod project_view;
 mod properties;
+mod script_editor;
 mod state;
 mod timeline;
 mod ui;
@@ -100,6 +101,7 @@ fn App() -> Element {
             motions::MotionDialog { ui }
             components::ComponentNameDialog { ui }
             components::ComponentLibraryDialog { ui }
+            script_editor::ScriptEditor { ui }
         }
     }
 }
