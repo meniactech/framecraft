@@ -203,7 +203,7 @@ Each platform runs the reference test suite. Rendering differences between web e
 | M4 | Outliner and property schema: Scene, Transform, Look, Text | Parity with FRAME for shapes and text. **Done 2026-11-19.** |
 | M5 | Timeline editing: keyframes, easing, cues, auto-key | Parity with FRAME's timeline. **Done 2026-11-19.** |
 | M6 | Remaining item types and modifiers | Every FRAME tab works. **Done 2026-11-19.** |
-| M7 | Libraries and media | Media, motions, components, palettes, gradients, SVG shapes. |
+| M7 | Libraries and media | Media, motions, components, palettes, gradients, SVG shapes. **Done 2026-11-19** (palettes to revisit: placement and workflow vs FRAME). |
 | M8 | Scripts, cues, BOARD settings, export dialog | Every FRAME export option is reachable from the UI. |
 | M9 | Packaging | Installers for Linux, Windows and macOS, plus auto-update. |
 
