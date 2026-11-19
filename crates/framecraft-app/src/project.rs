@@ -773,3 +773,37 @@ mod folder_tests {
         let _ = std::fs::remove_dir_all(base);
     }
 }
+
+#[cfg(test)]
+mod new_project_tests {
+    use super::*;
+
+    #[test]
+    fn new_project_builds_a_preview() {
+        let p = Project::new_empty("Untitled");
+        let (pkg, _) = p.preview(0);
+        let html = pkg
+            .files
+            .iter()
+            .find(|(path, _)| path.ends_with(".html") && !path.contains('/'))
+            .map(|(_, b)| String::from_utf8_lossy(b).into_owned())
+            .expect("an entry page");
+        assert!(
+            html.contains("framecraft-editor.js"),
+            "editor script missing"
+        );
+        assert!(
+            pkg.files
+                .iter()
+                .any(|(p, _)| p == "js/ionframe-spx-runtime.mjs")
+        );
+        eprintln!(
+            "entry files: {:?}",
+            pkg.files
+                .iter()
+                .map(|(p, _)| p.as_str())
+                .filter(|p| p.ends_with(".html"))
+                .collect::<Vec<_>>()
+        );
+    }
+}

@@ -57,8 +57,11 @@ if (!window.__fc) {
       const all = frames();
       const next = all.find((f) => f !== fc.active) || all[0];
       const ready = next && next.getClientRects().length > 0 && next.clientWidth > 0;
+      // A plain timer, not requestAnimationFrame: animation frames are not
+      // delivered while nothing on screen changes (an empty viewport after
+      // New), which left the load waiting for good.
       if (!ready && performance.now() - t0 < 10000) {
-        fc.waiting = requestAnimationFrame(tryLoad);
+        fc.waiting = setTimeout(tryLoad, 30);
         return;
       }
       if (!next) return;
