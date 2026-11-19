@@ -114,8 +114,15 @@ fn App() -> Element {
         } = event
             && *ui.dirty.peek()
         {
-            dioxus::desktop::window().set_visible(true);
+            // Dioxus hides the window right after this handler runs (event
+            // handlers come first), so show it again a moment later.
             close_prompt.set(true);
+            spawn(async move {
+                tokio::time::sleep(std::time::Duration::from_millis(60)).await;
+                let w = dioxus::desktop::window();
+                w.set_visible(true);
+                w.set_focus();
+            });
         }
     });
 
