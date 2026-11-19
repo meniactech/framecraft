@@ -457,6 +457,56 @@ if (!window.__fc) {
     dot.addEventListener('pointercancel', up);
   });
 
+  // Curve editors (.curve-track[data-curve]), values 0–1 over life: a click
+  // adds a stop at that point, a press selects one, dragging moves it (the
+  // ends only up and down) with a live line; Rust gets add / select / move.
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const track = e.target.closest('.curve-track[data-curve]');
+    if (!track) return;
+    e.preventDefault();
+    const id = track.dataset.curve;
+    const rect = track.getBoundingClientRect();
+    const offAt = (x) => Math.min(1, Math.max(0, (x - rect.left) / Math.max(1, rect.width)));
+    const valAt = (y) => Math.round(Math.min(1, Math.max(0, 1 - (y - rect.top) / Math.max(1, rect.height))) * 100) / 100;
+    const dot = e.target.closest('.curve-dot');
+    if (!dot) { fc.emit({ type: 'ramp', action: 'add', id, offset: offAt(e.clientX), value: valAt(e.clientY) }); return; }
+    const index = parseInt(dot.dataset.index, 10);
+    fc.emit({ type: 'ramp', action: 'select', id, index });
+    const dots = Array.from(track.querySelectorAll('.curve-dot'));
+    const end = index === 0 || index === dots.length - 1;
+    const lo = end ? 0 : parseFloat(dots[index - 1].dataset.offset) + 0.001;
+    const hi = end ? 1 : parseFloat(dots[index + 1].dataset.offset) - 0.001;
+    const o0 = parseFloat(dot.dataset.offset), v0 = parseFloat(dot.dataset.value);
+    let o = o0, v = v0;
+    const line = track.querySelector('polyline');
+    const paint = () => {
+      if (!line) return;
+      line.setAttribute('points', dots
+        .map((d) => d === dot ? [o, v] : [parseFloat(d.dataset.offset), parseFloat(d.dataset.value)])
+        .sort((a, b) => a[0] - b[0])
+        .map(([x, y]) => (x * 100).toFixed(2) + ',' + (100 - y * 100).toFixed(2))
+        .join(' '));
+    };
+    dot.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      if (!end) o = Math.min(hi, Math.max(lo, offAt(ev.clientX)));
+      v = valAt(ev.clientY);
+      dot.style.left = (o * 100) + '%';
+      dot.style.top = (100 - v * 100) + '%';
+      paint();
+    };
+    const up = () => {
+      dot.removeEventListener('pointermove', move);
+      dot.removeEventListener('pointerup', up);
+      dot.removeEventListener('pointercancel', up);
+      if (o !== o0 || v !== v0) fc.emit({ type: 'ramp', action: 'move', id, index, offset: o, value: v });
+    };
+    dot.addEventListener('pointermove', move);
+    dot.addEventListener('pointerup', up);
+    dot.addEventListener('pointercancel', up);
+  });
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {

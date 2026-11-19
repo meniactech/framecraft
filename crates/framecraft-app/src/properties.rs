@@ -524,7 +524,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             ChartPoints { ui, value: field.value.clone(), set }
         },
         Kind::ValueRamp => rsx! {
-            ValueRamp { value: field.value.clone(), set }
+            ValueRamp { ui, path: prop.path, value: field.value.clone(), set }
         },
         Kind::ColorList => rsx! {
             ColorList { value: field.value.clone(), set }
@@ -1076,94 +1076,180 @@ fn ChartPoints(ui: Ui, value: Value, set: Callback<Value>) -> Element {
     }
 }
 
-/// Values (0–1) along a particle's life: position (%) and value per stop.
+/// A value over a particle's life (FRAME's curve editor): a box with the
+/// curve from left (birth) to right (death), values 0–1. Click to add a
+/// stop, press one to select it, drag it (the ends only up and down). The
+/// bridge does the pointer work and live preview; changes arrive as
+/// `ramp` events. Below: the selected stop's value.
 #[component]
-fn ValueRamp(value: Value, set: Callback<Value>) -> Element {
-    let stops: Vec<(f64, f64)> = value
+fn ValueRamp(ui: Ui, path: &'static str, value: Value, set: Callback<Value>) -> Element {
+    let (value_label, axis_y, default) = match path {
+        "particleAlphaRamp" => (
+            "Alpha",
+            "Alpha 0→1",
+            json!([{ "offset": 0, "value": 1 }, { "offset": 1, "value": 0 }]),
+        ),
+        _ => (
+            "Scale",
+            "Scale 0→1",
+            json!([{ "offset": 0, "value": 1 }, { "offset": 1, "value": 0.25 }]),
+        ),
+    };
+    let mut stops: Vec<(f64, f64)> = value
         .as_array()
         .map(|a| {
             a.iter()
                 .map(|s| {
                     (
-                        s["offset"].as_f64().unwrap_or(0.0),
-                        s["value"].as_f64().unwrap_or(0.0),
+                        s["offset"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0),
+                        s["value"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0),
                     )
                 })
                 .collect()
         })
-        .unwrap_or_else(|| vec![(0.0, 1.0), (1.0, 1.0)]);
-    let write = move |mut stops: Vec<(f64, f64)>| {
-        stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+        .unwrap_or_default();
+    if stops.len() < 2 {
+        stops = default
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|s| {
+                (
+                    s["offset"].as_f64().unwrap_or(0.0),
+                    s["value"].as_f64().unwrap_or(0.0),
+                )
+            })
+            .collect();
+    }
+    stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut selected = use_signal(|| 0usize);
+    let latest = use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Vec::<(f64, f64)>::new())));
+    *latest.borrow_mut() = stops.clone();
+    let write = move |list: Vec<(f64, f64)>| {
+        let mut list = list;
+        list.sort_by(|a, b| a.0.total_cmp(&b.0));
         set(Value::Array(
-            stops
-                .into_iter()
+            list.into_iter()
                 .map(|(o, v)| json!({ "offset": o, "value": v }))
                 .collect(),
         ));
     };
+    {
+        let latest = latest.clone();
+        use_effect(move || {
+            let Some(ev) = (ui.ramp_event)() else { return };
+            if ev["id"].as_str() != Some(path) {
+                return;
+            }
+            let mut ramp_event = ui.ramp_event;
+            ramp_event.set(None);
+            let mut list = latest.borrow().clone();
+            let index = ev["index"].as_u64().unwrap_or(0) as usize;
+            let offset = ev["offset"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+            let v = ev["value"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+            match ev["action"].as_str() {
+                Some("select") => selected.set(index),
+                Some("add") => {
+                    list.push((offset, v));
+                    list.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    let at = list.iter().position(|s| *s == (offset, v)).unwrap_or(0);
+                    selected.set(at);
+                    write(list);
+                }
+                Some("move") if index < list.len() => {
+                    list[index] = (offset, v);
+                    write(list);
+                }
+                _ => {}
+            }
+        });
+    }
     let count = stops.len();
+    let sel = selected().min(count.saturating_sub(1));
+    let can_remove = sel > 0 && sel + 1 < count;
+    let points = stops
+        .iter()
+        .map(|(o, v)| format!("{},{}", round3(o * 100.0), round3(100.0 - v * 100.0)))
+        .collect::<Vec<_>>()
+        .join(" ");
+    let current = stops.get(sel).copied().unwrap_or((0.0, 0.0));
+    let shown = number_to_string(round3(current.1));
+    let (s_val, s_remove) = (stops.clone(), stops.clone());
     rsx! {
         div { class: "ramp",
-            for (i , (offset , v)) in stops.iter().copied().enumerate() {
-                {
-                    let (s1, s2, s3) = (stops.clone(), stops.clone(), stops.clone());
-                    let pct = number_to_string(round3(offset * 100.0));
-                    let val = number_to_string(round3(v));
-                    rsx! {
-                        div { class: "stop",
-                            input {
-                                r#type: "number",
-                                step: "1",
-                                value: "{pct}",
-                                title: "Position % of the particle's life",
-                                onchange: move |evt| {
-                                    if let Ok(p) = evt.value().trim().parse::<f64>() {
-                                        let mut s = s1.clone();
-                                        s[i].0 = (p / 100.0).clamp(0.0, 1.0);
-                                        write(s);
-                                    }
-                                },
-                            }
-                            input {
-                                r#type: "number",
-                                step: "0.05",
-                                value: "{val}",
-                                title: "Value (0–1)",
-                                onchange: move |evt| {
-                                    if let Ok(x) = evt.value().trim().parse::<f64>() {
-                                        let mut s = s2.clone();
-                                        s[i].1 = x.clamp(0.0, 1.0);
-                                        write(s);
-                                    }
-                                },
-                            }
-                            button {
-                                class: "key-button",
-                                disabled: count <= 2,
-                                title: "Remove stop",
-                                onclick: move |_| {
-                                    let mut s = s3.clone();
-                                    s.remove(i);
-                                    write(s);
-                                },
-                                "×"
-                            }
+            div { class: "ramp-actions",
+                button {
+                    title: "Reset to the default curve",
+                    onclick: move |_| {
+                        selected.set(0);
+                        set(default.clone());
+                    },
+                    "Reset"
+                }
+                button {
+                    title: "Remove the selected stop (not the ends)",
+                    disabled: !can_remove,
+                    onclick: move |_| {
+                        let mut list = s_remove.clone();
+                        if sel < list.len() {
+                            list.remove(sel);
                         }
+                        selected.set(sel.saturating_sub(1));
+                        write(list);
+                    },
+                    "Remove stop"
+                }
+            }
+            div { class: "curve-axes",
+                span { "Life 0→1" }
+                span { "{axis_y}" }
+            }
+            div {
+                class: "curve-track",
+                "data-curve": "{path}",
+                title: "Click to add a stop; drag stops to change the curve",
+                svg {
+                    class: "curve-line",
+                    view_box: "0 0 100 100",
+                    preserve_aspect_ratio: "none",
+                    polyline {
+                        points: "{points}",
+                        fill: "none",
+                        stroke: "#d4d4d4",
+                        stroke_width: "2",
+                        vector_effect: "non-scaling-stroke",
+                    }
+                }
+                for (i , (o , v)) in stops.iter().copied().enumerate() {
+                    div {
+                        class: match (i == sel, i == 0 || i + 1 == count) {
+                            (true, _) => "curve-dot selected",
+                            (false, true) => "curve-dot endpoint",
+                            _ => "curve-dot",
+                        },
+                        "data-index": "{i}",
+                        "data-offset": "{o}",
+                        "data-value": "{v}",
+                        style: "left:{o * 100.0}%;top:{100.0 - v * 100.0}%;",
+                        title: "{number_to_string(round3(o * 100.0))}% · {number_to_string(round3(v))}",
                     }
                 }
             }
-            {
-                let s = stops.clone();
-                rsx! {
-                    button {
-                        onclick: move |_| {
-                            let mut s = s.clone();
-                            let last = s.last().map_or(1.0, |l| l.1);
-                            s.push((1.0, last));
-                            write(s);
-                        },
-                        "+ Stop"
-                    }
+            label { class: "curve-value",
+                span { class: "dim", "{value_label}" }
+                input {
+                    r#type: "number",
+                    step: "0.01",
+                    min: "0",
+                    max: "1",
+                    value: "{shown}",
+                    onchange: move |evt| {
+                        let mut list = s_val.clone();
+                        if let (Some(s), Ok(v)) = (list.get_mut(sel), evt.value().trim().parse::<f64>()) {
+                            s.1 = v.clamp(0.0, 1.0);
+                            write(list);
+                        }
+                    },
                 }
             }
         }
