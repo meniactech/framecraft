@@ -445,3 +445,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .rgba-row input[type=range] { -webkit-appearance: none; appearance: none; height: 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--track); }
 .rgba-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 16px; border-radius: 3px; background: #f5f5f5; border: 1px solid #1a1d24; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
 .popover-catcher { position: fixed; inset: 0; z-index: 19; }
+/* Align tools (FRAME's) in the viewport tool row */
+.align-tools { display: flex; gap: 2px; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line); }
+.align-btn { width: 26px; height: 24px; padding: 0; display: flex; align-items: center; justify-content: center; }
+.align-btn img { width: 16px; height: 16px; pointer-events: none; }
+.align-btn:nth-child(3) { margin-right: 6px; }
+.align-btn:disabled { opacity: .35; }

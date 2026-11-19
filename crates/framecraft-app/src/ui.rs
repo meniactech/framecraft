@@ -135,6 +135,11 @@ pub fn Viewport(ui: Ui) -> Element {
     };
     let zoom = (ui.zoom)();
     let (px, py) = (ui.pan)();
+    let has_selection = ui
+        .editor
+        .read()
+        .as_ref()
+        .is_some_and(|e| e.selected.is_some());
     let frame_style = format!("width:{w}px;height:{h}px;transform:scale({zoom});");
     rsx! {
         div { class: "viewport-panel",
@@ -150,6 +155,23 @@ pub fn Viewport(ui: Ui) -> Element {
                     }
                 }
                 button { onclick: move |_| { spawn(fit(ui)); }, "Fit" }
+                // FRAME's align tools: one layer aligns to its parent or
+                // the scene.
+                div { class: "align-tools", role: "toolbar",
+                    for (mode , title , icon) in framecraft_core::manipulate::ALIGN_MODES {
+                        button {
+                            class: "align-btn",
+                            title: "{title} (to the scene, or the parent layer)",
+                            disabled: !has_selection,
+                            onclick: move |_| ui.align(mode),
+                            img {
+                                src: crate::preview::library_url(&format!("/icons/align/{icon}.svg")),
+                                alt: "",
+                                draggable: "false",
+                            }
+                        }
+                    }
+                }
                 span { class: "dim", "{w}×{h}" }
             }
             div { class: "viewport", id: "fc-viewport",

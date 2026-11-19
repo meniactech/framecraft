@@ -340,6 +340,49 @@ fn frame_inside(doc: &Document, item: &Item, time_ms: f64, seen: &mut Vec<String
     }
 }
 
+/// FRAME's align modes, with the toolbar's titles and icons
+/// (`icons/align/<icon>.svg`).
+pub const ALIGN_MODES: [(&str, &str, &str); 6] = [
+    ("left", "Align left edges", "HL"),
+    ("center", "Align horizontal centers", "HC"),
+    ("right", "Align right edges", "HR"),
+    ("top", "Align top edges", "VT"),
+    ("middle", "Align vertical centers", "VC"),
+    ("bottom", "Align bottom edges", "VB"),
+];
+
+/// Where a box `(x, y, w, h)` goes when aligned (`mode` as in
+/// [`ALIGN_MODES`]) to the area `(ax, ay, aw, ah)`: one axis moves, the
+/// other stays. FRAME's rule (unrotated, unscaled boxes).
+pub fn align_box(mode: &str, b: (f64, f64, f64, f64), area: (f64, f64, f64, f64)) -> (f64, f64) {
+    let (x, y, w, h) = b;
+    let (ax, ay, aw, ah) = area;
+    match mode {
+        "left" => (ax, y),
+        "center" => (ax + (aw - w) / 2.0, y),
+        "right" => (ax + aw - w, y),
+        "top" => (x, ay),
+        "middle" => (x, ay + (ah - h) / 2.0),
+        "bottom" => (x, ay + ah - h),
+        _ => (x, y),
+    }
+}
+
+/// The area several boxes align to: their joint bounds (FRAME's
+/// multi-selection align).
+pub fn bounds_of(boxes: &[(f64, f64, f64, f64)]) -> Option<(f64, f64, f64, f64)> {
+    let first = boxes.first()?;
+    let (mut x0, mut y0) = (first.0, first.1);
+    let (mut x1, mut y1) = (first.0 + first.2, first.1 + first.3);
+    for b in boxes {
+        x0 = x0.min(b.0);
+        y0 = y0.min(b.1);
+        x1 = x1.max(b.0 + b.2);
+        y1 = y1.max(b.1 + b.3);
+    }
+    Some((x0, y0, x1 - x0, y1 - y0))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -546,5 +589,23 @@ mod tests {
         let q = corners(&pose(45.0, 1.0, 1.0), &Frame::SCENE);
         assert!(inside(&q, (200.0, 100.0)));
         assert!(!inside(&q, (100.0, 50.0)));
+    }
+
+    #[test]
+    fn align_as_frame() {
+        let b = (10.0, 20.0, 100.0, 50.0);
+        let scene = (0.0, 0.0, 1920.0, 1080.0);
+        assert_eq!(align_box("left", b, scene), (0.0, 20.0));
+        assert_eq!(align_box("center", b, scene), (910.0, 20.0));
+        assert_eq!(align_box("right", b, scene), (1820.0, 20.0));
+        assert_eq!(align_box("top", b, scene), (10.0, 0.0));
+        assert_eq!(align_box("middle", b, scene), (10.0, 515.0));
+        assert_eq!(align_box("bottom", b, scene), (10.0, 1030.0));
+        let area = bounds_of(&[b, (200.0, 0.0, 10.0, 10.0)]).unwrap();
+        assert_eq!(area, (10.0, 0.0, 200.0, 70.0));
+        assert_eq!(
+            align_box("right", (200.0, 0.0, 10.0, 10.0), area),
+            (200.0, 0.0)
+        );
     }
 }

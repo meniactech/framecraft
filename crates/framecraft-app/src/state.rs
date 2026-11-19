@@ -701,6 +701,56 @@ impl Ui {
 
     /// Starts an undo gesture (a drag): commands until
     /// [`Ui::end_gesture`] are one undo step.
+    /// Aligns the selected layer (FRAME's align tools). One layer aligns to
+    /// its parent's box, or to the scene; positions are set at the
+    /// playhead (keys with Auto-key), as one undo step.
+    pub fn align(self, mode: &str) {
+        use framecraft_core::commands::SetValueAt;
+        use framecraft_core::manipulate::align_box;
+        use framecraft_core::timeline::pose_at;
+        let (time, auto_key) = (*self.time.peek(), *self.auto_key.peek());
+        let planned = self.editor.peek().as_ref().and_then(|e| {
+            let doc = e.doc();
+            let id = e.selected.clone()?;
+            let item = doc.items.iter().find(|i| i.id == id)?;
+            let pose = pose_at(doc, item, time);
+            let area = match item
+                .parent_id
+                .clone()
+                .flatten()
+                .and_then(|p| doc.items.iter().find(|i| i.id == p))
+            {
+                // Children are placed in their parent's box.
+                Some(parent) => {
+                    let pp = pose_at(doc, parent, time);
+                    (0.0, 0.0, pp.width, pp.height)
+                }
+                None => (0.0, 0.0, doc.scene.width, doc.scene.height),
+            };
+            let (x, y) = align_box(mode, (pose.x, pose.y, pose.width, pose.height), area);
+            let mut cmds: Vec<Box<dyn Command>> = Vec::new();
+            for (lane, from, to) in [("x", pose.x, x), ("y", pose.y, y)] {
+                if (from - to).abs() > 1e-9 {
+                    cmds.push(Box::new(SetValueAt {
+                        item: id.clone(),
+                        lane: lane.into(),
+                        time_ms: time,
+                        value: to,
+                        auto_key,
+                    }));
+                }
+            }
+            Some((item.name.clone(), cmds))
+        });
+        let Some((name, cmds)) = planned else { return };
+        if cmds.is_empty() {
+            return;
+        }
+        self.begin_gesture(format!("Align {name}"));
+        self.execute_all(&cmds);
+        self.end_gesture();
+    }
+
     pub fn begin_gesture(mut self, label: String) {
         if let Some(e) = self.editor.write().as_mut() {
             let g = e.graphic;
