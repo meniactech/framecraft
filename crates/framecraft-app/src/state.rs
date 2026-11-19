@@ -70,6 +70,10 @@ pub struct Ui {
     pub palettes: Signal<framecraft_core::palettes::UserPalettes>,
     /// The Project view (graphics and Media Manager) covers the editor.
     pub project_view: Signal<bool>,
+    /// The motion library: `Some("apply")` or `Some("save")` when open.
+    pub motion_dialog: Signal<Option<&'static str>>,
+    /// The user's saved motions (data folder).
+    pub user_motions: Signal<framecraft_core::motion::UserMotions>,
 }
 
 /// An open media library: what it lists and where the pick goes.
@@ -121,7 +125,23 @@ impl Ui {
                     .unwrap_or_default()
             }),
             project_view: use_signal(|| false),
+            motion_dialog: use_signal(|| None),
+            user_motions: use_signal(|| {
+                crate::motions::motions_path()
+                    .map(|p| framecraft_core::motion::UserMotions::load(&p))
+                    .unwrap_or_default()
+            }),
         }
+    }
+
+    /// Replaces the user's saved motions and saves them.
+    pub fn set_user_motions(mut self, next: framecraft_core::motion::UserMotions) {
+        if let Some(path) = crate::motions::motions_path()
+            && let Err(e) = next.save(&path)
+        {
+            self.set_status(format!("Could not save motions: {e}"));
+        }
+        self.user_motions.set(next);
     }
 
     /// Replaces the user's palettes: saves them, and when the active colors
@@ -342,7 +362,7 @@ impl Ui {
         }
     }
 
-    fn selected(&self) -> Option<String> {
+    pub fn selected(&self) -> Option<String> {
         self.editor.peek().as_ref().and_then(|e| e.selected.clone())
     }
 

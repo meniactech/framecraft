@@ -21,6 +21,7 @@ pub mod manipulate;
 pub mod media;
 pub mod model;
 pub mod modifiers;
+pub mod motion;
 pub mod normalize;
 pub mod pack;
 pub mod palettes;

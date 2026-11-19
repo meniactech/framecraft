@@ -38,7 +38,7 @@ fn round3(v: f64) -> f64 {
 }
 
 /// `ease-in-out-back` → `In Out Back`.
-fn easing_label(id: &str) -> String {
+pub(crate) fn easing_label(id: &str) -> String {
     if id == "linear" {
         return "Linear".into();
     }
@@ -300,6 +300,24 @@ pub fn Timeline(ui: Ui) -> Element {
                     },
                     span { class: "dot" }
                     "Auto-key"
+                }
+                button {
+                    title: "Motion library: apply a ready-made or saved motion to the selected layer at the playhead",
+                    disabled: ui.editor.read().is_none(),
+                    onclick: move |_| {
+                        let mut open = ui.motion_dialog;
+                        open.set(Some("apply"));
+                    },
+                    "Motions"
+                }
+                button {
+                    title: "Save the selected keyframes (one layer) as a reusable motion",
+                    disabled: !crate::motions::can_save(ui),
+                    onclick: move |_| {
+                        let mut open = ui.motion_dialog;
+                        open.set(Some("save"));
+                    },
+                    "Save motion"
                 }
                 button {
                     class: if snap { "active" } else { "" },

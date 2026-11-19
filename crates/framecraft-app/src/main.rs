@@ -12,6 +12,7 @@
 mod bridge;
 mod interact;
 mod media;
+mod motions;
 mod outliner;
 mod palettes;
 mod preview;
@@ -95,6 +96,7 @@ fn App() -> Element {
             Timeline { ui }
             media::MediaDialog { ui }
             project_view::ProjectView { ui }
+            motions::MotionDialog { ui }
         }
     }
 }

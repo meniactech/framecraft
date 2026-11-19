@@ -294,3 +294,36 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent); }
 .stock-strip { display: flex; height: 22px; border-radius: 4px; overflow: hidden; }
 .stock-strip div { flex: 1; background: linear-gradient(var(--sw), var(--sw)), repeating-conic-gradient(#888 0% 25%, #ccc 0% 50%) 50% / 8px 8px; }
+/* Motion library */
+.motion-dialog { width: min(860px, 92vw); max-height: 88vh; display: flex; flex-direction: column; gap: 10px; padding: 14px; -webkit-user-select: none; user-select: none; }
+.motion-dialog.small { width: min(520px, 92vw); }
+.motion-dialog .modal-head { align-items: flex-start; }
+.motion-dialog .modal-head > div { flex: 1; }
+.motion-dialog .modal-head p { margin: 4px 0 0; font-size: 12px; }
+.motion-filters { display: flex; gap: 8px; align-items: center; }
+.motion-filters input[type=search] { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.motion-body { display: grid; grid-template-columns: 1fr 312px; gap: 12px; min-height: 0; flex: 1; }
+.motion-list { overflow: auto; min-height: 0; max-height: 52vh; }
+.motion-list h3, .motion-side h3 { font-size: 12px; margin: 6px 0; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.motion-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 6px; }
+.motion-card { position: relative; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.motion-card.active { border-color: var(--accent); background: #22283a; }
+.motion-pick { width: 100%; display: flex; flex-direction: column; align-items: flex-start; gap: 2px; padding: 6px 8px; border: none; background: none; text-align: left; font-size: 12px; }
+.motion-name { display: flex; justify-content: space-between; width: 100%; gap: 6px; font-weight: 600; }
+.motion-cat { font-weight: normal; font-size: 10px; color: var(--dim); }
+.motion-delete { position: absolute; right: 4px; bottom: 4px; font-size: 10px; padding: 1px 6px; display: none; }
+.motion-card:hover .motion-delete { display: block; }
+.motion-stage { position: relative; overflow: hidden; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); }
+.motion-stage.empty { width: 300px; height: 169px; display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--dim); }
+.motion-scene { position: absolute; left: 0; top: 0; transform-origin: 0 0; outline: 6px dashed #33384588; outline-offset: -6px; }
+.motion-box { position: absolute; display: flex; align-items: center; justify-content: center; overflow: hidden; border-radius: 12px; font-weight: 600;
+  background: rgb(229, 231, 235); color: rgb(17, 17, 17); transform-origin: center center; }
+.motion-progress { width: 300px; height: 4px; margin-top: 6px; border-radius: 2px; background: var(--line); overflow: hidden; }
+.motion-progress div { height: 100%; background: var(--accent); }
+.motion-foot { display: flex; gap: 10px; align-items: flex-end; }
+.motion-foot label, .motion-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; }
+.motion-foot input, .motion-field input { width: 110px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.motion-field input { width: auto; }
+.motion-foot .error { flex: 1; }
+.error { color: #f87171; font-size: 12px; }
+.dim.small { font-size: 11px; }
