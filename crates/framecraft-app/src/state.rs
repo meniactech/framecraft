@@ -202,6 +202,9 @@ impl Ui {
     /// Opens a FRAME pack or a FrameCraft project folder (or its
     /// `project.json`). A folder with an autosave copy asks to restore it.
     pub fn open(mut self, path: PathBuf) {
+        // Absolute, so save and export dialogs can start next to it (a
+        // relative path from the command line made them start elsewhere).
+        let path = std::fs::canonicalize(&path).unwrap_or(path);
         match Project::open_any(&path) {
             Ok(project) => {
                 let recovery = project.has_recovery().then(|| project.path.clone());
@@ -344,7 +347,14 @@ impl Ui {
                 self.dirty.set(false);
                 self.set_status(format!("Saved {}", dir.display()));
             }
-            Some(Err(e)) => self.set_status(format!("Could not save: {e}")),
+            Some(Err(e)) => {
+                let hint = if e.contains("Permission denied") {
+                    " — no permission to write there; choose a folder you own (e.g. in your home folder)"
+                } else {
+                    ""
+                };
+                self.set_status(format!("Could not save: {e}{hint}"));
+            }
             None => {}
         }
     }

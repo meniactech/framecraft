@@ -390,3 +390,5 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .tab-icon { width: 20px; height: 20px; object-fit: contain; opacity: .7; pointer-events: none; }
 .tab.active .tab-icon { opacity: 1; }
 .save.dirty { border-color: var(--key); color: var(--key); }
+/* The status line can be selected and copied (error messages). */
+.header .status { -webkit-user-select: text; user-select: text; cursor: text; }
