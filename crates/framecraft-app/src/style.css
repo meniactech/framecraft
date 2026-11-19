@@ -370,3 +370,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .script-sig { font: 12px ui-monospace, monospace; color: var(--dim); }
 .script-code { flex: 1; min-height: 0; resize: none; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 8px; font: 13px/1.45 ui-monospace, monospace; tab-size: 2; -webkit-user-select: text; user-select: text; }
 .script-global { border: 1px solid var(--line); border-radius: 6px; padding: 6px; display: flex; flex-direction: column; gap: 4px; }
+/* Scene → Cues */
+.cue-buttons { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 6px; }
+.cue-buttons button { padding: 3px 8px; font-size: 12px; }
+.cue-list { display: flex; flex-direction: column; gap: 3px; margin-bottom: 10px; }
+.cue-row { display: grid; grid-template-columns: 1fr 22px; gap: 4px; align-items: center; }
+.cue-seek { display: grid; grid-template-columns: 50px 60px 1fr; gap: 6px; text-align: left; font-size: 12px; padding: 3px 6px; }
+.cue-kind { font-weight: 600; }
+.cue-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

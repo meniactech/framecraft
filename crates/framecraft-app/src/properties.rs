@@ -194,6 +194,10 @@ pub fn Properties(ui: Ui) -> Element {
     let fields: Vec<Field> = Property::of(tab)
         .filter(|p| p.applies(if tab == Tab::Scene { None } else { item }))
         .filter(|p| p.scope != Scope::Item || shown(p, &item_json))
+        // FRAME shows these only while the BOARD Hook is on.
+        .filter(|p| {
+            !schema::needs_board_hook(p.path) || doc.scene.ionboard_hook_enabled == Some(true)
+        })
         .map(|p| {
             let root = match p.scope {
                 Scope::Item => &item_json,
@@ -281,6 +285,9 @@ pub fn Properties(ui: Ui) -> Element {
             if tab == Tab::Scene && ui.editor.read().is_some() {
                 Plates { ui }
             }
+            if tab == Tab::Scene && ui.editor.read().is_some() {
+                SceneCues { ui }
+            }
             if tab == Tab::Modifiers {
                 if let Some(item) = id.clone() {
                     ModifierStack { ui, item, cards, addable }
@@ -315,6 +322,12 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         }
     });
     let text = as_text(&field.value);
+    let board_hook = ui
+        .editor
+        .read()
+        .as_ref()
+        .is_some_and(|e| e.doc().scene.ionboard_hook_enabled == Some(true));
+    let help = schema::help(prop.path, board_hook).unwrap_or("");
     let mut stock_open = use_signal(|| false);
     let mut picker_open = use_signal(|| false);
     let default = if field.modifier.is_some() {
@@ -672,7 +685,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         return rsx! {
             {dialog}
             div { class: "field wide",
-                span { class: "field-label", "{prop.label}" }
+                span { class: "field-label", title: "{help}", "{prop.label}" }
                 {input}
             }
         };
@@ -683,7 +696,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         return rsx! {
             {dialog}
             div { class: "field",
-                span { class: "field-label", "{prop.label}" }
+                span { class: "field-label", title: "{help}", "{prop.label}" }
                 {input}
                 {key_button}
             }
@@ -692,7 +705,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     rsx! {
         {dialog}
         label { class: "field",
-            span { class: "field-label", "{prop.label}" }
+            span { class: "field-label", title: "{help}", "{prop.label}" }
             {input}
             {key_button}
         }
@@ -1661,6 +1674,109 @@ fn Plates(ui: Ui) -> Element {
                                     }
                                     span { "{name}" }
                                 }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Scene → Cues (FRAME's CueEditor): add cues at the playhead, jump between
+/// them, and the list. Their fields are edited on the timeline.
+#[component]
+fn SceneCues(ui: Ui) -> Element {
+    use framecraft_core::keys::{AddCue, RemoveCue, cue_label, new_cue};
+    use framecraft_core::model::CueKind;
+    let (mut cues, tracks) = match ui.editor.read().as_ref() {
+        Some(e) => (
+            e.doc().timeline.scene_cues.clone().unwrap_or_default(),
+            e.doc().timeline.item_tracks.len(),
+        ),
+        None => return rsx! {},
+    };
+    cues.sort_by(|a, b| a.time.total_cmp(&b.time));
+    let times: Vec<f64> = cues.iter().map(|c| c.time).collect();
+    let (prev_times, next_times) = (times.clone(), times.clone());
+    let add = move |kind: CueKind| {
+        ui.execute(&AddCue {
+            cue: new_cue(kind, *ui.time.peek()),
+        });
+    };
+    rsx! {
+        h3 { title: "Edit on the timeline (Pause / API / Script diamonds). Select a diamond for time, delay and type fields.",
+            "Cues"
+        }
+        div { class: "cue-buttons",
+            button { onclick: move |_| add(CueKind::Pause), "+ Pause" }
+            button { onclick: move |_| add(CueKind::ApiCall), "+ API" }
+            button { onclick: move |_| add(CueKind::Script), "+ Script" }
+            button {
+                title: "Jump to previous cue",
+                onclick: move |_| {
+                    let now = *ui.time.peek();
+                    let t = prev_times.iter().rev().find(|t| **t < now - 0.001).or(prev_times.first());
+                    if let Some(t) = t {
+                        if *ui.playing.peek() {
+                            ui.toggle_play();
+                        }
+                        ui.set_time(*t);
+                    }
+                },
+                "◀"
+            }
+            button {
+                title: "Jump to next cue",
+                onclick: move |_| {
+                    let now = *ui.time.peek();
+                    let t = next_times.iter().find(|t| **t > now + 0.001).or(next_times.last());
+                    if let Some(t) = t {
+                        if *ui.playing.peek() {
+                            ui.toggle_play();
+                        }
+                        ui.set_time(*t);
+                    }
+                },
+                "▶"
+            }
+        }
+        div { class: "script-summary",
+            span { class: "dim", "Scene cues" }
+            span { "{cues.len()}" }
+            span { class: "dim", "Item tracks" }
+            span { "{tracks}" }
+        }
+        if cues.is_empty() {
+            p { class: "dim", "No cues yet." }
+        }
+        div { class: "cue-list",
+            for c in cues {
+                {
+                    let (id, t) = (c.id.clone(), c.time);
+                    let detail = match c.label.clone().filter(|l| !l.is_empty()) {
+                        Some(l) => l,
+                        None => match c.kind {
+                            CueKind::Script => c.script_fn.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| "—".into()),
+                            CueKind::ApiCall => c.api_url.clone().filter(|s| !s.is_empty()).unwrap_or_else(|| "—".into()),
+                            CueKind::Pause => String::new(),
+                        },
+                    };
+                    rsx! {
+                        div { class: "cue-row",
+                            button {
+                                class: "cue-seek",
+                                title: "Move the playhead here",
+                                onclick: move |_| ui.set_time(t),
+                                span { class: "cue-kind", "{cue_label(c.kind)}" }
+                                span { class: "dim", "{t.round()}ms" }
+                                span { class: "cue-detail", "{detail}" }
+                            }
+                            button {
+                                class: "key-button",
+                                title: "Remove cue",
+                                onclick: move |_| ui.execute(&RemoveCue { id: id.clone() }),
+                                "✕"
                             }
                         }
                     }

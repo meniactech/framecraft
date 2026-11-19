@@ -337,17 +337,7 @@ pub const PROPERTIES: &[Property] = &[
         Scene,
         "BOARD",
         "ionboardHookEnabled",
-        "Live data",
-        Kind::Toggle,
-        Scene,
-        None,
-        Rebuild
-    ),
-    p!(
-        Scene,
-        "BOARD",
-        "ionboardPanelEnabled",
-        "SPX panel",
+        "Enable BOARD Hook",
         Kind::Toggle,
         Scene,
         None,
@@ -367,8 +357,18 @@ pub const PROPERTIES: &[Property] = &[
         Scene,
         "BOARD",
         "ionboardProjectId",
-        "Project ID",
+        "BOARD ID",
         Kind::Text,
+        Scene,
+        None,
+        Rebuild
+    ),
+    p!(
+        Scene,
+        "BOARD",
+        "ionboardPanelEnabled",
+        "Add SPX Panel",
+        Kind::Toggle,
         Scene,
         None,
         Rebuild
@@ -1744,6 +1744,44 @@ fn is_text(item: &Item) -> bool {
 
 /// Layers with FRAME's Look tab (fill, border, corners): all but Lottie,
 /// video, empty groups and patterns.
+/// Fields shown only while the BOARD Hook is on (as in FRAME).
+pub fn needs_board_hook(path: &str) -> bool {
+    matches!(
+        path,
+        "ionboardMagicId"
+            | "ionboardProjectId"
+            | "ionboardPanelEnabled"
+            | "visibilityVariableId"
+            | "visibilityInvert"
+    )
+}
+
+/// FRAME's info text for a field, if it has one.
+pub fn help(path: &str, board_hook: bool) -> Option<&'static str> {
+    Some(match path {
+        "ionboardHookEnabled" | "ionboardMagicId" => "Obtain Magic ID from MENiAC's account page.",
+        "ionboardProjectId" => "Insert here the BOARD project ID.",
+        "ionboardPanelEnabled" => {
+            "Adds an SPX panel field (16:9) whose url is an absolute BOARD link (board.meniac.tech/spx, or /play/… when Project ID is set). Same Magic auth as BOARD Connect. For SPX Play Item wiring from the board, keep the Connect plugin."
+        }
+        "visibilityVariableId" => {
+            "BOARD Hook key — match a BOARD bool variable or switch name (e.g. is_it_player_1_turn). Polls live JSON and shows/hides this layer. Enable Invert on the opposing arrow for the same bool."
+        }
+        "visibilityInvert" => {
+            "Show this layer when the live value is false. Use on player-2 arrow with the same turn bool as player 1."
+        }
+        "textVariableId" if board_hook => {
+            "OGraf / playout field id, and with BOARD Hook enabled also the live JSON key (match the BOARD component / variable name)."
+        }
+        "textVariableId" => "OGraf / SPX field id.",
+        "qrVariableId" if board_hook => {
+            "OGraf / playout field id, and with BOARD Hook enabled also the live JSON key that overrides Content at playout."
+        }
+        "qrVariableId" => "OGraf / SPX field id.",
+        _ => return None,
+    })
+}
+
 fn is_svg(item: &Item) -> bool {
     let url = item.media_url.as_deref().unwrap_or("");
     url.split(['?', '#'])
@@ -1965,6 +2003,21 @@ impl Property {
                 to_shape: false,
             }));
         }
+        if self.path == "ionboardHookEnabled" && value == Value::Bool(false) {
+            // FRAME: switching the Hook off also removes the SPX panel.
+            let set = |path: &str| -> Box<dyn Command> {
+                Box::new(SetField {
+                    target: FieldTarget::Scene,
+                    path: path.into(),
+                    value: Value::Bool(false),
+                    update: Update::Rebuild,
+                })
+            };
+            return Some(Box::new(crate::commands::Batch {
+                label: "Turn off BOARD Hook".into(),
+                commands: vec![set("ionboardHookEnabled"), set("ionboardPanelEnabled")],
+            }));
+        }
         if self.kind == Kind::SvgToPolygon {
             // Needs the SVG file: the app builds that command.
             return None;
@@ -2155,5 +2208,29 @@ mod tests {
                 .command(Some(&id), Value::from("lots"), 0.0, false)
                 .is_none()
         );
+    }
+
+    #[test]
+    fn board_hook_off_also_removes_the_panel() {
+        let mut d = doc_with(&[]);
+        d.scene.ionboard_hook_enabled = Some(true);
+        d.scene.ionboard_panel_enabled = Some(true);
+        let hook = Property::of(Tab::Scene)
+            .find(|p| p.path == "ionboardHookEnabled")
+            .unwrap();
+        let cmd = hook.command(None, Value::Bool(false), 0.0, false).unwrap();
+        let mut h = History::default();
+        h.execute(&mut d, cmd.as_ref()).unwrap();
+        assert_eq!(
+            (
+                d.scene.ionboard_hook_enabled,
+                d.scene.ionboard_panel_enabled
+            ),
+            (Some(false), Some(false))
+        );
+        h.undo(&mut d).unwrap();
+        assert_eq!(d.scene.ionboard_panel_enabled, Some(true));
+        assert!(needs_board_hook("visibilityInvert") && !needs_board_hook("ionboardHookEnabled"));
+        assert!(help("ionboardProjectId", false).is_some());
     }
 }

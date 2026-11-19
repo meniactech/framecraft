@@ -783,6 +783,33 @@ impl Command for SetField {
     }
 }
 
+/// Several commands as one: all apply, or none (the document is put back
+/// when one fails).
+pub struct Batch {
+    pub label: String,
+    pub commands: Vec<Box<dyn Command>>,
+}
+
+impl Command for Batch {
+    fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
+        let before = doc.clone();
+        let mut change = Change::None;
+        for c in &self.commands {
+            match c.apply(doc) {
+                Ok(ch) => change = change.merge(ch),
+                Err(e) => {
+                    *doc = before;
+                    return Err(e);
+                }
+            }
+        }
+        Ok(change)
+    }
+    fn label(&self, _doc: &Document) -> String {
+        self.label.clone()
+    }
+}
+
 /// Adds a layer on top (last in drawing order), with its parent set.
 pub struct AddItem {
     pub item: Item,
