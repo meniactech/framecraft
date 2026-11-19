@@ -129,6 +129,7 @@ pub(crate) fn set_number(item: &mut Item, field: &str, v: f64) -> Result<(), Com
         "lightningBx" => item.lightning_bx = Some(v),
         "lightningBy" => item.lightning_by = Some(v),
         "borderWidth" => item.border_width = v.max(0.0),
+        _ if crate::modifiers::set_lane(item, field, v)? => {}
         _ => return Err(CommandError::UnknownField(field.to_string())),
     }
     Ok(())
@@ -660,6 +661,11 @@ pub enum FieldTarget {
     Item(String),
     Scene,
     Timeline,
+    /// One modifier of a layer, by its id.
+    Modifier {
+        item: String,
+        modifier: String,
+    },
 }
 
 /// How much of the preview a field affects (see [`Change`]).
@@ -745,11 +751,22 @@ impl Command for SetField {
             FieldTarget::Item(id) => with_json(item_mut(doc, id)?, &self.path, self.value.clone())?,
             FieldTarget::Scene => with_json(&mut doc.scene, &self.path, self.value.clone())?,
             FieldTarget::Timeline => with_json(&mut doc.timeline, &self.path, self.value.clone())?,
+            FieldTarget::Modifier { item, modifier } => {
+                let m = item_mut(doc, item)?
+                    .modifiers
+                    .iter_mut()
+                    .flatten()
+                    .find(|m| crate::modifiers::id(m) == modifier)
+                    .ok_or_else(|| CommandError::InvalidValue(format!("no modifier {modifier}")))?;
+                with_json(m, &self.path, self.value.clone())?;
+            }
         }
         Ok(match (self.update, &self.target) {
             (Update::None, _) => Change::None,
             (Update::Pose, _) => Change::Pose,
-            (Update::Layer, FieldTarget::Item(id)) => Change::Layer(vec![id.clone()]),
+            (Update::Layer, FieldTarget::Item(id) | FieldTarget::Modifier { item: id, .. }) => {
+                Change::Layer(vec![id.clone()])
+            }
             (Update::Layer | Update::Rebuild, _) => Change::Rebuild,
         })
     }
@@ -759,6 +776,9 @@ impl Command for SetField {
             FieldTarget::Item(id) => format!("Change {field} of {}", item_name(doc, id)),
             FieldTarget::Scene => format!("Change scene {field}"),
             FieldTarget::Timeline => format!("Change timeline {field}"),
+            FieldTarget::Modifier { item, .. } => {
+                format!("Change modifier {field} of {}", item_name(doc, item))
+            }
         }
     }
 }

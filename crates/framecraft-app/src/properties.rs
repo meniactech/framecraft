@@ -7,6 +7,7 @@ use dioxus::prelude::*;
 use framecraft_core::color;
 use framecraft_core::commands::SetKeyframe;
 use framecraft_core::js::number_to_string;
+use framecraft_core::modifiers;
 use framecraft_core::schema::{self, Kind, Property, Scope, Tab};
 use framecraft_core::timeline::lane_value;
 use serde_json::{Value, json};
@@ -59,6 +60,103 @@ struct Field {
     value: Value,
     /// Animated at the playhead (the value shown is the animated one).
     animated: bool,
+    /// The modifier this field belongs to (Modifiers tab).
+    modifier: Option<String>,
+    /// Choices that depend on the document: `(value, label)` (layer pickers).
+    options: Vec<(String, String)>,
+    /// The whole modifier, for fields that need its other values.
+    context: Value,
+}
+
+/// One modifier in the stack, ready to draw.
+#[derive(Clone, PartialEq)]
+struct ModCard {
+    id: String,
+    title: String,
+    help: &'static str,
+    enabled: bool,
+    fields: Vec<Field>,
+}
+
+/// The cards of a layer's modifier stack.
+fn modifier_cards(
+    doc: &framecraft_core::normalize::Document,
+    item: &framecraft_core::model::Item,
+    time: f64,
+) -> Vec<ModCard> {
+    item.modifiers
+        .iter()
+        .flatten()
+        .map(|m| {
+            let json = serde_json::to_value(m).unwrap_or_default();
+            let kind = modifiers::kind(m);
+            let mid = modifiers::id(m).to_string();
+            let fields = modifiers::fields(doc, item, m)
+                .into_iter()
+                .map(|p| {
+                    let mut value = schema::lookup(&json, p.path);
+                    let mut animated = false;
+                    if let Some(lane) = p.lane
+                        && let Some(v) = lane_value(doc, &item.id, lane, time)
+                    {
+                        value = Value::from(round3(v));
+                        animated = true;
+                    }
+                    let current = value.as_str().unwrap_or("").to_string();
+                    let mut options: Vec<(String, String)> = match p.kind {
+                        Kind::MaskSource => std::iter::once((
+                            String::new(),
+                            "Custom region on this layer".to_string(),
+                        ))
+                        .chain(
+                            doc.items
+                                .iter()
+                                .filter(|i| i.id != item.id)
+                                .map(|i| (i.id.clone(), i.name.clone())),
+                        )
+                        .collect(),
+                        Kind::PathSource => {
+                            std::iter::once((String::new(), "Select path…".to_string()))
+                                .chain(modifiers::path_sources(doc, &item.id).into_iter().map(
+                                    |i| {
+                                        let shape = if i.shape_type
+                                            == Some(framecraft_core::model::ShapeType::Path)
+                                        {
+                                            "path"
+                                        } else {
+                                            "polygon"
+                                        };
+                                        (i.id.clone(), format!("{} ({shape})", i.name))
+                                    },
+                                ))
+                                .collect()
+                        }
+                        _ => Vec::new(),
+                    };
+                    if matches!(p.kind, Kind::MaskSource | Kind::PathSource)
+                        && !options.iter().any(|(v, _)| *v == current)
+                    {
+                        options.push((current, "(missing — pick again)".to_string()));
+                    }
+                    Field {
+                        prop: p,
+                        value,
+                        animated,
+                        modifier: Some(mid.clone()),
+                        options,
+                        context: json.clone(),
+                    }
+                })
+                .collect();
+            ModCard {
+                id: mid,
+                title: modifiers::label(kind).to_string(),
+                help: modifiers::help(kind, item),
+                enabled: modifiers::enabled(m),
+                fields,
+            }
+        })
+        .collect()
 }
 
 #[component]
@@ -100,6 +198,7 @@ pub fn Properties(ui: Ui) -> Element {
                 Scope::Item => &item_json,
                 Scope::Scene => &scene_json,
                 Scope::Timeline => &timeline_json,
+                Scope::Modifier => &Value::Null,
             };
             let mut value = schema::lookup(root, p.path);
             let mut animated = false;
@@ -113,9 +212,30 @@ pub fn Properties(ui: Ui) -> Element {
                 prop: p,
                 value,
                 animated,
+                modifier: None,
+                options: Vec::new(),
+                context: Value::Null,
             }
         })
         .collect();
+    let cards = match item {
+        Some(i) if tab == Tab::Modifiers => modifier_cards(doc, i, time),
+        _ => Vec::new(),
+    };
+    let addable: Vec<(&'static str, bool)> = item.map_or_else(Vec::new, |i| {
+        modifiers::kinds_for(i)
+            .into_iter()
+            .map(|k| {
+                (
+                    k,
+                    i.modifiers
+                        .iter()
+                        .flatten()
+                        .any(|m| modifiers::kind(m) == k),
+                )
+            })
+            .collect()
+    });
     let id = item.map(|i| i.id.clone());
     let heading = match item {
         Some(i) if tab != Tab::Scene => i.name.clone(),
@@ -147,6 +267,11 @@ pub fn Properties(ui: Ui) -> Element {
                 }
                 FieldRow { ui, field: f.clone(), item: id.clone() }
             }
+            if tab == Tab::Modifiers {
+                if let Some(item) = id.clone() {
+                    ModifierStack { ui, item, cards, addable }
+                }
+            }
             datalist { id: "fc-fonts",
                 for family in schema::builtin_font_families() {
                     option { value: "{family}" }
@@ -160,8 +285,13 @@ pub fn Properties(ui: Ui) -> Element {
 fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     let prop = field.prop;
     let target = item.clone();
+    let modifier = field.modifier.clone();
     let set = use_callback(move |v: Value| {
-        let cmd = prop.command(target.as_deref(), v, *ui.time.peek(), *ui.auto_key.peek());
+        let (time, auto_key) = (*ui.time.peek(), *ui.auto_key.peek());
+        let cmd = match (&modifier, target.as_deref()) {
+            (Some(m), Some(item)) => prop.modifier_command(item, m, v, time, auto_key),
+            _ => prop.command(target.as_deref(), v, time, auto_key),
+        };
         match cmd {
             Some(cmd) => ui.execute(cmd.as_ref()),
             None => {
@@ -171,10 +301,15 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         }
     });
     let text = as_text(&field.value);
+    let default = if field.modifier.is_some() {
+        modifiers::field_default(prop.group, prop.path)
+    } else {
+        number_default(prop.path)
+    };
 
     let input = match prop.kind {
         Kind::Number { step, .. } => {
-            let shown = match field.value.as_f64().or_else(|| number_default(prop.path)) {
+            let shown = match field.value.as_f64().or(default) {
                 Some(v) => number_to_string(round3(v)),
                 None => String::new(),
             };
@@ -284,6 +419,19 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 onchange: move |evt| set(Value::String(evt.value())),
             }
         },
+        Kind::MaskSource | Kind::PathSource => {
+            let options = field.options.clone();
+            rsx! {
+                select { onchange: move |evt| set(Value::from(evt.value())),
+                    for (v , l) in options {
+                        option { value: "{v}", selected: v == text, "{l}" }
+                    }
+                }
+            }
+        }
+        Kind::MaskPoints => rsx! {
+            MaskPoints { value: field.value.clone(), area: field.context["transform"].clone(), set }
+        },
         Kind::Seed => {
             let seed = text.clone();
             rsx! {
@@ -311,7 +459,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 .value
                 .as_f64()
                 .or_else(|| field.value.as_bool().map(|b| f64::from(u8::from(b))))
-                .or_else(|| number_default(prop.path))
+                .or(default)
                 .unwrap_or(0.0);
             rsx! {
                 button {
@@ -341,7 +489,12 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
 
     let wide = matches!(
         prop.kind,
-        Kind::Ramp | Kind::TextArea | Kind::ChartPoints | Kind::ValueRamp | Kind::ColorList
+        Kind::Ramp
+            | Kind::TextArea
+            | Kind::ChartPoints
+            | Kind::ValueRamp
+            | Kind::ColorList
+            | Kind::MaskPoints
     );
     if wide {
         // A div, not a label: these hold several inputs and buttons.
@@ -709,6 +862,211 @@ fn ColorList(value: Value, set: Callback<Value>) -> Element {
                         },
                         "+ Color"
                     }
+                }
+            }
+        }
+    }
+}
+
+/// The Modifiers tab: an Add menu and one card per modifier, in stack order.
+#[component]
+fn ModifierStack(
+    ui: Ui,
+    item: String,
+    cards: Vec<ModCard>,
+    addable: Vec<(&'static str, bool)>,
+) -> Element {
+    use framecraft_core::modifiers::{AddModifier, MoveModifier, RemoveModifier, set_enabled};
+    let mut menu = use_signal(|| false);
+    let count = cards.len();
+    let add_item = item.clone();
+    let add = use_callback(move |kind: &'static str| {
+        let made = ui.editor.read().as_ref().and_then(|ed| {
+            let doc = ed.doc();
+            let it = doc.items.iter().find(|i| i.id == add_item)?;
+            modifiers::new_modifier(doc, it, kind)
+        });
+        if let Some(modifier) = made {
+            ui.execute(&AddModifier {
+                item: add_item.clone(),
+                modifier,
+            });
+        }
+    });
+    rsx! {
+        div { class: "mod-head",
+            h3 { "Modifier stack" }
+            div { class: "add-wrap",
+                button {
+                    title: "Add a modifier. Modifiers apply in list order.",
+                    onclick: move |_| menu.set(!menu()),
+                    "+ Add modifier"
+                }
+                if menu() {
+                    div { class: "menu", onmouseleave: move |_| menu.set(false),
+                        for (kind , taken) in addable {
+                            button {
+                                disabled: taken,
+                                title: if taken { "This layer already has one" } else { "" },
+                                onclick: move |_| {
+                                    menu.set(false);
+                                    add(kind);
+                                },
+                                "{modifiers::label(kind)}"
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        if cards.is_empty() {
+            p { class: "dim", "No modifiers yet." }
+        }
+        for (i , card) in cards.into_iter().enumerate() {
+            {
+                let (a, b, c, d) = (item.clone(), item.clone(), item.clone(), item.clone());
+                let (ma, mb, mc, md) = (card.id.clone(), card.id.clone(), card.id.clone(), card.id.clone());
+                let on = card.enabled;
+                rsx! {
+                    div { class: if on { "mod-card" } else { "mod-card off" },
+                        div { class: "mod-title",
+                            input {
+                                r#type: "checkbox",
+                                checked: on,
+                                title: "Enable or disable this modifier in the viewport and export",
+                                onchange: move |_| ui.execute(&set_enabled(&a, &ma, !on)),
+                            }
+                            span { title: "{card.help}", "{card.title}" }
+                            button {
+                                class: "key-button",
+                                disabled: i == 0,
+                                title: "Move up (applies earlier)",
+                                onclick: move |_| {
+                                    ui.execute(&MoveModifier { item: b.clone(), modifier: mb.clone(), to: i - 1 });
+                                },
+                                "▲"
+                            }
+                            button {
+                                class: "key-button",
+                                disabled: i + 1 == count,
+                                title: "Move down (applies later)",
+                                onclick: move |_| {
+                                    ui.execute(&MoveModifier { item: c.clone(), modifier: mc.clone(), to: i + 1 });
+                                },
+                                "▼"
+                            }
+                            button {
+                                class: "key-button",
+                                title: "Remove this modifier and its keyframes",
+                                onclick: move |_| {
+                                    ui.execute(&RemoveModifier { item: d.clone(), modifier: md.clone() });
+                                },
+                                "×"
+                            }
+                        }
+                        if !card.help.is_empty() {
+                            p { class: "mod-help", "{card.help}" }
+                        }
+                        for f in card.fields {
+                            FieldRow { ui, field: f, item: Some(item.clone()) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A mask's polygon points, in the layer's own box. At least 3 points.
+#[component]
+fn MaskPoints(value: Value, area: Value, set: Callback<Value>) -> Element {
+    let points: Vec<Value> = value.as_array().cloned().unwrap_or_default();
+    let n = |k: &str, d: f64| area[k].as_f64().unwrap_or(d);
+    let (x, y, w, h) = (
+        n("x", 0.0),
+        n("y", 0.0),
+        n("width", 1.0).max(1.0),
+        n("height", 1.0).max(1.0),
+    );
+    let count = points.len();
+    let add = points.clone();
+    rsx! {
+        div { class: "points",
+            for (i , p) in points.iter().cloned().enumerate() {
+                {
+                    let (a, b, c) = (points.clone(), points.clone(), points.clone());
+                    let px = as_text(&p["x"]);
+                    let py = as_text(&p["y"]);
+                    let edit = move |mut list: Vec<Value>, key: &str, v: String| {
+                        if let Ok(v) = v.trim().parse::<f64>() {
+                            list[i][key] = Value::from(v);
+                            set(Value::Array(list));
+                        }
+                    };
+                    rsx! {
+                        div { class: "point xy",
+                            span { class: "dim", "#{i + 1}" }
+                            input {
+                                r#type: "number",
+                                step: "1",
+                                value: "{px}",
+                                title: "X",
+                                onchange: move |evt| edit(a.clone(), "x", evt.value()),
+                            }
+                            input {
+                                r#type: "number",
+                                step: "1",
+                                value: "{py}",
+                                title: "Y",
+                                onchange: move |evt| edit(b.clone(), "y", evt.value()),
+                            }
+                            button {
+                                class: "key-button",
+                                disabled: count <= 3,
+                                title: "Remove point (a polygon needs at least 3)",
+                                onclick: move |_| {
+                                    let mut list = c.clone();
+                                    list.remove(i);
+                                    set(Value::Array(list));
+                                },
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+            if count == 0 {
+                p { class: "dim", "No points yet." }
+            }
+            div { class: "row-buttons",
+                button {
+                    title: "Four points on the mask's box",
+                    onclick: move |_| {
+                        set(json!([
+                            { "x": x, "y": y },
+                            { "x": x + w, "y": y },
+                            { "x": x + w, "y": y + h },
+                            { "x": x, "y": y + h }
+                        ]));
+                    },
+                    "Init from box"
+                }
+                button {
+                    onclick: move |_| {
+                        // As FRAME: halfway between the last and first point.
+                        let mut list = add.clone();
+                        if list.len() < 2 {
+                            list = vec![json!({ "x": x, "y": y }), json!({ "x": x + w, "y": y })];
+                        }
+                        let (first, last) = (&list[0], &list[list.len() - 1]);
+                        let mid = |k: &str| {
+                            (first[k].as_f64().unwrap_or(0.0) + last[k].as_f64().unwrap_or(0.0)) / 2.0
+                        };
+                        let p = json!({ "x": mid("x"), "y": mid("y") });
+                        list.push(p);
+                        set(Value::Array(list));
+                    },
+                    "+ Point"
                 }
             }
         }

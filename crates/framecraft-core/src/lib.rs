@@ -19,6 +19,7 @@ pub mod keys;
 pub mod layers;
 pub mod manipulate;
 pub mod model;
+pub mod modifiers;
 pub mod normalize;
 pub mod pack;
 pub mod preview;

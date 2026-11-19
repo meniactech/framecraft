@@ -22,6 +22,7 @@ pub enum Tab {
     Pattern,
     Lottie,
     Video,
+    Modifiers,
 }
 
 impl Tab {
@@ -38,6 +39,7 @@ impl Tab {
             Tab::Pattern => "Pattern",
             Tab::Lottie => "Lottie",
             Tab::Video => "Video",
+            Tab::Modifiers => "Modifiers",
         }
     }
 
@@ -51,6 +53,7 @@ impl Tab {
             Tab::Chart | Tab::Qr => "chart",
             Tab::Particles | Tab::Lightning | Tab::Pattern => "particles",
             Tab::Lottie | Tab::Video => "look",
+            Tab::Modifiers => "modifiers",
         }
     }
 
@@ -71,6 +74,7 @@ impl Tab {
             Some(ItemType::Video) => tabs.push(Tab::Video),
             _ => {}
         }
+        tabs.push(Tab::Modifiers);
         tabs
     }
 }
@@ -105,6 +109,12 @@ pub enum Kind {
     Seed,
     /// When a Lottie / video clip starts (ms); moves its timeline Start key.
     ClipStart,
+    /// Another layer to mask with, or none (a custom region).
+    MaskSource,
+    /// A path or polygon layer to follow.
+    PathSource,
+    /// A mask's polygon: `[{x, y}, …]` in the layer's own box.
+    MaskPoints,
 }
 
 /// Where a property's value lives.
@@ -113,6 +123,8 @@ pub enum Scope {
     Item,
     Scene,
     Timeline,
+    /// Inside one modifier of a layer (see [`crate::modifiers`]).
+    Modifier,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -1775,23 +1787,15 @@ impl Property {
             (Scope::Item, Some(i)) => serde_json::to_value(i),
             (Scope::Scene, _) => serde_json::to_value(&doc.scene),
             (Scope::Timeline, _) => serde_json::to_value(&doc.timeline),
-            (Scope::Item, None) => return Value::Null,
+            (Scope::Item | Scope::Modifier, None) | (Scope::Modifier, _) => return Value::Null,
         }
         .unwrap_or(Value::Null);
         lookup(&root, self.path)
     }
 
-    /// The command that sets this property. Animatable numbers go through
-    /// [`SetValueAt`] (keyframes, Auto-key); everything else through
-    /// [`SetField`]. Text typed into a number field is parsed here.
-    pub fn command(
-        &self,
-        item: Option<&str>,
-        value: Value,
-        time_ms: f64,
-        auto_key: bool,
-    ) -> Option<Box<dyn Command>> {
-        let value = match (self.kind, value) {
+    /// Typed text and toggles turned into the value stored.
+    fn parse(&self, value: Value) -> Option<Value> {
+        Some(match (self.kind, value) {
             (Kind::Number { min, max, .. }, Value::String(s)) => {
                 Value::from(s.trim().parse::<f64>().ok()?.clamp(min, max))
             }
@@ -1812,7 +1816,55 @@ impl Property {
                 Value::from(s.parse::<f64>().ok()?)
             }
             (_, v) => v,
+        })
+    }
+
+    /// The command that sets this field of modifier `modifier` on `item`.
+    pub fn modifier_command(
+        &self,
+        item: &str,
+        modifier: &str,
+        value: Value,
+        time_ms: f64,
+        auto_key: bool,
+    ) -> Option<Box<dyn Command>> {
+        let value = self.parse(value)?;
+        if let Some(lane) = self.lane {
+            return Some(Box::new(SetValueAt {
+                item: item.into(),
+                lane: lane.into(),
+                time_ms,
+                value: value.as_f64()?,
+                auto_key,
+            }));
+        }
+        let update = match self.kind {
+            // Masks and path follows set up their source layer at start.
+            Kind::MaskSource | Kind::PathSource => Update::Rebuild,
+            _ => self.update,
         };
+        Some(Box::new(SetField {
+            target: FieldTarget::Modifier {
+                item: item.into(),
+                modifier: modifier.into(),
+            },
+            path: self.path.into(),
+            value,
+            update,
+        }))
+    }
+
+    /// The command that sets this property. Animatable numbers go through
+    /// [`SetValueAt`] (keyframes, Auto-key); everything else through
+    /// [`SetField`]. Text typed into a number field is parsed here.
+    pub fn command(
+        &self,
+        item: Option<&str>,
+        value: Value,
+        time_ms: f64,
+        auto_key: bool,
+    ) -> Option<Box<dyn Command>> {
+        let value = self.parse(value)?;
         if let (Kind::ClipStart, Some(id)) = (self.kind, item) {
             let t = match &value {
                 Value::String(s) => s.trim().parse::<f64>().ok()?,
@@ -1836,6 +1888,7 @@ impl Property {
             Scope::Item => FieldTarget::Item(item?.to_string()),
             Scope::Scene => FieldTarget::Scene,
             Scope::Timeline => FieldTarget::Timeline,
+            Scope::Modifier => return None,
         };
         Some(Box::new(SetField {
             target,
@@ -1941,11 +1994,11 @@ mod tests {
         assert_eq!(
             tabs,
             vec![
-                vec![Tab::Transform, Tab::Look, Tab::Text],
-                vec![Tab::Transform, Tab::Look],
-                vec![Tab::Transform],
-                vec![Tab::Transform, Tab::Look, Tab::Chart],
-                vec![Tab::Transform, Tab::Look, Tab::Qr],
+                vec![Tab::Transform, Tab::Look, Tab::Text, Tab::Modifiers],
+                vec![Tab::Transform, Tab::Look, Tab::Modifiers],
+                vec![Tab::Transform, Tab::Modifiers],
+                vec![Tab::Transform, Tab::Look, Tab::Chart, Tab::Modifiers],
+                vec![Tab::Transform, Tab::Look, Tab::Qr, Tab::Modifiers],
             ]
         );
         // Chart style fields follow the chart type.
