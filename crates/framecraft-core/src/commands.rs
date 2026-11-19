@@ -9,7 +9,7 @@
 
 use crate::model::{Item, ItemTrack, Keyframe};
 use crate::normalize::Document;
-use crate::timeline::{base_value, lane_keys};
+use crate::timeline::{base_value, lane_keys, value_at};
 use std::collections::BTreeMap;
 
 /// How much of the preview a change affects (cheapest first).
@@ -137,9 +137,13 @@ impl Command for SetNumber {
     }
 }
 
-/// Sets a value at the playhead: a keyframe when the lane is animated or
-/// auto-key is on (which starts animating the lane), otherwise the layer's
-/// own value.
+/// Sets a value at the playhead:
+///
+/// - Auto-key on: writes a keyframe there (animating the lane if it was not).
+/// - Auto-key off, lane animated: shifts every keyframe of the lane by the
+///   same amount, so the animation keeps its shape and passes through the
+///   new value at the playhead. No keyframes are added.
+/// - Auto-key off, not animated: changes the layer's own value.
 pub struct SetValueAt {
     pub item: String,
     pub lane: String,
@@ -151,23 +155,46 @@ pub struct SetValueAt {
 
 impl Command for SetValueAt {
     fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
-        if self.auto_key || lane_keys(doc, &self.item, &self.lane).is_some() {
-            SetKeyframe {
+        if self.auto_key {
+            return SetKeyframe {
                 item: self.item.clone(),
                 lane: self.lane.clone(),
                 time_ms: self.time_ms,
                 value: self.value,
                 easing: None,
             }
-            .apply(doc)
-        } else {
-            SetNumber {
+            .apply(doc);
+        }
+        let Some(current) =
+            lane_keys(doc, &self.item, &self.lane).and_then(|k| value_at(k, self.time_ms))
+        else {
+            return SetNumber {
                 item: self.item.clone(),
                 field: self.lane.clone(),
                 value: self.value,
             }
-            .apply(doc)
+            .apply(doc);
+        };
+        let delta = self.value - current;
+        item_mut(doc, &self.item)?;
+        let keys = track_mut(doc, &self.item)
+            .properties
+            .get_mut(&self.lane)
+            .expect("animated lane");
+        for k in keys.iter_mut() {
+            k.value += delta;
         }
+        // Keep the layer's own value with the animation, so removing the
+        // keyframes later does not jump back.
+        if let Some(base) = doc
+            .items
+            .iter()
+            .find(|i| i.id == self.item)
+            .and_then(|i| base_value(i, &self.lane))
+        {
+            set_number(item_mut(doc, &self.item)?, &self.lane, base + delta)?;
+        }
+        Ok(Change::Pose)
     }
     fn label(&self, doc: &Document) -> String {
         format!("Change {} of {}", self.lane, item_name(doc, &self.item))
@@ -808,21 +835,40 @@ mod tests {
     }
 
     #[test]
-    fn edits_key_animated_lanes_or_with_auto_key() {
+    fn auto_key_on_writes_keyframes() {
         let mut d = doc();
         let mut h = History::default();
-        // Animated lane: the edit becomes a keyframe.
-        h.execute(&mut d, &set_at("x", 500.0, 7.0, false)).unwrap();
+        h.execute(&mut d, &set_at("x", 500.0, 7.0, true)).unwrap();
         assert_eq!(lane_value(&d, "c", "x", 500.0), Some(7.0));
         assert_eq!(lane_keys(&d, "c", "x").unwrap().len(), 3);
-        // Not animated, auto-key off: the layer's own value changes.
-        h.execute(&mut d, &set_at("y", 500.0, 9.0, false)).unwrap();
-        assert_eq!(d.items.iter().find(|i| i.id == "c").unwrap().y, 9.0);
-        assert!(lane_keys(&d, "c", "y").is_none());
-        // Auto-key on: the first edit starts animating the lane.
+        // The first edit of a lane starts animating it.
         h.execute(&mut d, &set_at("y", 800.0, 12.0, true)).unwrap();
         assert_eq!(lane_keys(&d, "c", "y").unwrap().len(), 1);
         assert_eq!(lane_value(&d, "c", "y", 0.0), Some(12.0));
+    }
+
+    #[test]
+    fn auto_key_off_shifts_animations_and_sets_plain_values() {
+        let mut d = doc();
+        let mut h = History::default();
+        // c.x goes 0 -> 100 over 1 s; at 500 ms it is 50. Ask for 80 there.
+        h.execute(&mut d, &set_at("x", 500.0, 80.0, false)).unwrap();
+        let keys: Vec<(f64, f64)> = lane_keys(&d, "c", "x")
+            .unwrap()
+            .iter()
+            .map(|k| (k.time, k.value))
+            .collect();
+        assert_eq!(keys, vec![(0.0, 30.0), (1000.0, 130.0)]);
+        assert_eq!(lane_value(&d, "c", "x", 500.0), Some(80.0));
+        // Repeated absolute requests (a drag) land exactly, without drift.
+        h.execute(&mut d, &set_at("x", 500.0, 90.0, false)).unwrap();
+        h.execute(&mut d, &set_at("x", 500.0, 90.0, false)).unwrap();
+        assert_eq!(lane_value(&d, "c", "x", 500.0), Some(90.0));
+        assert_eq!(lane_keys(&d, "c", "x").unwrap().len(), 2);
+        // Not animated: the layer's own value.
+        h.execute(&mut d, &set_at("y", 500.0, 9.0, false)).unwrap();
+        assert_eq!(d.items.iter().find(|i| i.id == "c").unwrap().y, 9.0);
+        assert!(lane_keys(&d, "c", "y").is_none());
     }
 
     #[test]

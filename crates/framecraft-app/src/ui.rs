@@ -310,7 +310,7 @@ pub fn Properties(ui: Ui) -> Element {
                                     button {
                                         class: if is_animated { "key-button animated" } else { "key-button" },
                                         title: if is_animated {
-                                            "Animated. Click to set a keyframe at the playhead."
+                                            "Animated. Click to set a keyframe at the playhead. With Auto-key off, editing shifts the whole animation."
                                         } else {
                                             "Click to animate: sets the first keyframe at the playhead."
                                         },
@@ -455,7 +455,7 @@ pub fn Timeline(ui: Ui) -> Element {
                 button { onclick: toggle, if playing { "⏸ Pause" } else { "▶ Play" } }
                 button {
                     class: if (ui.auto_key)() { "auto-key on" } else { "auto-key" },
-                    title: "Auto-key: every property edit writes a keyframe at the playhead",
+                    title: "Auto-key on: edits write keyframes at the playhead. Off: edits shift existing animations and add no keyframes.",
                     onclick: move |_| {
                         let mut auto_key = ui.auto_key;
                         auto_key.set(!auto_key());
