@@ -157,3 +157,80 @@ fn project_packs_match_frame_and_round_trip() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+/// Built-in files from FRAME's static folder.
+struct StaticDir(PathBuf);
+
+impl framecraft_core::export::package::MediaSource for StaticDir {
+    fn read(&self, url: &str) -> Option<Vec<u8>> {
+        let rel = url.split(['?', '#']).next()?.strip_prefix('/')?;
+        if rel.split('/').any(|p| p == "..") {
+            return None;
+        }
+        std::fs::read(self.0.join(rel)).ok()
+    }
+}
+
+/// Reference packs become project folders that open unchanged and export
+/// exactly what the packs export.
+#[test]
+fn project_folders_from_packs_export_the_same() {
+    use framecraft_core::export::package::{ExportRequest, spx_package};
+    use framecraft_core::project::{ChainedMedia, Project};
+
+    let Some(expected) = common::expected_dir() else {
+        return;
+    };
+    let reference = expected.parent().unwrap();
+    let builtin = StaticDir(reference.parent().unwrap().join("static"));
+    let p = Profile::frame();
+    let mut packs: Vec<PathBuf> = std::fs::read_dir(reference.join("projects"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| p.to_string_lossy().ends_with(".frameproject.zip"))
+        .collect();
+    packs.sort();
+
+    for pack_path in packs {
+        let (Pack::Project(pack), _) = read_pack(&std::fs::read(&pack_path).unwrap()).unwrap()
+        else {
+            panic!()
+        };
+        let dir = std::env::temp_dir().join(format!(
+            "framecraft-ref-{}-{}",
+            std::process::id(),
+            pack.name.replace(' ', "_")
+        ));
+        let _ = std::fs::remove_dir_all(&dir);
+        let created = Project::from_pack(&pack, &dir, &p).unwrap();
+        let opened = Project::open(&dir, &p).unwrap();
+        assert_eq!(opened, created);
+        assert_eq!(opened.graphics.len(), pack.graphics.len());
+
+        let from_pack = common::PackMedia {
+            pack: pack.clone(),
+            static_dir: reference.parent().unwrap().join("static"),
+        };
+        let from_project = ChainedMedia {
+            first: &opened,
+            second: &builtin,
+        };
+        for (g, pg) in pack.graphics.iter().zip(&opened.graphics) {
+            let doc_from_pack = normalize(&g.graphic, &p);
+            assert_eq!(pg.doc, doc_from_pack, "{}: graphic changed", g.name);
+            let req = |doc| ExportRequest {
+                doc,
+                graphic_name: &g.name,
+                palette_colors: &[],
+                user_fonts: &[],
+                exported_at: EXPORTED_AT,
+            };
+            let a = spx_package(&req(&doc_from_pack), &from_pack, &p);
+            let b = spx_package(&req(&pg.doc), &from_project, &p);
+            assert!(b.missing.is_empty(), "{}: missing {:?}", g.name, b.missing);
+            assert_eq!(a.files, b.files, "{}: exports differ", g.name);
+        }
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+}

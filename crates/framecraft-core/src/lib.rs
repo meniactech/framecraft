@@ -18,6 +18,7 @@ pub mod model;
 pub mod normalize;
 pub mod pack;
 pub mod profile;
+pub mod project;
 pub mod ramp;
 pub mod script;
 pub mod timeline;
