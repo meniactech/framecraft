@@ -109,7 +109,7 @@ button:disabled { opacity: .45; cursor: default; }
 }
 .menu button { text-align: left; border-color: transparent; background: none; }
 .menu button:hover { background: var(--accent); }
-.layer-list { overflow: auto; user-select: none; }
+.layer-list { overflow: auto; user-select: none; -webkit-user-select: none; }
 .layer-list .pad { padding: 8px 12px; }
 .layer-row { position: relative; display: flex; align-items: center; gap: 4px; height: 24px; padding-right: 4px; cursor: default; border-bottom: 1px solid #262a33; }
 .layer-row:hover { background: #232733; }
@@ -126,7 +126,7 @@ button:disabled { opacity: .45; cursor: default; }
 .row-toggle { flex: none; padding: 0; width: 22px; height: 20px; font-size: 12px; background: none; border-color: transparent; opacity: .55; }
 .row-toggle.on { opacity: 1; color: var(--key); }
 .row-toggle:hover { opacity: 1; }
-.drop-zones { position: absolute; inset: 0; display: grid; grid-template-rows: 30% 40% 30%; z-index: 5; }
+body.row-dragging, body.row-dragging * { cursor: grabbing !important; }
 
 .tabs { display: flex; gap: 4px; margin-bottom: 10px; flex-wrap: wrap; }
 .tab { padding: 3px 10px; }

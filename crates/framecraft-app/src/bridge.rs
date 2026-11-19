@@ -158,6 +158,54 @@ if (!window.__fc) {
   document.addEventListener('pointerup', onMove('up'));
   document.addEventListener('pointercancel', onMove('up'));
 
+  // Outliner rows (`.layer-row[data-id]`) are dragged here, in the page:
+  // Rust only hears the drop. Over a row, the top 30% drops above it, the
+  // bottom 30% below it, and the middle inside it.
+  const clearDrop = () => {
+    for (const el of document.querySelectorAll('.drop-above, .drop-into, .drop-below, .drag-source')) {
+      el.classList.remove('drop-above', 'drop-into', 'drop-below', 'drag-source');
+    }
+  };
+  document.addEventListener('pointerdown', (e) => {
+    const row = e.target && e.target.closest ? e.target.closest('.layer-row[data-id]') : null;
+    if (!row || e.button !== 0 || e.target.closest('button, input, .caret')) return;
+    e.preventDefault(); // no text selection; click and dblclick still fire
+    fc.rowDrag = { id: row.dataset.id, row, x: e.clientX, y: e.clientY, pointer: e.pointerId, moved: false, target: null, zone: null };
+  });
+  document.addEventListener('pointermove', (e) => {
+    const d = fc.rowDrag;
+    if (!d || e.pointerId !== d.pointer) return;
+    if (!d.moved && Math.hypot(e.clientX - d.x, e.clientY - d.y) < 4) return;
+    if (!d.moved) { d.moved = true; d.row.classList.add('drag-source'); document.body.classList.add('row-dragging'); }
+    for (const el of document.querySelectorAll('.drop-above, .drop-into, .drop-below')) {
+      el.classList.remove('drop-above', 'drop-into', 'drop-below');
+    }
+    d.target = null;
+    const hit = document.elementFromPoint(e.clientX, e.clientY);
+    const over = hit && hit.closest ? hit.closest('.layer-row[data-id]') : null;
+    if (!over || over.dataset.id === d.id) return;
+    const r = over.getBoundingClientRect();
+    const f = (e.clientY - r.top) / r.height;
+    d.zone = f < 0.3 ? 'above' : f > 0.7 ? 'below' : 'into';
+    d.target = over.dataset.id;
+    over.classList.add('drop-' + d.zone);
+  });
+  const endRowDrag = (drop) => (e) => {
+    const d = fc.rowDrag;
+    if (!d || e.pointerId !== d.pointer) return;
+    fc.rowDrag = null;
+    clearDrop();
+    document.body.classList.remove('row-dragging');
+    if (!d.moved) return;
+    // A drag is not a click: swallow the click that follows.
+    const swallow = (c) => { c.stopPropagation(); c.preventDefault(); };
+    window.addEventListener('click', swallow, true);
+    setTimeout(() => window.removeEventListener('click', swallow, true), 0);
+    if (drop && d.target) fc.emit({ type: 'outliner-drop', id: d.id, target: d.target, zone: d.zone });
+  };
+  document.addEventListener('pointerup', endRowDrag(true));
+  document.addEventListener('pointercancel', endRowDrag(false));
+
   // Editor keys, outside text fields.
   document.addEventListener('keydown', (e) => {
     const t = e.target;

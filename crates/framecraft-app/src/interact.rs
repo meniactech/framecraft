@@ -133,6 +133,7 @@ pub fn on_event(ui: Ui, ev: Value) {
             Some("up") => pointer_up(ui),
             _ => {}
         },
+        Some("outliner-drop") => crate::outliner::on_drop(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
         _ => {}
     }

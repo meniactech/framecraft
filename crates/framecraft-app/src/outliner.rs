@@ -34,14 +34,6 @@ enum Zone {
     Below,
 }
 
-#[derive(Clone, PartialEq)]
-struct Dragging {
-    id: String,
-    /// The mouse has left the row it started on (a real drag, not a click).
-    moved: bool,
-    target: Option<(String, Zone)>,
-}
-
 fn parent_of(item: &Item) -> Option<String> {
     item.parent_id.clone().flatten()
 }
@@ -143,7 +135,6 @@ fn drop_move(doc: &Document, mover: &str, target: &str, zone: Zone, time: f64) -
 pub fn Outliner(ui: Ui) -> Element {
     let mut collapsed = use_signal(Vec::<String>::new);
     let mut renaming = use_signal(|| None::<String>);
-    let mut dragging = use_signal(|| None::<Dragging>);
     let mut menu = use_signal(|| false);
 
     let (rows, selected) = match ui.editor.read().as_ref() {
@@ -151,23 +142,6 @@ pub fn Outliner(ui: Ui) -> Element {
         None => (Vec::new(), None),
     };
     let open = ui.editor.read().is_some();
-    let drag_now = dragging.read().clone();
-
-    let finish_drag = move |_| {
-        let Some(d) = dragging.take() else { return };
-        let Some((target, zone)) = d.target.filter(|_| d.moved) else {
-            return;
-        };
-        let time = *ui.time.peek();
-        let cmd = ui
-            .editor
-            .peek()
-            .as_ref()
-            .and_then(|e| drop_move(e.doc(), &d.id, &target, zone, time));
-        if let Some(cmd) = cmd {
-            ui.execute(&cmd);
-        }
-    };
 
     rsx! {
         div { class: "outliner",
@@ -208,39 +182,21 @@ pub fn Outliner(ui: Ui) -> Element {
                     }
                 }
             }
-            div {
-                class: if drag_now.as_ref().is_some_and(|d| d.moved) { "layer-list dragging" } else { "layer-list" },
-                onmouseup: finish_drag,
-                onmouseleave: move |_| dragging.set(None),
+            div { class: "layer-list",
                 if rows.is_empty() {
                     p { class: "dim pad", if open { "No layers. Add one with + Add." } else { "Nothing open" } }
                 }
                 for row in rows {
                     {
                         let is_selected = selected.as_deref() == Some(row.id.as_str());
-                        let target = drag_now
-                            .as_ref()
-                            .filter(|d| d.moved && d.id != row.id)
-                            .and_then(|d| d.target.clone())
-                            .filter(|(t, _)| *t == row.id)
-                            .map(|(_, z)| z);
                         let class = format!(
-                            "layer-row{}{}{}{}",
+                            "layer-row{}{}",
                             if is_selected { " selected" } else { "" },
                             if row.visible { "" } else { " hidden" },
-                            match target {
-                                Some(Zone::Above) => " drop-above",
-                                Some(Zone::Into) => " drop-into",
-                                Some(Zone::Below) => " drop-below",
-                                None => "",
-                            },
-                            if drag_now.as_ref().is_some_and(|d| d.moved && d.id == row.id) { " drag-source" } else { "" },
                         );
-                        let show_zones = drag_now.as_ref().is_some_and(|d| d.moved && d.id != row.id);
                         let is_renaming = renaming.read().as_deref() == Some(row.id.as_str());
                         let Row { id, name, icon, depth, has_children, collapsed: is_collapsed, visible, locked, lock_children } = row;
-                        let (id1, id2, id3, id4, id5, id6, id7, id8) = (
-                            id.clone(),
+                        let (id1, id3, id4, id5, id6, id7, id8) = (
                             id.clone(),
                             id.clone(),
                             id.clone(),
@@ -250,28 +206,18 @@ pub fn Outliner(ui: Ui) -> Element {
                             id.clone(),
                         );
                         rsx! {
+                            // Dragging is done by the bridge (`data-id`); see `on_drop`.
                             div {
                                 key: "{id}",
                                 class: "{class}",
+                                "data-id": "{id}",
                                 style: "padding-left:{4 + depth * 14}px;",
-                                onmousedown: move |evt| {
-                                    if evt.trigger_button() != Some(dioxus::html::input_data::MouseButton::Primary) {
-                                        return;
-                                    }
-                                    ui.select_layer(Some(id1.clone()));
-                                    dragging.set(Some(Dragging { id: id1.clone(), moved: false, target: None }));
-                                },
-                                onmouseleave: move |_| {
-                                    let mut d = dragging.write();
-                                    if let Some(d) = d.as_mut().filter(|d| d.id == id2) {
-                                        d.moved = true;
-                                    }
-                                },
+                                onclick: move |_| ui.select_layer(Some(id1.clone())),
                                 if has_children {
                                     span {
                                         class: "caret",
-                                        onmousedown: move |evt| evt.stop_propagation(),
-                                        onclick: move |_| {
+                                        onclick: move |evt| {
+                                            evt.stop_propagation();
                                             let mut c = collapsed.write();
                                             if let Some(i) = c.iter().position(|x| *x == id3) {
                                                 c.remove(i);
@@ -289,7 +235,7 @@ pub fn Outliner(ui: Ui) -> Element {
                                     input {
                                         class: "rename",
                                         value: "{name}",
-                                        onmousedown: move |evt| evt.stop_propagation(),
+                                        onclick: move |evt| evt.stop_propagation(),
                                         onmounted: move |evt| async move {
                                             let _ = evt.set_focus(true).await;
                                         },
@@ -318,8 +264,8 @@ pub fn Outliner(ui: Ui) -> Element {
                                     button {
                                         class: if lock_children { "row-toggle on" } else { "row-toggle" },
                                         title: "Lock children: clicking a child in the viewport selects this layer",
-                                        onmousedown: move |evt| evt.stop_propagation(),
-                                        onclick: move |_| {
+                                        onclick: move |evt| {
+                                            evt.stop_propagation();
                                             ui.execute(&SetField {
                                                 target: FieldTarget::Item(id6.clone()),
                                                 path: "lockChildren".into(),
@@ -333,37 +279,20 @@ pub fn Outliner(ui: Ui) -> Element {
                                 button {
                                     class: if locked { "row-toggle on" } else { "row-toggle" },
                                     title: if locked { "Unlock" } else { "Lock (locked layers are click-through in the viewport)" },
-                                    onmousedown: move |evt| evt.stop_propagation(),
-                                    onclick: move |_| ui.execute(&SetLocked { item: id7.clone(), locked: !locked }),
+                                    onclick: move |evt| {
+                                        evt.stop_propagation();
+                                        ui.execute(&SetLocked { item: id7.clone(), locked: !locked });
+                                    },
                                     if locked { "🔒" } else { "🔓" }
                                 }
                                 button {
                                     class: if visible { "row-toggle" } else { "row-toggle on" },
                                     title: if visible { "Hide" } else { "Show" },
-                                    onmousedown: move |evt| evt.stop_propagation(),
-                                    onclick: move |_| ui.execute(&SetVisible { item: id8.clone(), visible: !visible }),
+                                    onclick: move |evt| {
+                                        evt.stop_propagation();
+                                        ui.execute(&SetVisible { item: id8.clone(), visible: !visible });
+                                    },
                                     if visible { "👁" } else { "–" }
-                                }
-                                if show_zones {
-                                    {
-                                        let (a, b, c) = (id.clone(), id.clone(), id.clone());
-                                        rsx! {
-                                            div { class: "drop-zones",
-                                                div {
-                                                    class: "zone",
-                                                    onmouseenter: move |_| set_target(dragging, &a, Zone::Above),
-                                                }
-                                                div {
-                                                    class: "zone",
-                                                    onmouseenter: move |_| set_target(dragging, &b, Zone::Into),
-                                                }
-                                                div {
-                                                    class: "zone",
-                                                    onmouseenter: move |_| set_target(dragging, &c, Zone::Below),
-                                                }
-                                            }
-                                        }
-                                    }
                                 }
                             }
                         }
@@ -374,9 +303,27 @@ pub fn Outliner(ui: Ui) -> Element {
     }
 }
 
-fn set_target(mut dragging: Signal<Option<Dragging>>, id: &str, zone: Zone) {
-    if let Some(d) = dragging.write().as_mut() {
-        d.target = Some((id.to_string(), zone));
+/// A row dropped on another row (`{type: "outliner-drop", id, target,
+/// zone: "above"|"into"|"below"}` from the bridge): moves the layer.
+pub fn on_drop(ui: Ui, ev: &serde_json::Value) {
+    let (Some(id), Some(target)) = (ev["id"].as_str(), ev["target"].as_str()) else {
+        return;
+    };
+    let zone = match ev["zone"].as_str() {
+        Some("above") => Zone::Above,
+        Some("below") => Zone::Below,
+        Some("into") => Zone::Into,
+        _ => return,
+    };
+    let time = *ui.time.peek();
+    let cmd = ui
+        .editor
+        .peek()
+        .as_ref()
+        .and_then(|e| drop_move(e.doc(), id, target, zone, time));
+    if let Some(cmd) = cmd {
+        ui.execute(&cmd);
+        ui.select_layer(Some(id.to_string()));
     }
 }
 
