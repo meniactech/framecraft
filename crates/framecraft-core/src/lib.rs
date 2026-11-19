@@ -14,6 +14,7 @@ pub mod commands;
 pub mod easing;
 pub mod export;
 pub mod js;
+pub mod manipulate;
 pub mod model;
 pub mod normalize;
 pub mod pack;
@@ -22,6 +23,7 @@ pub mod profile;
 pub mod project;
 pub mod ramp;
 pub mod script;
+pub mod selection;
 pub mod timeline;
 
 /// Product name used in generated files (`generator` fields and similar).
