@@ -17,6 +17,9 @@ pub enum Tab {
     Text,
     Chart,
     Qr,
+    Particles,
+    Lightning,
+    Pattern,
 }
 
 impl Tab {
@@ -28,6 +31,9 @@ impl Tab {
             Tab::Text => "Text",
             Tab::Chart => "Chart",
             Tab::Qr => "QR",
+            Tab::Particles => "Particles",
+            Tab::Lightning => "Lightning",
+            Tab::Pattern => "Pattern",
         }
     }
 
@@ -39,6 +45,7 @@ impl Tab {
             Tab::Look => "look",
             Tab::Text => "text",
             Tab::Chart | Tab::Qr => "chart",
+            Tab::Particles | Tab::Lightning | Tab::Pattern => "particles",
         }
     }
 
@@ -52,6 +59,9 @@ impl Tab {
             Some(ItemType::Text) => tabs.push(Tab::Text),
             Some(ItemType::Chart) => tabs.push(Tab::Chart),
             Some(ItemType::Qr) => tabs.push(Tab::Qr),
+            Some(ItemType::Particles) => tabs.push(Tab::Particles),
+            Some(ItemType::Lightning) => tabs.push(Tab::Lightning),
+            Some(ItemType::Pattern) => tabs.push(Tab::Pattern),
             _ => {}
         }
         tabs
@@ -80,6 +90,12 @@ pub enum Kind {
     Ramp,
     /// Chart data: `[{id, label, value, color?, liveVariableId?}, …]`.
     ChartPoints,
+    /// Numbers along a 0–1 ramp: `[{offset, value}, …]` (values 0–1).
+    ValueRamp,
+    /// A list of colors.
+    ColorList,
+    /// A random seed (whole number), with a Randomize button.
+    Seed,
 }
 
 /// Where a property's value lives.
@@ -1031,6 +1047,550 @@ pub const PROPERTIES: &[Property] = &[
         None,
         Layer
     ),
+    // Particles
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitting",
+        "Emitting",
+        Kind::Toggle,
+        Item,
+        Some("particleEmitting"),
+        Pose
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleSpawnRate",
+        "Spawn / sec",
+        num(0.0, 10_000.0, 1.0),
+        Item,
+        Some("particleSpawnRate"),
+        Pose
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterX",
+        "Emitter X",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("particleEmitterX"),
+        Pose
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterY",
+        "Emitter Y",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("particleEmitterY"),
+        Pose
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterShape",
+        "Shape",
+        Kind::Choice(&[("circle", "Circle"), ("box", "Box")]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterRadius",
+        "Radius",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterWidth",
+        "Width",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitterHeight",
+        "Height",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleEmitAngleDeg",
+        "Angle °",
+        num(-ANY, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleAttach",
+        "Space",
+        Kind::Choice(&[
+            ("absolute", "Absolute"),
+            ("relative", "Relative to emitter")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleMaxCount",
+        "Max count",
+        num(1.0, 100_000.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Emitter",
+        "particleLifetimeMs",
+        "Lifetime (ms)",
+        num(1.0, ANY, 50.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Motion",
+        "particleSpeed",
+        "Speed",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Motion",
+        "particleSpreadDeg",
+        "Spread °",
+        num(0.0, 360.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Motion",
+        "particleGravityX",
+        "Gravity X",
+        num(-ANY, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Motion",
+        "particleGravityY",
+        "Gravity Y",
+        num(-ANY, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleRotationDeg",
+        "Rotation °",
+        num(-ANY, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleSpinDeg",
+        "Spin ° / s",
+        num(-ANY, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleRotationRandomDeg",
+        "Random rotation °",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleAlignToVelocity",
+        "Align to velocity",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleSize",
+        "Size",
+        num(0.5, ANY, 0.5),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleSizeRamp",
+        "Size over life",
+        Kind::ValueRamp,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleColorMode",
+        "Color mode",
+        Kind::Choice(&[
+            ("ramp", "Ramp over life"),
+            ("paletteCycle", "Palette cycle")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleColorRamp",
+        "Color over life",
+        Kind::Ramp,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particlePaletteColors",
+        "Palette",
+        Kind::ColorList,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleAlphaRamp",
+        "Opacity over life",
+        Kind::ValueRamp,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleBlend",
+        "Blend",
+        Kind::Choice(&[("additive", "Additive"), ("normal", "Normal")]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleSpriteUrl",
+        "Sprite URL",
+        Kind::Text,
+        Item,
+        None,
+        Rebuild
+    ),
+    p!(
+        Particles,
+        "Look",
+        "particleSeed",
+        "Seed",
+        Kind::Seed,
+        Item,
+        None,
+        Layer
+    ),
+    // Lightning
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningEmitting",
+        "Emitting",
+        Kind::Toggle,
+        Item,
+        Some("lightningEmitting"),
+        Pose
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningAx",
+        "A X",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("lightningAx"),
+        Pose
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningAy",
+        "A Y",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("lightningAy"),
+        Pose
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningBx",
+        "B X",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("lightningBx"),
+        Pose
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningBy",
+        "B Y",
+        num(-ANY, ANY, 1.0),
+        Item,
+        Some("lightningBy"),
+        Pose
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningSegments",
+        "Segments",
+        num(2.0, 48.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningAmplitude",
+        "Amplitude",
+        num(0.0, ANY, 0.5),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningBranches",
+        "Branches",
+        num(0.0, 6.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Bolt",
+        "lightningFlickerMs",
+        "Flicker (ms)",
+        num(8.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Look",
+        "lightningWidth",
+        "Width",
+        num(0.5, ANY, 0.25),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Look",
+        "lightningGlowWidth",
+        "Glow width",
+        num(0.0, ANY, 0.5),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Look",
+        "lightningColor",
+        "Color",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Look",
+        "lightningGlowColor",
+        "Glow color",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lightning,
+        "Look",
+        "lightningSeed",
+        "Seed",
+        Kind::Seed,
+        Item,
+        None,
+        Layer
+    ),
+    // Pattern
+    p!(
+        Pattern,
+        "Pattern",
+        "patternKind",
+        "Preset",
+        Kind::Choice(&[
+            ("checker", "Checker"),
+            ("stripes", "Stripes"),
+            ("dots", "Dots"),
+            ("grid", "Grid")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternPhase",
+        "Phase (cycles)",
+        num(-ANY, ANY, 0.01),
+        Item,
+        Some("patternPhase"),
+        Pose
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternColorA",
+        "Color A",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternColorB",
+        "Color B",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternStripeWidth",
+        "Stripe width",
+        num(1.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternStripeGap",
+        "Gap",
+        num(0.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternStripeAngleDeg",
+        "Angle °",
+        num(-ANY, ANY, 0.1),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternCellSize",
+        "Cell size",
+        num(2.0, ANY, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternDotRadius",
+        "Dot radius",
+        num(0.5, ANY, 0.5),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Pattern,
+        "Pattern",
+        "patternLineWidth",
+        "Line width",
+        num(0.5, ANY, 0.5),
+        Item,
+        None,
+        Layer
+    ),
 ];
 
 fn is_text(item: &Item) -> bool {
@@ -1044,6 +1604,13 @@ fn is_filled(item: &Item) -> bool {
         item.item_type,
         Some(ItemType::Lottie | ItemType::Video | ItemType::Empty | ItemType::Pattern)
     )
+}
+
+fn pattern_kind(item: &Item) -> &str {
+    match item.pattern_kind.as_deref() {
+        Some(k @ ("stripes" | "dots" | "grid")) => k,
+        _ => "checker",
+    }
 }
 
 fn chart_kind(item: &Item) -> &str {
@@ -1105,11 +1672,26 @@ impl Property {
             "chartLineWidth" | "chartPointRadius" | "chartLineTension" => {
                 chart_kind(item) == "line"
             }
+            "particleEmitterWidth" | "particleEmitterHeight" => {
+                item.particle_emitter_shape.as_deref() == Some("box")
+            }
+            "particleEmitterRadius" => item.particle_emitter_shape.as_deref() != Some("box"),
+            "particlePaletteColors" => item.particle_color_mode.as_deref() == Some("paletteCycle"),
+            "particleColorRamp" => item.particle_color_mode.as_deref() != Some("paletteCycle"),
+            "patternStripeWidth" | "patternStripeGap" | "patternStripeAngleDeg" => {
+                pattern_kind(item) == "stripes"
+            }
+            "patternCellSize" => pattern_kind(item) != "stripes",
+            "patternDotRadius" => pattern_kind(item) == "dots",
+            "patternLineWidth" => pattern_kind(item) == "grid",
             _ => match self.tab {
                 Tab::Look => is_filled(item),
                 Tab::Text => is_text(item),
                 Tab::Chart => item.item_type == Some(ItemType::Chart),
                 Tab::Qr => item.item_type == Some(ItemType::Qr),
+                Tab::Particles => item.item_type == Some(ItemType::Particles),
+                Tab::Lightning => item.item_type == Some(ItemType::Lightning),
+                Tab::Pattern => item.item_type == Some(ItemType::Pattern),
                 _ => true,
             },
         }
@@ -1148,6 +1730,12 @@ impl Property {
                 Ok(n) => Value::from(n),
                 Err(_) => Value::String(s.trim().to_string()),
             },
+            (Kind::Toggle, Value::Bool(b)) if self.lane.is_some() => {
+                Value::from(f64::from(u8::from(b)))
+            }
+            (Kind::Seed, Value::String(s)) => {
+                Value::from(s.trim().parse::<f64>().ok()?.round().max(1.0))
+            }
             (Kind::Choice(_), Value::String(s)) if self.path == "fontWeight" => {
                 Value::from(s.parse::<f64>().ok()?)
             }
@@ -1201,6 +1789,16 @@ mod tests {
     #[test]
     fn every_path_reads_and_writes_on_fitting_layers() {
         let mut d = doc_with(&NewLayer::ALL);
+        // Variants, so fields shown only for some settings are covered too.
+        let mut box_particles = new_layer(NewLayer::Particles, None);
+        box_particles.particle_emitter_shape = Some("box".into());
+        box_particles.particle_color_mode = Some("paletteCycle".into());
+        d.items.push(box_particles);
+        for kind in ["stripes", "dots", "grid"] {
+            let mut pattern = new_layer(NewLayer::Pattern, None);
+            pattern.pattern_kind = Some(kind.into());
+            d.items.push(pattern);
+        }
         let mut h = History::default();
         for p in PROPERTIES {
             let targets: Vec<Option<String>> = match p.scope {
@@ -1224,6 +1822,11 @@ mod tests {
                     (Kind::Number { min, .. }, _) => Value::from(min.max(0.0)),
                     (Kind::Color, _) => Value::from("#123456"),
                     (Kind::Toggle, _) => Value::from(true),
+                    (Kind::ValueRamp, _) => {
+                        serde_json::json!([{ "offset": 0, "value": 1 }, { "offset": 1, "value": 0 }])
+                    }
+                    (Kind::ColorList, _) => serde_json::json!(["#ff0000"]),
+                    (Kind::Seed, _) => Value::from(7),
                     (Kind::ChartPoints, _) => {
                         serde_json::json!([{ "id": "p", "label": "A", "value": 1 }])
                     }

@@ -227,10 +227,19 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         }
         Kind::Toggle => {
             // Unset chart toggles are on in FRAME.
+            // Animated toggles read as numbers (on from 0.5); unset chart and
+            // emitter toggles are on in FRAME.
             let on = field
                 .value
                 .as_bool()
-                .unwrap_or(matches!(prop.path, "chartShowLegend" | "chartShowValues"));
+                .or_else(|| field.value.as_f64().map(|v| v >= 0.5))
+                .unwrap_or(matches!(
+                    prop.path,
+                    "chartShowLegend"
+                        | "chartShowValues"
+                        | "particleEmitting"
+                        | "lightningEmitting"
+                ));
             rsx! {
                 input {
                     r#type: "checkbox",
@@ -259,6 +268,30 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         Kind::ChartPoints => rsx! {
             ChartPoints { ui, value: field.value.clone(), set }
         },
+        Kind::ValueRamp => rsx! {
+            ValueRamp { value: field.value.clone(), set }
+        },
+        Kind::ColorList => rsx! {
+            ColorList { value: field.value.clone(), set }
+        },
+        Kind::Seed => {
+            let seed = text.clone();
+            rsx! {
+                div { class: "seed-field",
+                    input {
+                        r#type: "number",
+                        step: "1",
+                        value: "{seed}",
+                        onchange: move |evt| set(Value::String(evt.value())),
+                    }
+                    button {
+                        title: "A new random seed",
+                        onclick: move |_| set(Value::from(framecraft_core::layers::random_seed())),
+                        "Randomize"
+                    }
+                }
+            }
+        }
     };
 
     let key_button = match (prop.lane, item) {
@@ -267,6 +300,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             let value = field
                 .value
                 .as_f64()
+                .or_else(|| field.value.as_bool().map(|b| f64::from(u8::from(b))))
                 .or_else(|| number_default(prop.path))
                 .unwrap_or(0.0);
             rsx! {
@@ -295,7 +329,10 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
     };
 
-    let wide = matches!(prop.kind, Kind::Ramp | Kind::TextArea | Kind::ChartPoints);
+    let wide = matches!(
+        prop.kind,
+        Kind::Ramp | Kind::TextArea | Kind::ChartPoints | Kind::ValueRamp | Kind::ColorList
+    );
     if wide {
         // A div, not a label: these hold several inputs and buttons.
         return rsx! {
@@ -506,6 +543,161 @@ fn ChartPoints(ui: Ui, value: Value, set: Callback<Value>) -> Element {
                             set(Value::Array(list));
                         },
                         "+ Point"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Values (0–1) along a particle's life: position (%) and value per stop.
+#[component]
+fn ValueRamp(value: Value, set: Callback<Value>) -> Element {
+    let stops: Vec<(f64, f64)> = value
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .map(|s| {
+                    (
+                        s["offset"].as_f64().unwrap_or(0.0),
+                        s["value"].as_f64().unwrap_or(0.0),
+                    )
+                })
+                .collect()
+        })
+        .unwrap_or_else(|| vec![(0.0, 1.0), (1.0, 1.0)]);
+    let write = move |mut stops: Vec<(f64, f64)>| {
+        stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+        set(Value::Array(
+            stops
+                .into_iter()
+                .map(|(o, v)| json!({ "offset": o, "value": v }))
+                .collect(),
+        ));
+    };
+    let count = stops.len();
+    rsx! {
+        div { class: "ramp",
+            for (i , (offset , v)) in stops.iter().copied().enumerate() {
+                {
+                    let (s1, s2, s3) = (stops.clone(), stops.clone(), stops.clone());
+                    let pct = number_to_string(round3(offset * 100.0));
+                    let val = number_to_string(round3(v));
+                    rsx! {
+                        div { class: "stop",
+                            input {
+                                r#type: "number",
+                                step: "1",
+                                value: "{pct}",
+                                title: "Position % of the particle's life",
+                                onchange: move |evt| {
+                                    if let Ok(p) = evt.value().trim().parse::<f64>() {
+                                        let mut s = s1.clone();
+                                        s[i].0 = (p / 100.0).clamp(0.0, 1.0);
+                                        write(s);
+                                    }
+                                },
+                            }
+                            input {
+                                r#type: "number",
+                                step: "0.05",
+                                value: "{val}",
+                                title: "Value (0–1)",
+                                onchange: move |evt| {
+                                    if let Ok(x) = evt.value().trim().parse::<f64>() {
+                                        let mut s = s2.clone();
+                                        s[i].1 = x.clamp(0.0, 1.0);
+                                        write(s);
+                                    }
+                                },
+                            }
+                            button {
+                                class: "key-button",
+                                disabled: count <= 2,
+                                title: "Remove stop",
+                                onclick: move |_| {
+                                    let mut s = s3.clone();
+                                    s.remove(i);
+                                    write(s);
+                                },
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+            {
+                let s = stops.clone();
+                rsx! {
+                    button {
+                        onclick: move |_| {
+                            let mut s = s.clone();
+                            let last = s.last().map_or(1.0, |l| l.1);
+                            s.push((1.0, last));
+                            write(s);
+                        },
+                        "+ Stop"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// A list of colors (particle palette).
+#[component]
+fn ColorList(value: Value, set: Callback<Value>) -> Element {
+    let colors: Vec<String> = value
+        .as_array()
+        .map(|a| {
+            a.iter()
+                .filter_map(|c| c.as_str().map(String::from))
+                .collect()
+        })
+        .unwrap_or_default();
+    rsx! {
+        div { class: "color-list",
+            for (i , c) in colors.iter().cloned().enumerate() {
+                {
+                    let (l1, l2) = (colors.clone(), colors.clone());
+                    let hex = color::parse(&c).map_or("#000000".to_string(), |x| x.hex());
+                    rsx! {
+                        div { class: "swatch",
+                            input {
+                                r#type: "color",
+                                value: "{hex}",
+                                onchange: move |evt| {
+                                    let mut l = l1.clone();
+                                    if let Some(v) = color::with_rgb(&l[i], &evt.value()) {
+                                        l[i] = v;
+                                        set(json!(l));
+                                    }
+                                },
+                            }
+                            button {
+                                class: "key-button",
+                                title: "Remove color",
+                                onclick: move |_| {
+                                    let mut l = l2.clone();
+                                    l.remove(i);
+                                    set(json!(l));
+                                },
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+            {
+                let l = colors.clone();
+                rsx! {
+                    button {
+                        onclick: move |_| {
+                            let mut l = l.clone();
+                            l.push(l.last().cloned().unwrap_or_else(|| "#ffffff".into()));
+                            set(json!(l));
+                        },
+                        "+ Color"
                     }
                 }
             }

@@ -47,10 +47,13 @@ pub enum NewLayer {
     PieChart,
     LineChart,
     Qr,
+    Particles,
+    Lightning,
+    Pattern,
 }
 
 impl NewLayer {
-    pub const ALL: [NewLayer; 11] = [
+    pub const ALL: [NewLayer; 14] = [
         NewLayer::Empty,
         NewLayer::Text,
         NewLayer::Box,
@@ -62,6 +65,9 @@ impl NewLayer {
         NewLayer::PieChart,
         NewLayer::LineChart,
         NewLayer::Qr,
+        NewLayer::Particles,
+        NewLayer::Lightning,
+        NewLayer::Pattern,
     ];
 
     pub fn label(self) -> &'static str {
@@ -77,8 +83,16 @@ impl NewLayer {
             NewLayer::PieChart => "Pie Chart",
             NewLayer::LineChart => "Line Chart",
             NewLayer::Qr => "QR Code",
+            NewLayer::Particles => "Particles",
+            NewLayer::Lightning => "Lightning",
+            NewLayer::Pattern => "Pattern",
         }
     }
+}
+
+/// A random seed for particles and lightning (1 to 2³² − 1, as FRAME).
+pub fn random_seed() -> u32 {
+    u32::from_str_radix(&new_id()[..8], 16).unwrap_or(1).max(1)
 }
 
 /// A chart data point id, like FRAME's (`cp_` and 8 characters).
@@ -186,6 +200,45 @@ pub fn new_layer(kind: NewLayer, parent: Option<&str>) -> Item {
                 "qrFgColor": "#000000", "qrBgColor": "#ffffff", "qrErrorCorrection": "M", "qrMargin": 2,
                 "width": 240, "height": 240, "bg_color": "#00000000", "borderWidth": 0,
                 "borderWidths": [0, 0, 0, 0] }),
+        ),
+        NewLayer::Particles => set(
+            &mut v,
+            json!({ "itemType": "particles", "name": "Particles", "width": 400, "height": 400,
+                "bg_color": "#00000000", "borderWidth": 0, "borderWidths": [0, 0, 0, 0],
+                "particleEmitting": true, "particleEmitterX": 200, "particleEmitterY": 200,
+                "particleEmitterRadius": 12, "particleEmitterWidth": 80, "particleEmitterHeight": 48,
+                "particleEmitterShape": "circle", "particleEmitAngleDeg": -90, "particleSpawnRate": 40,
+                "particleMaxCount": 300, "particleLifetimeMs": 1800, "particleSize": 8, "particleSizeEnd": 2,
+                "particleSizeRamp": [{ "offset": 0, "value": 1 }, { "offset": 1, "value": 0.25 }],
+                "particleSpeed": 80, "particleSpreadDeg": 360, "particleGravityX": 0, "particleGravityY": 120,
+                "particleRotationDeg": 0, "particleRotationRandomDeg": 0, "particleSpinDeg": 0,
+                "particleAlignToVelocity": false,
+                "particleColorStart": "rgba(255, 255, 255, 1)", "particleColorEnd": "rgba(255, 255, 255, 0)",
+                "particleColorRamp": [
+                    { "offset": 0, "color": "rgba(255, 255, 255, 1)" },
+                    { "offset": 1, "color": "rgba(255, 255, 255, 0)" }
+                ],
+                "particleColorMode": "ramp", "particlePaletteColors": [],
+                "particleAlphaRamp": [{ "offset": 0, "value": 1 }, { "offset": 1, "value": 1 }],
+                "particleSpriteUrl": "", "particleBlend": "additive", "particleAttach": "absolute",
+                "particleSeed": random_seed() }),
+        ),
+        NewLayer::Lightning => set(
+            &mut v,
+            json!({ "itemType": "lightning", "name": "Lightning", "width": 480, "height": 270,
+                "bg_color": "#00000000", "borderWidth": 0, "borderWidths": [0, 0, 0, 0],
+                "lightningEmitting": true, "lightningAx": 24, "lightningAy": 135, "lightningBx": 456,
+                "lightningBy": 135, "lightningSegments": 14, "lightningAmplitude": 18, "lightningWidth": 2,
+                "lightningGlowWidth": 10, "lightningColor": "#e0e7ff", "lightningGlowColor": "#6366f1",
+                "lightningBranches": 2, "lightningSeed": random_seed(), "lightningFlickerMs": 48 }),
+        ),
+        NewLayer::Pattern => set(
+            &mut v,
+            json!({ "itemType": "pattern", "name": "Pattern", "width": 480, "height": 270,
+                "bg_color": "#00000000", "borderWidth": 0, "borderWidths": [0, 0, 0, 0],
+                "patternKind": "checker", "patternColorA": "#1e293b", "patternColorB": "#334155",
+                "patternCellSize": 32, "patternStripeWidth": 16, "patternStripeGap": 16,
+                "patternStripeAngleDeg": 45, "patternDotRadius": 6, "patternLineWidth": 2, "patternPhase": 0 }),
         ),
     }
     v["id"] = new_id().into();

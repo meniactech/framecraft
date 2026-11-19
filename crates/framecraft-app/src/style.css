@@ -188,3 +188,10 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .point input[type=color] { padding: 0; height: 24px; }
 .points > button { justify-self: start; }
 .menu { max-height: 60vh; overflow: auto; }
+
+.seed-field { display: grid; grid-template-columns: 1fr auto; gap: 6px; }
+.seed-field input { width: 100%; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
+.ramp .stop input { min-width: 0; }
+.color-list { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.swatch { display: inline-flex; align-items: center; }
+.swatch input[type=color] { width: 34px; padding: 0; height: 24px; border: 1px solid var(--line); background: var(--bg); }
