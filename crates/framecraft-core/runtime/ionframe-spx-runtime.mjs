@@ -1666,7 +1666,21 @@ export function initIonFrameSpx(data) {
           }
         }
       }
-      if (track.domId.startsWith('shp_') || track.domId.startsWith('cht_') || track.domId.startsWith('isl_') || (track.domId.startsWith('img_') && track.base.svgTint)) {
+      // Polygon and path shapes draw in their own SVG: never paint the box;
+      // a solid fill color goes to the SVG shape instead.
+      const svgShape =
+        track.domId.startsWith('shp_') && node.querySelector(':scope > svg > polygon, :scope > svg > path');
+      if (svgShape) {
+        node.style.backgroundColor = 'transparent';
+        node.style.backgroundImage = 'none';
+        const solid = String(track.base.backgroundType || 'solid') === 'solid';
+        if (solid && !node.hasAttribute('data-ion-path-graphic')) {
+          svgShape.setAttribute(
+            'fill',
+            `rgba(${Math.round(bgColorR)}, ${Math.round(bgColorG)}, ${Math.round(bgColorB)}, ${Math.max(0, Math.min(1, bgColorA))})`
+          );
+        }
+      } else if (track.domId.startsWith('shp_') || track.domId.startsWith('cht_') || track.domId.startsWith('isl_') || (track.domId.startsWith('img_') && track.base.svgTint)) {
         // Gradient fills live in background-image with stop alphas. Never stamp an opaque
         // backgroundColor underneath — that makes semi-transparent stops look solid.
         const bgType = String(track.base.backgroundType || 'solid');
