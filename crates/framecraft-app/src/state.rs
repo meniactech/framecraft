@@ -361,17 +361,23 @@ impl Ui {
 
     /// Writes the autosave copy when there are unsaved changes.
     pub fn autosave(self) {
+        let mut status = self.status;
+        if debug() {
+            eprintln!("[autosave] tick, unsaved changes: {}", *self.dirty.peek());
+        }
         if !*self.dirty.peek() {
             return;
         }
-        if let Some(Err(e)) = self
-            .editor
-            .peek()
-            .as_ref()
-            .map(|e| e.project.save_recovery())
-        {
-            let mut status = self.status;
-            status.set(format!("Autosave failed: {e}"));
+        let result = self.editor.peek().as_ref().map(|e| {
+            if e.project.folder.is_none() {
+                return Err("save the project once (Ctrl+S) to turn autosave on".to_string());
+            }
+            e.project.save_recovery()
+        });
+        match result {
+            Some(Ok(())) => status.set(format!("Autosaved {}", crate::project::now_iso().get(11..19).unwrap_or(""))),
+            Some(Err(e)) => status.set(format!("Not autosaved: {e}")),
+            None => {}
         }
     }
 

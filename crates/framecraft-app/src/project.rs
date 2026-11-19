@@ -569,3 +569,34 @@ mod tests {
         assert!(t.as_str() > "2026-01-01");
     }
 }
+
+#[cfg(test)]
+mod folder_tests {
+    use super::*;
+
+    #[test]
+    fn autosave_copy_is_found_and_restored() {
+        let base = std::env::temp_dir().join(format!(
+            "fc-app-recovery-{}",
+            framecraft_core::project::new_graphic_id()
+        ));
+        let dir = base.join("Show.framecraft");
+        let mut p = Project::new_empty("Show");
+        p.save_to(&dir).unwrap();
+        assert!(!p.has_recovery());
+        // An edit after saving, then the autosave.
+        p.docs[0].scene.width = 1280.0;
+        p.save_recovery().unwrap();
+        assert!(p.has_recovery());
+        let opened = Project::open_any(&dir.join("project.json")).unwrap();
+        assert!(opened.has_recovery());
+        assert_eq!(opened.docs[0].scene.width, 1920.0);
+        let restored = Project::open_folder(&dir, true).unwrap();
+        assert_eq!(restored.docs[0].scene.width, 1280.0);
+        // Saving clears the autosave.
+        let mut r = restored;
+        r.save_to(&dir).unwrap();
+        assert!(!r.has_recovery());
+        let _ = std::fs::remove_dir_all(base);
+    }
+}
