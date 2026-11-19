@@ -1,0 +1,71 @@
+<script type="module">
+  import { DotLottie } from 'https://cdn.jsdelivr.net/npm/@lottiefiles/dotlottie-web/+esm';
+  (function () {
+    var data = window.__ionframeSpx;
+    var layers = (data && data.lottieLayers) || [];
+    var players = {};
+    var meta = {};
+
+    function clipLocalMs(sceneTimeMs, startMs, durationMs, loop) {
+      var local = (Number(sceneTimeMs) || 0) - (Number(startMs) || 0);
+      if (local <= 0) return 0;
+      var dur = Math.max(1, Number(durationMs) || 0);
+      if (!(dur > 0)) return 0;
+      if (loop) {
+        var m = local % dur;
+        return m < 0 ? m + dur : m;
+      }
+      return Math.min(local, dur);
+    }
+
+    function frameAt(localMs, durationMs, totalFrames) {
+      var frames = Math.max(0, Number(totalFrames) || 0);
+      if (frames <= 0) return 0;
+      var dur = Math.max(1e-6, Number(durationMs) || 0);
+      var t = Math.max(0, Math.min(1, localMs / dur));
+      if (t >= 1) return Math.max(0, frames - 1e-3);
+      return t * frames;
+    }
+
+    function seekPlayer(id, timeMs) {
+      var row = layers.find(function (p) { return p && p.id === id; });
+      var player = players[id];
+      if (!row || !player || !player.isLoaded) return;
+      var durationMs = Math.max(1, (Number(player.duration) || 0) * 1000);
+      var totalFrames = Number(player.totalFrames) || 0;
+      var local = clipLocalMs(timeMs, row.startMs, durationMs, !!row.loop);
+      var frame = frameAt(local, durationMs, totalFrames);
+      try {
+        player.pause();
+        player.setFrame(frame);
+      } catch (e) {}
+    }
+
+    window.__ionframeApplyLottie = function (id, timeMs) {
+      seekPlayer(id, timeMs);
+    };
+
+    function initOne(row) {
+      if (!row || !row.id || !row.src) return;
+      var canvas = document.getElementById('lot_canvas_' + row.id);
+      if (!canvas) return;
+      var player = new DotLottie({
+        canvas: canvas,
+        src: row.src,
+        autoplay: false,
+        loop: false
+      });
+      players[row.id] = player;
+      player.addEventListener('load', function () {
+        meta[row.id] = { duration: player.duration, frames: player.totalFrames };
+        seekPlayer(row.id, 0);
+      });
+    }
+
+    function initAll() {
+      for (var i = 0; i < layers.length; i++) initOne(layers[i]);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+    else initAll();
+  })();
+  </script>

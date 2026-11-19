@@ -1,0 +1,68 @@
+<script>
+  (function () {
+    var data = window.__ionframeSpx;
+    var layers = (data && data.videoLayers) || [];
+
+    function resolveDurationSec(el) {
+      var d = Number(el.duration);
+      if (isFinite(d) && d > 0) return d;
+      try {
+        if (el.seekable && el.seekable.length > 0) {
+          var end = Number(el.seekable.end(el.seekable.length - 1));
+          if (isFinite(end) && end > 0) return end;
+        }
+      } catch (e) {}
+      return 0;
+    }
+
+    function clipLocalSec(sceneTimeMs, startMs, durationSec, loop) {
+      var local = (Number(sceneTimeMs) || 0) - (Number(startMs) || 0);
+      if (local <= 0) return 0;
+      var durMs = Math.max(1, (Number(durationSec) || 0) * 1000);
+      if (!(durMs > 0) || !isFinite(durMs)) return 0;
+      var localClamped;
+      if (loop) {
+        var m = local % durMs;
+        localClamped = m < 0 ? m + durMs : m;
+      } else {
+        localClamped = Math.min(local, durMs);
+      }
+      return localClamped / 1000;
+    }
+
+    function seekPlayer(id, timeMs) {
+      var row = layers.find(function (p) { return p && p.id === id; });
+      var el = document.getElementById('vid_el_' + id);
+      if (!row || !el) return;
+      var durationSec = resolveDurationSec(el);
+      if (!(durationSec > 0)) return;
+      var t = clipLocalSec(timeMs, row.startMs, durationSec, !!row.loop);
+      try {
+        el.pause();
+        el.currentTime = Math.min(Math.max(0, t), Math.max(0, durationSec - 0.001));
+      } catch (e) {}
+    }
+
+    window.__ionframeApplyVideo = function (id, timeMs) {
+      seekPlayer(id, timeMs);
+    };
+
+    function bindOne(row) {
+      if (!row || !row.id) return;
+      var el = document.getElementById('vid_el_' + row.id);
+      if (!el) return;
+      el.muted = true;
+      el.playsInline = true;
+      el.addEventListener('loadedmetadata', function () {
+        seekPlayer(row.id, 0);
+      });
+      if (el.readyState >= 1) seekPlayer(row.id, 0);
+    }
+
+    function initAll() {
+      for (var i = 0; i < layers.length; i++) bindOne(layers[i]);
+    }
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initAll);
+    else initAll();
+  })();
+  </script>

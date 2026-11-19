@@ -1,0 +1,250 @@
+<script>
+(function () {
+  // Set BEFORE the deferred ES module runs (module executes before DOMContentLoaded).
+  window.__ionboardHookInline = true;
+
+  function startIonBoardInlineHook() {
+    function e(id) { return document.getElementById(id); }
+    function fieldText(fieldId) {
+      var node = e(fieldId);
+      return node ? String(node.textContent || '').trim() : '';
+    }
+    function htmlDecode(input) {
+      var txt = document.createElement('textarea');
+      txt.innerHTML = input || '';
+      return txt.value;
+    }
+
+    var data = window.__ionframeSpx;
+    var hook = data && data.ionboardHook;
+    if (!hook || !hook.enabled) {
+      window.__ionboardHookInline = false;
+      return;
+    }
+
+    var projectIdField = String(hook.projectIdField || 'ionboard_project_id').trim();
+    var magicIdField = String(hook.magicIdField || 'ionboard_magic_id').trim();
+    var apiBase = String(hook.apiBase || 'https://board.meniac.tech').replace(/\/$/, '');
+    var pollMs = Math.max(200, Number(hook.pollMs) || 500);
+    var textLayers = Array.isArray(data.textLayers) ? data.textLayers : [];
+    var visibilityLayers = Array.isArray(data.visibilityLayers) ? data.visibilityLayers : [];
+    var liveValues = {};
+    var lastPayload = '';
+    var pollCount = 0;
+    var pollTimer = null;
+    var pollingActive = false;
+    var inFlight = false;
+    var warnedEmpty = false;
+
+    function ensureHiddenField(fieldId) {
+      var node = e(fieldId);
+      if (node) return node;
+      var holder = e('hiddenSpxData') || document.body;
+      node = document.createElement('div');
+      node.id = fieldId;
+      holder.appendChild(node);
+      return node;
+    }
+
+    function coerceLiveBool(v) {
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'number') return v !== 0 && !isNaN(v);
+      var s = String(v == null ? '' : v).trim().toLowerCase();
+      if (!s) return false;
+      return !(s === 'false' || s === '0' || s === 'off' || s === 'no' || s === 'null' || s === 'undefined');
+    }
+
+    function applyTextLayers() {
+      for (var i = 0; i < textLayers.length; i++) {
+        var row = textLayers[i];
+        if (!row || !row.id) continue;
+        var target = e('txt_' + row.id);
+        if (!target) continue;
+        var fallback = row.fallback == null ? '' : String(row.fallback);
+        var fieldId = (row.fieldId || '').trim();
+        var next = fallback;
+        if (fieldId) {
+          var hasLive = Object.prototype.hasOwnProperty.call(liveValues, fieldId);
+          var raw = hasLive ? String(liveValues[fieldId] == null ? '' : liveValues[fieldId]).trim() : fieldText(fieldId);
+          next = htmlDecode(raw || fallback);
+        }
+        // Seed only — typewriter / stagger / path-follow are painted by the SPX runtime.
+        target.setAttribute('data-ion-full-text', next);
+        if (typeof window.__ionframeRefreshFrame !== 'function') {
+          var slot = target.querySelector('[data-ion-text]');
+          if (slot) slot.textContent = next;
+          else target.textContent = next;
+        }
+      }
+      if (typeof window.__ionframeRefreshFrame === 'function') {
+        window.__ionframeRefreshFrame();
+      }
+    }
+
+    function applyVisibilityLayers() {
+      for (var i = 0; i < visibilityLayers.length; i++) {
+        var row = visibilityLayers[i];
+        if (!row) continue;
+        var fieldId = (row.fieldId || '').trim();
+        if (!fieldId) continue;
+        var target = e(row.domId || '') || (row.id ? e('shp_' + row.id) : null);
+        if (!target && row.id) {
+          var prefixes = ['txt_', 'img_', 'isl_', 'cht_', 'prt_', 'lot_', 'vid_', 'emp_', 'shp_', 'qr_'];
+          for (var p = 0; p < prefixes.length; p++) {
+            target = e(prefixes[p] + row.id);
+            if (target) break;
+          }
+        }
+        if (!target) continue;
+        if (!Object.prototype.hasOwnProperty.call(liveValues, fieldId)) {
+          // No live value yet — leave editor/export visibility alone.
+          continue;
+        }
+        var on = coerceLiveBool(liveValues[fieldId]);
+        if (row.invert) on = !on;
+        target.style.visibility = on ? 'visible' : 'hidden';
+        if (on) target.removeAttribute('data-ion-live-hidden');
+        else target.setAttribute('data-ion-live-hidden', '1');
+      }
+    }
+
+    function applyChartLayers() {
+      if (typeof window.__ionframeApplyChartFromLive === 'function') {
+        window.__ionframeApplyChartFromLive(liveValues);
+      }
+    }
+
+    function applyQrLayers() {
+      if (typeof window.__ionframeApplyQrFromLive === 'function') {
+        window.__ionframeApplyQrFromLive(liveValues);
+      }
+    }
+
+    function applyJson(json) {
+      liveValues = json && typeof json === 'object' && !Array.isArray(json) ? Object.assign({}, json) : {};
+      window.__ionboardLiveValues = liveValues;
+      var keys = Object.keys(liveValues);
+      for (var i = 0; i < keys.length; i++) {
+        var key = keys[i];
+        if (key === projectIdField || key === magicIdField) continue;
+        ensureHiddenField(key).textContent = liveValues[key] == null ? '' : String(liveValues[key]);
+      }
+      applyTextLayers();
+      applyVisibilityLayers();
+      applyChartLayers();
+      applyQrLayers();
+    }
+
+    function scheduleNext() {
+      if (!pollingActive) return;
+      if (pollTimer) clearTimeout(pollTimer);
+      pollTimer = setTimeout(function () {
+        pollTimer = null;
+        poll();
+      }, pollMs);
+    }
+
+    function poll() {
+      if (!pollingActive) return;
+      if (inFlight) {
+        scheduleNext();
+        return;
+      }
+      pollCount += 1;
+      var projectId = fieldText(projectIdField);
+      var magicId = fieldText(magicIdField);
+      if (!projectId || !magicId) {
+        if (!warnedEmpty) {
+          warnedEmpty = true;
+          console.warn('[IonBoard hook] waiting for Magic ID (#' + magicIdField + ') and Project ID (#' + projectIdField + ')');
+        }
+        scheduleNext();
+        return;
+      }
+      warnedEmpty = false;
+      var url = apiBase + '/api/live_board.php?project_id=' + encodeURIComponent(projectId)
+        + '&format=data&magic=' + encodeURIComponent(magicId);
+      inFlight = true;
+      fetch(url, {
+        cache: 'no-store',
+        credentials: 'omit',
+        headers: { 'X-IonBoard-Magic': magicId }
+      })
+        .then(function (res) {
+          if (!pollingActive) return null;
+          if (!res.ok) throw new Error('HTTP ' + res.status);
+          return res.json();
+        })
+        .then(function (json) {
+          if (!pollingActive || json == null) return;
+          if (!json || typeof json !== 'object' || Array.isArray(json)) return;
+          var encoded = JSON.stringify(json);
+          if (encoded !== lastPayload) {
+            lastPayload = encoded;
+            applyJson(json);
+          } else {
+            applyTextLayers();
+            applyVisibilityLayers();
+            applyChartLayers();
+            applyQrLayers();
+          }
+        })
+        .catch(function (err) {
+          if (pollingActive) console.warn('[IonBoard hook] poll failed', err);
+        })
+        .then(function () {
+          inFlight = false;
+          scheduleNext();
+        });
+    }
+
+    function startPolling(reason) {
+      pollingActive = true;
+      lastPayload = '';
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+      poll();
+    }
+
+    function stopPolling(reason) {
+      if (!pollingActive && !pollTimer) return;
+      pollingActive = false;
+      if (pollTimer) {
+        clearTimeout(pollTimer);
+        pollTimer = null;
+      }
+    }
+
+    window.__ionboardStartPolling = startPolling;
+    window.__ionboardStopPolling = stopPolling;
+
+    var previousUpdate = window.update;
+    window.update = function (payload) {
+      if (typeof previousUpdate === 'function') previousUpdate(payload);
+      startPolling('spx update');
+    };
+
+    var previousPlay = window.play;
+    window.play = function () {
+      startPolling('spx play');
+      if (typeof previousPlay === 'function') previousPlay();
+    };
+
+    var previousStop = window.stop;
+    window.stop = function () {
+      stopPolling('spx stop / play-out');
+      if (typeof previousStop === 'function') previousStop();
+    };
+
+    startPolling('init');
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', startIonBoardInlineHook);
+  } else {
+    startIonBoardInlineHook();
+  }
+})();
+</script>

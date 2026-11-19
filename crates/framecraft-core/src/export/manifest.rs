@@ -401,28 +401,29 @@ pub fn ograf_component_source(entry_html: &str, step_count: usize) -> String {
     let entry = entry.strip_prefix('/').unwrap_or(entry);
     let multi = step_count >= 2;
     let when = |s: &'static str| if multi { s } else { "" };
-    OGRAF_COMPONENT
-        .replace("@ENTRY_JSON@", &serde_json::to_string(entry).expect("strings serialize"))
-        .replace("@STEP_RESET_4@", when("    this.step = 0;\n"))
-        .replace("@STEP_RESET_6@", when("      this.step = 0;\n"))
-        .replace("@CURRENT_STEP@", when(", currentStep: this.step"))
-        .replace("@STEP_LOG@", when(", { step: this.step }"))
-        .replace(
-            "@PLAY_BODY@",
-            if multi {
-                "      if (this.step > 0) {\n        this.iframe.contentWindow.next();\n      } else {\n        this.iframe.contentWindow.play();\n      }\n      this.step++;\n      return { statusCode: 200, currentStep: this.step };"
-            } else {
-                "      this.iframe.contentWindow.play();\n      return { statusCode: 200 };"
-            },
-        )
-        .replace(
-            "@CUSTOM_BODY@",
-            if multi {
-                "    if (this.iframe && this.iframe.contentWindow && params && params.id === \"next\") {\n      this.iframe.contentWindow.next();\n    }"
-            } else {
-                "    // No custom actions"
-            },
-        )
+    let entry_json = serde_json::to_string(entry).expect("strings serialize");
+    let play_body = if multi {
+        "      if (this.step > 0) {\n        this.iframe.contentWindow.next();\n      } else {\n        this.iframe.contentWindow.play();\n      }\n      this.step++;\n      return { statusCode: 200, currentStep: this.step };"
+    } else {
+        "      this.iframe.contentWindow.play();\n      return { statusCode: 200 };"
+    };
+    let custom_body = if multi {
+        "    if (this.iframe && this.iframe.contentWindow && params && params.id === \"next\") {\n      this.iframe.contentWindow.next();\n    }"
+    } else {
+        "    // No custom actions"
+    };
+    js::fill_markers(
+        OGRAF_COMPONENT,
+        &[
+            ("ENTRY_JSON", &entry_json),
+            ("STEP_RESET_4", when("    this.step = 0;\n")),
+            ("STEP_RESET_6", when("      this.step = 0;\n")),
+            ("CURRENT_STEP", when(", currentStep: this.step")),
+            ("STEP_LOG", when(", { step: this.step }")),
+            ("PLAY_BODY", play_body),
+            ("CUSTOM_BODY", custom_body),
+        ],
+    )
 }
 
 /// What an `export-info.json` describes.

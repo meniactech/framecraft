@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>@TITLE@</title>
+  <script src="js/spx_interface.js"></script>
+  <style>
+    html, body {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      width: 100%;
+      height: 100%;
+      overflow: visible;
+      scrollbar-width: none;
+      -ms-overflow-style: none;
+      background: transparent;
+    }
+    html::-webkit-scrollbar, body::-webkit-scrollbar { display: none; width: 0; height: 0; }
+    .SPXWindow {
+      position: relative;
+      width: 100vw;
+      height: 100vh;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      overflow: visible;
+      box-sizing: border-box;
+    }
+    #gfx {
+      position: relative;
+      width: @WIDTH@px;
+      height: @HEIGHT@px;
+      margin: 0;
+      padding: 0;
+      border: 0;
+      opacity: 0;
+      transform-origin: top left;
+      box-sizing: border-box;
+    }
+    @FONT_FACE_CSS@
+    .shapeItem { position: absolute; }
+    .textItem { position: absolute; white-space: pre-wrap; overflow: hidden; line-height: 1.1; }
+    .imgItem { position: absolute; object-fit: contain; }
+    .imgSlotItem { position: absolute; }@OVERLAY_CSS@
+  </style>
+  @BOOT_SCRIPT@
+  @BOARD_SCRIPT@
+  @TEMPLATE_JS_SCRIPT@
+  @CHART_SCRIPT@
+  @QR_SCRIPT@
+  @LOTTIE_SCRIPT@
+  @VIDEO_SCRIPT@
+  @MODULE_INIT_SCRIPT@
+  <script>
+    window.SPXGCTemplateDefinition = @TEMPLATE_DEFINITION@;
+  </script>
+</head>
+<body>
+  <div class="SPXWindow">
+    <div id="gfx">
+@LAYERS@
+    </div>
+  </div>
+
+  <div id="hiddenSpxData" style="display:none;">
+@HIDDEN_DATA@
+  </div>
+</body>
+</html>

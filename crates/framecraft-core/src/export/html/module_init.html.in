@@ -1,0 +1,8 @@
+<script type="module">
+    try {
+      const mod = await import('./js/ionframe-spx-runtime.mjs');
+      mod.initIonFrameSpx(window.__ionframeSpx);
+    } catch (err) {
+      console.error('[IonFrame SPX] runtime module failed', err);
+    }
+  </script>

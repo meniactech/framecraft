@@ -1,0 +1,66 @@
+<script src="js/lib/qrcode.min.js"></script>
+  <script>
+  (function () {
+    var qrState = {};
+    function fieldText(fieldId) {
+      var node = document.getElementById(fieldId);
+      return node ? String(node.textContent || '').trim() : '';
+    }
+    function drawSize(w, h) {
+      return Math.max(1, Math.min(Math.round(Number(w) || 1), Math.round(Number(h) || 1)));
+    }
+    function paintRow(row, text) {
+      if (!row || !row.id || typeof QRCode === 'undefined' || !QRCode.toCanvas) return;
+      var canvas = document.getElementById('qr_canvas_' + row.id);
+      if (!canvas) return;
+      var content = String(text == null ? '' : text);
+      if (!content) content = ' ';
+      var size = drawSize(row.width, row.height);
+      var key = content + '|' + size + '|' + row.ec + '|' + row.margin + '|' + row.fg + '|' + row.bg;
+      if (qrState[row.id] === key) return;
+      QRCode.toCanvas(canvas, content, {
+        errorCorrectionLevel: row.ec || 'M',
+        margin: row.margin != null ? row.margin : 2,
+        width: size,
+        color: { dark: row.fg || '#000000', light: row.bg || '#ffffff' }
+      }, function () {
+        qrState[row.id] = key;
+        canvas.style.display = 'block';
+        canvas.style.margin = '0 auto';
+      });
+    }
+    function resolveText(row, liveValues) {
+      var fallback = row.content == null ? '' : String(row.content);
+      var fieldId = (row.fieldId || '').trim();
+      if (!fieldId) return fallback;
+      if (liveValues && Object.prototype.hasOwnProperty.call(liveValues, fieldId)) {
+        var live = liveValues[fieldId];
+        var liveStr = live == null ? '' : String(live).trim();
+        return liveStr || fallback;
+      }
+      var fromField = fieldText(fieldId);
+      return fromField || fallback;
+    }
+    function applyQrFromLive(liveValues) {
+      var data = window.__ionframeSpx;
+      var layers = data && data.qrLayers;
+      if (!layers) return;
+      for (var i = 0; i < layers.length; i++) {
+        var row = layers[i];
+        if (!row) continue;
+        paintRow(row, resolveText(row, liveValues));
+      }
+    }
+    function initQr() {
+      applyQrFromLive(window.__ionboardLiveValues || null);
+    }
+    window.__ionframeApplyQrFromLive = applyQrFromLive;
+    var previousUpdate = window.update;
+    window.update = function (payload) {
+      if (typeof previousUpdate === 'function') previousUpdate(payload);
+      applyQrFromLive(window.__ionboardLiveValues || null);
+    };
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initQr);
+    else initQr();
+  })();
+  </script>

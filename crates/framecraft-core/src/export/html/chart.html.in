@@ -1,0 +1,425 @@
+<script src="js/lib/chart.umd.min.js"></script>
+  <script>
+  (function () {
+    var chartInstances = {};
+    var chartBase = {};
+    function colors(points) {
+      var pal = ['#3b82f6','#22c55e','#f59e0b','#ef4444','#a855f7','#06b6d4','#f97316','#84cc16'];
+      var out = [];
+      for (var i = 0; i < points.length; i++) {
+        var c = points[i] && typeof points[i].color === 'string' ? String(points[i].color).trim() : '';
+        out.push(c || pal[i % pal.length]);
+      }
+      return out;
+    }
+    function clampReveal(raw) {
+      var n = Number(raw);
+      if (!isFinite(n)) return 1;
+      return Math.max(0, Math.min(1, n));
+    }
+    var pieRevealClipPlugin = {
+      id: 'ionframePieReveal',
+      beforeDatasetsDraw: function (chart) {
+        var type = chart.config.type;
+        if (type !== 'pie' && type !== 'doughnut') return;
+        var opts = chart.options && chart.options.plugins && chart.options.plugins.ionframePieReveal;
+        var reveal = clampReveal(opts && opts.reveal);
+        chart.$ionframePieRevealClipped = false;
+        if (reveal >= 1) return;
+        var area = chart.chartArea;
+        if (!area) return;
+        var ctx = chart.ctx;
+        var cx = (area.left + area.right) / 2;
+        var cy = (area.top + area.bottom) / 2;
+        var hw = (area.right - area.left) / 2;
+        var hh = (area.bottom - area.top) / 2;
+        var radius = Math.sqrt(hw * hw + hh * hh) + 2;
+        ctx.save();
+        ctx.beginPath();
+        if (reveal <= 0) {
+          ctx.rect(0, 0, 0, 0);
+        } else {
+          var start = -Math.PI / 2;
+          ctx.moveTo(cx, cy);
+          ctx.arc(cx, cy, radius, start, start + reveal * 2 * Math.PI, false);
+          ctx.closePath();
+        }
+        ctx.clip();
+        chart.$ionframePieRevealClipped = true;
+      },
+      afterDatasetsDraw: function (chart) {
+        if (chart.$ionframePieRevealClipped) {
+          chart.ctx.restore();
+          chart.$ionframePieRevealClipped = false;
+        }
+      }
+    };
+    var barValueLabelsPlugin = {
+      id: 'ionframeBarValues',
+      afterDatasetsDraw: function (chart) {
+        if (chart.config.type !== 'bar') return;
+        var opts = chart.options && chart.options.plugins && chart.options.plugins.ionframeBarValues;
+        if (!opts || !opts.show) return;
+        var ctx = chart.ctx;
+        var meta = chart.getDatasetMeta(0);
+        if (!meta || meta.hidden) return;
+        var family = typeof opts.fontFamily === 'string' && opts.fontFamily.trim() ? opts.fontFamily.trim() : 'Mouse Memoirs';
+        var size = Math.max(8, Math.round(Number(opts.fontSize) || 14));
+        var color = typeof opts.color === 'string' && opts.color.trim() ? opts.color.trim() : '#e2e8f0';
+        var targets = Array.isArray(opts.targets) ? opts.targets : [];
+        ctx.save();
+        ctx.fillStyle = color;
+        ctx.font = '600 ' + size + 'px ' + family;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        var minLabelY = ((chart.chartArea && chart.chartArea.top) || 0) + size + 2;
+        for (var i = 0; i < meta.data.length; i++) {
+          var el = meta.data[i];
+          if (!el || el.skip) continue;
+          var raw = chart.data.datasets[0] && chart.data.datasets[0].data ? chart.data.datasets[0].data[i] : 0;
+          var target = targets[i] != null ? parseNum(targets[i]) : parseNum(raw);
+          var label = formatRevealNum(raw, target);
+          var x = Number(el.x);
+          var barTop = Number(el.y);
+          if (!isFinite(x) || !isFinite(barTop)) continue;
+          var labelY = Math.max(minLabelY, barTop - 4);
+          ctx.fillText(label, x, labelY);
+        }
+        ctx.restore();
+      }
+    };
+    if (window.Chart && window.Chart.register) {
+      window.Chart.register(pieRevealClipPlugin);
+      window.Chart.register(barValueLabelsPlugin);
+    }
+    function clampStyle(style, kind) {
+      var s = style && typeof style === 'object' ? style : {};
+      var cutout = Number(s.cutout);
+      if (!isFinite(cutout)) cutout = 0;
+      cutout = Math.max(0, Math.min(80, Math.round(cutout)));
+      var barThickness = Number(s.barThickness);
+      if (!isFinite(barThickness)) barThickness = 80;
+      barThickness = Math.max(10, Math.min(100, Math.round(barThickness)));
+      var lineWidth = Number(s.lineWidth);
+      if (!isFinite(lineWidth)) lineWidth = 2;
+      lineWidth = Math.max(1, Math.min(16, Math.round(lineWidth)));
+      var pointRadius = Number(s.pointRadius);
+      if (!isFinite(pointRadius)) pointRadius = 4;
+      pointRadius = Math.max(0, Math.min(20, Math.round(pointRadius)));
+      var tension = Number(s.tension);
+      if (!isFinite(tension)) tension = 0.2;
+      tension = Math.max(0, Math.min(1, Math.round(tension * 100) / 100));
+      var showLegend =
+        kind === 'pie' ? (typeof s.showLegend === 'boolean' ? s.showLegend : true) : false;
+      var showValues =
+        kind === 'bar' ? (typeof s.showValues === 'boolean' ? s.showValues : true) : false;
+      return {
+        cutout: cutout,
+        barThickness: barThickness,
+        lineWidth: lineWidth,
+        pointRadius: pointRadius,
+        tension: tension,
+        showLegend: showLegend,
+        showValues: showValues
+      };
+    }
+    function parseNum(raw) {
+      if (typeof raw === 'number') return isFinite(raw) ? raw : 0;
+      if (typeof raw === 'string') {
+        var s = raw.trim().replace(/\s+/g, '').replace(',', '.');
+        if (!s) return 0;
+        var n = Number(s);
+        return isFinite(n) ? n : 0;
+      }
+      if (raw == null) return 0;
+      var n2 = Number(raw);
+      return isFinite(n2) ? n2 : 0;
+    }
+    function valueDecimals(value) {
+      var v = parseNum(value);
+      if (Math.abs(v - Math.round(v)) < 1e-9) return 0;
+      var s = Math.abs(v).toFixed(8).replace(/0+$/, '').replace(/\.$/, '');
+      var i = s.indexOf('.');
+      return i >= 0 ? Math.min(4, s.length - i - 1) : 0;
+    }
+    function formatNum(value, maxDigits) {
+      var v = parseNum(value);
+      if (Math.abs(v - Math.round(v)) < 1e-9) return String(Math.round(v));
+      var decimals = maxDigits != null ? maxDigits : 2;
+      if (!isFinite(decimals)) decimals = 2;
+      decimals = Math.max(0, Math.min(8, Math.round(decimals)));
+      var rounded = Number(v.toFixed(decimals));
+      if (Math.abs(rounded - Math.round(rounded)) < 1e-9) return String(Math.round(rounded));
+      return rounded.toFixed(decimals).replace(/(\.d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
+    }
+    function formatRevealNum(displayed, target) {
+      return formatNum(displayed, valueDecimals(target));
+    }
+    function sortPoints(points, valueSort) {
+      var mode = valueSort === 'asc' || valueSort === 'desc' ? valueSort : 'none';
+      if (mode === 'none' || !points || points.length < 2) return points || [];
+      var indexed = [];
+      for (var i = 0; i < points.length; i++) {
+        indexed.push({ p: points[i], i: i, v: parseNum(points[i] && points[i].value) });
+      }
+      indexed.sort(function (a, b) {
+        var d = mode === 'asc' ? a.v - b.v : b.v - a.v;
+        return d !== 0 ? d : a.i - b.i;
+      });
+      return indexed.map(function (row) { return row.p; });
+    }
+    function buildConfig(kind, points, reveal, style, fontFamily, fontSize, valueSort, textColor) {
+      var r = clampReveal(reveal);
+      var st = clampStyle(style, kind);
+      var family = typeof fontFamily === 'string' && fontFamily.trim() ? fontFamily.trim() : 'Mouse Memoirs';
+      var sizeNum = Number(fontSize);
+      var size = isFinite(sizeNum) ? Math.max(8, Math.min(2000, Math.round(sizeNum))) : 14;
+      var ink = typeof textColor === 'string' && textColor.trim() ? textColor.trim() : '#e2e8f0';
+      var labelFont = { family: family, size: size };
+      var ordered = sortPoints(points, valueSort);
+      var labels = ordered.map(function (p) { return p.label; });
+      var baseValues = ordered.map(function (p) { return parseNum(p.value); });
+      var values = kind === 'pie' ? baseValues : baseValues.map(function (v) { return v * r; });
+      var cols = colors(ordered);
+      var primary = cols[0] || '#3b82f6';
+      var yMax = 0;
+      for (var i = 0; i < baseValues.length; i++) {
+        if (baseValues[i] > yMax) yMax = baseValues[i];
+      }
+      var tooltipOpts = {
+        enabled: true,
+        titleFont: labelFont,
+        bodyFont: labelFont,
+        callbacks: {
+          label: function (ctx) {
+            var label = ctx.label ? ctx.label + ': ' : '';
+            var parsed = ctx.parsed;
+            var raw = parsed && typeof parsed === 'object'
+              ? (parsed.y != null ? parsed.y : parsed.r)
+              : (ctx.raw != null ? ctx.raw : ctx.formattedValue);
+            return label + formatNum(raw);
+          }
+        }
+      };
+      var legend = { display: st.showLegend, labels: { color: ink, font: labelFont } };
+      if (kind === 'pie') {
+        var cutout = st.cutout;
+        return {
+          type: cutout > 0 ? 'doughnut' : 'pie',
+          data: { labels: labels, datasets: [{ data: values, backgroundColor: cols, borderColor: 'var(--ui-bg)', borderWidth: 1 }] },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            rotation: 0,
+            circumference: 360,
+            cutout: cutout > 0 ? cutout + '%' : 0,
+            plugins: {
+              legend: legend,
+              tooltip: tooltipOpts,
+              ionframePieReveal: { reveal: r }
+            }
+          }
+        };
+      }
+      var yScale = {
+        beginAtZero: true,
+        ticks: {
+          color: ink,
+          font: labelFont,
+          callback: function (val) { return formatNum(val); }
+        },
+        grid: { color: 'rgba(148,163,184,0.2)' }
+      };
+      if (yMax > 0) yScale.max = yMax;
+      if (kind === 'line') {
+        return {
+          type: 'line',
+          data: {
+            labels: labels,
+            datasets: [{
+              label: 'Values',
+              data: values,
+              borderColor: primary,
+              backgroundColor: 'rgba(59,130,246,0.2)',
+              borderWidth: st.lineWidth,
+              pointBackgroundColor: cols,
+              pointRadius: st.pointRadius,
+              pointHoverRadius: Math.max(st.pointRadius, 4),
+              tension: st.tension,
+              fill: false
+            }]
+          },
+          options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            animation: false,
+            plugins: {
+              legend: legend,
+              tooltip: tooltipOpts
+            },
+            scales: {
+              x: { ticks: { color: ink, font: labelFont }, grid: { color: 'rgba(148,163,184,0.2)' } },
+              y: yScale
+            }
+          }
+        };
+      }
+      if (yMax > 0 && st.showValues) yScale.max = yMax * 1.14;
+      if (yMax > 0) {
+        yScale.afterBuildTicks = function (axis) {
+          var eps = Math.max(1e-6, yMax * 1e-9);
+          axis.ticks = axis.ticks.filter(function (t) { return t.value <= yMax + eps; });
+        };
+      }
+      return {
+        type: 'bar',
+        data: {
+          labels: labels,
+          datasets: [{
+            label: 'Values',
+            data: values,
+            backgroundColor: cols,
+            borderWidth: 0,
+            barPercentage: st.barThickness / 100,
+            categoryPercentage: 0.9
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          animation: false,
+          layout: {
+            padding: {
+              top: st.showValues ? Math.max(14, size + 8) : 0
+            }
+          },
+          plugins: {
+            legend: legend,
+            tooltip: tooltipOpts,
+            ionframeBarValues: {
+              show: st.showValues,
+              fontFamily: family,
+              fontSize: size,
+              color: ink,
+              targets: baseValues
+            }
+          },
+          scales: {
+            x: { ticks: { color: ink, font: labelFont }, grid: { display: false } },
+            y: yScale
+          }
+        }
+      };
+    }
+    function applyChartReveal(id, reveal, fontSize) {
+      var inst = chartInstances[id];
+      var base = chartBase[id];
+      if (!inst || !base) return;
+      var r = reveal != null ? reveal : (base.lastReveal != null ? base.lastReveal : 1);
+      base.lastReveal = r;
+      var size = fontSize != null ? fontSize : base.fontSize;
+      var cfg = buildConfig(
+        base.kind || 'bar',
+        Array.isArray(base.points) ? base.points : [],
+        r,
+        base.style,
+        base.fontFamily,
+        size,
+        base.valueSort || 'none',
+        base.textColor
+      );
+      if (inst.config.type !== cfg.type) {
+        inst.destroy();
+        var canvas = document.getElementById('cht_canvas_' + id);
+        if (!canvas || !window.Chart) return;
+        chartInstances[id] = new window.Chart(canvas, cfg);
+        return;
+      }
+      inst.data = cfg.data;
+      if (cfg.options) {
+        for (var key in cfg.options) {
+          if (Object.prototype.hasOwnProperty.call(cfg.options, key)) {
+            inst.options[key] = cfg.options[key];
+          }
+        }
+      }
+      inst.update('none');
+    }
+    function applyChartFromLive(liveValues) {
+      var data = window.__ionframeSpx;
+      var layers = data && data.chartLayers;
+      if (!layers || !liveValues || typeof liveValues !== 'object') return;
+      for (var i = 0; i < layers.length; i++) {
+        var row = layers[i];
+        if (!row || !row.id) continue;
+        var base = chartBase[row.id];
+        if (!base || !Array.isArray(base.points)) continue;
+        var changed = false;
+        for (var p = 0; p < base.points.length; p++) {
+          var pt = base.points[p];
+          if (!pt) continue;
+          var fieldId = (pt.fieldId || '').trim();
+          if (!fieldId) continue;
+          if (!Object.prototype.hasOwnProperty.call(liveValues, fieldId)) continue;
+          var rawLive = liveValues[fieldId];
+          var n = typeof rawLive === 'number'
+            ? rawLive
+            : Number(String(rawLive == null ? '' : rawLive).trim().replace(',', '.'));
+          if (!isFinite(n)) continue;
+          if (pt.value !== n) {
+            pt.value = n;
+            changed = true;
+          }
+        }
+        if (changed) applyChartReveal(row.id, base.lastReveal != null ? base.lastReveal : 1, base.fontSize);
+      }
+    }
+    function initCharts() {
+      var data = window.__ionframeSpx;
+      var layers = data && data.chartLayers;
+      if (!layers || !window.Chart) return;
+      for (var i = 0; i < layers.length; i++) {
+        var row = layers[i];
+        var canvas = document.getElementById('cht_canvas_' + row.id);
+        if (!canvas) continue;
+        var style = {
+          cutout: row.cutout,
+          barThickness: row.barThickness,
+          lineWidth: row.lineWidth,
+          pointRadius: row.pointRadius,
+          tension: row.tension,
+          showLegend: row.showLegend,
+          showValues: row.showValues
+        };
+        chartBase[row.id] = {
+          kind: row.kind || 'bar',
+          points: Array.isArray(row.points) ? row.points.slice() : [],
+          style: style,
+          fontFamily: row.fontFamily || 'Mouse Memoirs',
+          fontSize: row.fontSize != null ? row.fontSize : 14,
+          textColor: typeof row.textColor === 'string' && row.textColor.trim() ? row.textColor.trim() : '#e2e8f0',
+          valueSort: row.valueSort === 'asc' || row.valueSort === 'desc' ? row.valueSort : 'none',
+          lastReveal: 1
+        };
+        chartInstances[row.id] = new window.Chart(
+          canvas,
+          buildConfig(
+            chartBase[row.id].kind,
+            chartBase[row.id].points,
+            1,
+            style,
+            chartBase[row.id].fontFamily,
+            chartBase[row.id].fontSize,
+            chartBase[row.id].valueSort,
+            chartBase[row.id].textColor
+          )
+        );
+      }
+    }
+    window.__ionframeApplyChartReveal = applyChartReveal;
+    window.__ionframeApplyChartFromLive = applyChartFromLive;
+    if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', initCharts);
+    else initCharts();
+  })();
+  </script>

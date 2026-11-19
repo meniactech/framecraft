@@ -216,6 +216,106 @@ pub fn slice_utf16(s: &str, n: usize) -> &str {
     s
 }
 
+/// `x.toFixed(digits)`: exact decimal rounding with halves away from zero
+/// (Rust's `{:.N}` rounds exact halves to even).
+pub fn to_fixed(x: f64, digits: usize) -> String {
+    if !x.is_finite() {
+        return number_to_string(x);
+    }
+    if x.abs() >= 1e21 {
+        return number_to_string(x);
+    }
+    // JavaScript prints a sign only for values below zero, never for -0.
+    let sign = if x < 0.0 { "-" } else { "" };
+    // Enough digits to hold the exact binary value for any |x| < 1e21.
+    let exact = format!("{:.*}", digits + 1100, x.abs());
+    let (int_part, frac) = exact.split_once('.').expect("fixed has a dot");
+    let keep = &frac[..digits];
+    let rest = &frac[digits..];
+    let round_up = rest.as_bytes()[0] >= b'5';
+    let mut digits_str: Vec<u8> = format!("{int_part}{keep}").into_bytes();
+    if round_up {
+        let mut i = digits_str.len();
+        loop {
+            if i == 0 {
+                digits_str.insert(0, b'1');
+                break;
+            }
+            i -= 1;
+            if digits_str[i] == b'9' {
+                digits_str[i] = b'0';
+            } else {
+                digits_str[i] += 1;
+                break;
+            }
+        }
+    }
+    let s = String::from_utf8(digits_str).expect("ascii digits");
+    let split = s.len() - digits;
+    if digits == 0 {
+        format!("{sign}{s}")
+    } else {
+        format!("{sign}{}.{}", &s[..split], &s[split..])
+    }
+}
+
+/// `JSON.stringify(value)`: compact, keys in insertion order, numbers printed
+/// the JavaScript way.
+pub fn stringify(value: &serde_json::Value) -> String {
+    use serde_json::Value;
+    match value {
+        Value::Number(n) => number_to_string(n.as_f64().unwrap_or(f64::NAN)),
+        Value::Array(a) => format!(
+            "[{}]",
+            a.iter().map(stringify).collect::<Vec<_>>().join(",")
+        ),
+        Value::Object(o) => format!(
+            "{{{}}}",
+            o.iter()
+                .map(|(k, v)| format!(
+                    "{}:{}",
+                    serde_json::to_string(k).expect("strings serialize"),
+                    stringify(v)
+                ))
+                .collect::<Vec<_>>()
+                .join(",")
+        ),
+        other => serde_json::to_string(other).expect("scalars serialize"),
+    }
+}
+
+/// Replaces `@NAME@` markers in one pass, so inserted text is never
+/// scanned for markers again. Panics on a marker without a value, which
+/// would be a bug in the caller.
+pub fn fill_markers(template: &str, values: &[(&str, &str)]) -> String {
+    let mut out = String::with_capacity(template.len());
+    let mut rest = template;
+    while let Some(start) = rest.find('@') {
+        out.push_str(&rest[..start]);
+        let after = &rest[start + 1..];
+        let name_end =
+            after.find(|c: char| !(c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_'));
+        match name_end {
+            Some(end) if end > 0 && after[end..].starts_with('@') => {
+                let name = &after[..end];
+                let value = values
+                    .iter()
+                    .find(|(k, _)| *k == name)
+                    .unwrap_or_else(|| panic!("no value for marker @{name}@"))
+                    .1;
+                out.push_str(value);
+                rest = &after[end + 1..];
+            }
+            _ => {
+                out.push('@');
+                rest = after;
+            }
+        }
+    }
+    out.push_str(rest);
+    out
+}
+
 /// `String.prototype.trim` (Unicode whitespace and the BOM).
 pub fn trim(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
@@ -303,6 +403,53 @@ mod tests {
         assert_eq!(slice_utf16("abc", 2), "ab");
         assert_eq!(slice_utf16("a😀b", 2), "a");
         assert_eq!(slice_utf16("a😀b", 3), "a😀");
+    }
+
+    #[test]
+    fn to_fixed_like_javascript() {
+        assert_eq!(to_fixed(0.125, 2), "0.13");
+        assert_eq!(to_fixed(1.005, 2), "1.00"); // 1.005 is stored as 1.00499…
+        assert_eq!(to_fixed(-0.0, 2), "0.00");
+        assert_eq!(to_fixed(-0.001, 2), "-0.00");
+        assert_eq!(to_fixed(9.996, 2), "10.00");
+        assert_eq!(to_fixed(2.5, 0), "3");
+        assert_eq!(to_fixed(-1.23456, 3), "-1.235");
+    }
+
+    #[test]
+    fn markers_fill_in_one_pass() {
+        let t = "a @X@ b @Y@ c@d.e @lower@";
+        assert_eq!(
+            fill_markers(t, &[("X", "@Y@"), ("Y", "2")]),
+            "a @Y@ b 2 c@d.e @lower@"
+        );
+    }
+
+    #[test]
+    fn compact_stringify() {
+        let v = serde_json::json!({ "a": [1.0, 2.5], "b": "<" });
+        assert_eq!(stringify(&v), r#"{"a":[1,2.5],"b":"<"}"#);
+    }
+
+    #[test]
+    fn json_numbers_read_back_exactly() {
+        // Needs serde_json's `float_roundtrip`; the default parser can be
+        // off in the last bit, which changed coordinates in exported HTML.
+        for text in [
+            "374.65685463511716",
+            "39.278056926286396",
+            "1351.5581290778077",
+            "0.1",
+            "1e-7",
+        ] {
+            let v: serde_json::Value = serde_json::from_str(text).unwrap();
+            let want: f64 = text.parse().unwrap();
+            assert_eq!(v.as_f64(), Some(want), "{text}");
+            assert_eq!(
+                number_to_string(want),
+                if text == "1e-7" { "1e-7" } else { text }
+            );
+        }
     }
 
     #[test]
