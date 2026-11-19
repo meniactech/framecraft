@@ -268,8 +268,6 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   padding: 8px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 8px 24px rgba(0,0,0,0.45); }
 .palette-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .stock-btn { font-size: 12px; }
-.custom-color { display: grid; grid-template-columns: 34px 1fr 36px; gap: 6px; align-items: center; }
-.custom-color input[type=color] { width: 34px; height: 24px; padding: 0; border: 1px solid var(--line); background: var(--bg); }
 /* Project view (FRAME's dashboard for the project) */
 .project-view { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; }
 .project-head { display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 44px; border-bottom: 1px solid var(--line); background: var(--panel); }
@@ -435,3 +433,15 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .info-bubble { position: fixed; z-index: 60; width: 260px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line);
   background: #0f1115; color: var(--text); font-size: 12px; line-height: 1.4; text-transform: none; letter-spacing: normal;
   font-weight: normal; box-shadow: 0 8px 24px rgba(0,0,0,.5); pointer-events: none; }
+/* Color picker: RGBA sliders and hex (FRAME's picker) */
+.color-popover { width: 260px; }
+.rgba-picker { display: flex; flex-direction: column; gap: 5px; }
+.rgba-head { display: grid; grid-template-columns: 34px 1fr; gap: 6px; align-items: center; }
+.rgba-preview { height: 26px; border-radius: 4px; border: 1px solid var(--line);
+  background: linear-gradient(var(--sw), var(--sw)), repeating-conic-gradient(#888 0% 25%, #ccc 0% 50%) 50% / 8px 8px; }
+.rgba-hex { min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: 12px ui-monospace, monospace; }
+.rgba-row { display: grid; grid-template-columns: 12px 1fr 52px; gap: 6px; align-items: center; }
+.rgba-row input[type=number] { min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 2px 4px; font: 12px inherit; }
+.rgba-row input[type=range] { -webkit-appearance: none; appearance: none; height: 12px; border-radius: 6px; border: 1px solid var(--line); background: var(--track); }
+.rgba-row input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 16px; border-radius: 3px; background: #f5f5f5; border: 1px solid #1a1d24; box-shadow: 0 1px 3px rgba(0,0,0,.5); }
+.popover-catcher { position: fixed; inset: 0; z-index: 19; }

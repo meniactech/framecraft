@@ -364,8 +364,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             }
         }
         Kind::Color => {
-            let hex = color::parse(&text).map_or("#000000".to_string(), |c| c.hex());
-            let current = text.clone();
             // The active palette's colors, as FRAME's color picker shows them.
             let swatches: Vec<(String, String)> = ui
                 .palettes
@@ -395,8 +393,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 .active()
                 .map(|p| p.name.clone())
                 .unwrap_or_default();
-            let alpha = color::parse(&text).map_or(100.0, |c| (c.a * 100.0).round());
-            let (cur_a, cur_b) = (current.clone(), current.clone());
             rsx! {
                 div { class: "color-field",
                     button {
@@ -411,9 +407,14 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                         onchange: move |evt| set(Value::from(evt.value().trim())),
                     }
                     if picker_open() {
+                        // A click outside closes it (FRAME); a drag that
+                        // leaves the popover keeps going.
+                        div {
+                            class: "popover-catcher",
+                            onclick: move |_| picker_open.set(false),
+                        }
                         div {
                             class: "color-popover",
-                            onmouseleave: move |_| picker_open.set(false),
                             // FRAME: the active palette first, then stock.
                             if !swatches.is_empty() {
                                 div { class: "palette-label", "{palette_name}" }
@@ -439,33 +440,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                                 },
                                 "Select from stock palette…"
                             }
-                            div { class: "custom-color",
-                                input {
-                                    r#type: "color",
-                                    value: "{hex}",
-                                    title: "Custom color (keeps the alpha)",
-                                    onchange: move |evt| {
-                                        if let Some(c) = color::with_rgb(&cur_a, &evt.value()) {
-                                            set(Value::from(c));
-                                        }
-                                    },
-                                }
-                                input {
-                                    r#type: "range",
-                                    min: "0",
-                                    max: "100",
-                                    value: "{alpha}",
-                                    title: "Alpha {alpha}%",
-                                    onchange: move |evt| {
-                                        if let Ok(a) = evt.value().parse::<f64>()
-                                            && let Some(c) = color::with_alpha(&cur_b, a / 100.0)
-                                        {
-                                            set(Value::from(c));
-                                        }
-                                    },
-                                }
-                                span { class: "dim", "{alpha}%" }
-                            }
+                            RgbaSliders { value: text.clone(), set }
                         }
                     }
                 }
@@ -2073,6 +2048,147 @@ pub fn InfoTip(text: &'static str) -> Element {
                 // Under the pointer, kept inside the window.
                 style: "left:min(calc(100vw - 276px), max(8px, {x - 130.0}px));top:{y + 14.0}px;",
                 "{text}"
+            }
+        }
+    }
+}
+
+/// `#rrggbb`, or `#rrggbbaa` when not opaque (the hex field).
+fn hex_with_alpha(c: color::Rgba) -> String {
+    let b = |v: f64| v.round().clamp(0.0, 255.0) as u8;
+    let a = (c.a.clamp(0.0, 1.0) * 255.0).round() as u8;
+    if a == 255 {
+        format!("#{:02x}{:02x}{:02x}", b(c.r), b(c.g), b(c.b))
+    } else {
+        format!("#{:02x}{:02x}{:02x}{a:02x}", b(c.r), b(c.g), b(c.b))
+    }
+}
+
+/// The color picker's sliders (FRAME's RGBA picker): R, G, B (0–255) and
+/// A (0–100 %) with tinted tracks and numbers, a preview and a hex field
+/// (`#rrggbb`, `#rrggbbaa` or any CSS color). Sliders preview while
+/// dragging and write one change on release.
+#[component]
+fn RgbaSliders(value: String, set: Callback<Value>) -> Element {
+    let base = color::parse(&value).unwrap_or(color::Rgba {
+        r: 255.0,
+        g: 255.0,
+        b: 255.0,
+        a: 1.0,
+    });
+    let mut live = use_signal(|| None::<color::Rgba>);
+    // A new value from outside ends any preview.
+    use_effect(use_reactive!(|value| {
+        let _ = &value;
+        live.set(None);
+    }));
+    let c = live().unwrap_or(base);
+    let (r, g, b) = (c.r.round(), c.g.round(), c.b.round());
+    let a_pct = (c.a * 100.0).round();
+    let preview = c.css();
+    let hex = hex_with_alpha(c);
+    let channels: [(&str, &str, f64, f64, String); 4] = [
+        (
+            "r",
+            "R",
+            r,
+            255.0,
+            format!("linear-gradient(90deg, rgb(0,{g},{b}), rgb(255,{g},{b}))"),
+        ),
+        (
+            "g",
+            "G",
+            g,
+            255.0,
+            format!("linear-gradient(90deg, rgb({r},0,{b}), rgb({r},255,{b}))"),
+        ),
+        (
+            "b",
+            "B",
+            b,
+            255.0,
+            format!("linear-gradient(90deg, rgb({r},{g},0), rgb({r},{g},255))"),
+        ),
+        (
+            "a",
+            "A",
+            a_pct,
+            100.0,
+            format!(
+                "linear-gradient(90deg, rgba({r},{g},{b},0), rgba({r},{g},{b},1)), repeating-conic-gradient(#888 0% 25%, #ccc 0% 50%) 50% / 8px 8px"
+            ),
+        ),
+    ];
+    let with = move |c: color::Rgba, ch: &str, v: f64| -> color::Rgba {
+        let mut n = c;
+        match ch {
+            "r" => n.r = v.clamp(0.0, 255.0),
+            "g" => n.g = v.clamp(0.0, 255.0),
+            "b" => n.b = v.clamp(0.0, 255.0),
+            _ => n.a = (v / 100.0).clamp(0.0, 1.0),
+        }
+        n
+    };
+    rsx! {
+        div { class: "rgba-picker",
+            div { class: "rgba-head",
+                div { class: "rgba-preview", style: "--sw: {preview};" }
+                input {
+                    class: "rgba-hex",
+                    r#type: "text",
+                    value: "{hex}",
+                    spellcheck: "false",
+                    title: "Hex (#rrggbb or #rrggbbaa) or any CSS color",
+                    onchange: move |evt| {
+                        let t = evt.value();
+                        let t = t.trim();
+                        let t = if !t.starts_with('#') && t.len() >= 6 && t.chars().all(|ch| ch.is_ascii_hexdigit()) {
+                            format!("#{t}")
+                        } else {
+                            t.to_string()
+                        };
+                        if let Some(c) = color::parse(&t) {
+                            set(Value::from(c.css()));
+                        }
+                    },
+                }
+            }
+            for (ch , label , v , max , track) in channels {
+                div { class: "rgba-row",
+                    span { class: "dim", "{label}" }
+                    input {
+                        r#type: "range",
+                        min: "0",
+                        max: "{max}",
+                        step: "1",
+                        value: "{v}",
+                        style: "--track: {track};",
+                        oninput: move |evt| {
+                            if let Ok(n) = evt.value().parse::<f64>() {
+                                let cur = live.peek().unwrap_or(base);
+                                live.set(Some(with(cur, ch, n)));
+                            }
+                        },
+                        onchange: move |evt| {
+                            if let Ok(n) = evt.value().parse::<f64>() {
+                                let cur = live.peek().unwrap_or(base);
+                                set(Value::from(with(cur, ch, n).css()));
+                            }
+                        },
+                    }
+                    input {
+                        r#type: "number",
+                        min: "0",
+                        max: "{max}",
+                        step: "1",
+                        value: "{v}",
+                        onchange: move |evt| {
+                            if let Ok(n) = evt.value().trim().parse::<f64>() {
+                                set(Value::from(with(base, ch, n).css()));
+                            }
+                        },
+                    }
+                }
             }
         }
     }
