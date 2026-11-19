@@ -302,6 +302,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     });
     let text = as_text(&field.value);
     let mut stock_open = use_signal(|| false);
+    let mut picker_open = use_signal(|| false);
     let default = if field.modifier.is_some() {
         modifiers::field_default(prop.group, prop.path)
     } else {
@@ -349,42 +350,83 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                         .collect()
                 })
                 .unwrap_or_default();
+            let palette_name = ui
+                .palettes
+                .read()
+                .active()
+                .map(|p| p.name.clone())
+                .unwrap_or_default();
+            let alpha = color::parse(&text).map_or(100.0, |c| (c.a * 100.0).round());
+            let (cur_a, cur_b) = (current.clone(), current.clone());
             rsx! {
                 div { class: "color-field",
-                    input {
-                        r#type: "color",
-                        value: "{hex}",
-                        onchange: move |evt| {
-                            if let Some(c) = color::with_rgb(&current, &evt.value()) {
-                                set(Value::from(c));
-                            }
-                        },
+                    button {
+                        class: "color-chip",
+                        title: "Pick a color",
+                        style: "--sw: {text};",
+                        onclick: move |_| picker_open.toggle(),
                     }
                     input {
                         r#type: "text",
                         value: "{text}",
                         onchange: move |evt| set(Value::from(evt.value().trim())),
                     }
-                    div { class: "swatch-row",
-                        for (css , tip) in swatches {
-                            button {
-                                class: "swatch-btn small",
-                                title: "{tip}",
-                                style: "--sw: {css};",
-                                onclick: move |evt| {
-                                    evt.prevent_default();
-                                    set(Value::from(css.clone()));
-                                },
+                    if picker_open() {
+                        div {
+                            class: "color-popover",
+                            onmouseleave: move |_| picker_open.set(false),
+                            // FRAME: the active palette first, then stock.
+                            if !swatches.is_empty() {
+                                div { class: "palette-label", "{palette_name}" }
+                                div { class: "swatches",
+                                    for (css , tip) in swatches {
+                                        button {
+                                            class: "swatch-btn",
+                                            title: "{tip}",
+                                            style: "--sw: {css};",
+                                            onclick: move |_| {
+                                                picker_open.set(false);
+                                                set(Value::from(css.clone()));
+                                            },
+                                        }
+                                    }
+                                }
                             }
-                        }
-                        button {
-                            class: "swatch-stock",
-                            title: "Select from a stock palette",
-                            onclick: move |evt| {
-                                evt.prevent_default();
-                                stock_open.set(true);
-                            },
-                            "Stock…"
+                            button {
+                                class: "stock-btn",
+                                onclick: move |_| {
+                                    picker_open.set(false);
+                                    stock_open.set(true);
+                                },
+                                "Select from stock palette…"
+                            }
+                            div { class: "custom-color",
+                                input {
+                                    r#type: "color",
+                                    value: "{hex}",
+                                    title: "Custom color (keeps the alpha)",
+                                    onchange: move |evt| {
+                                        if let Some(c) = color::with_rgb(&cur_a, &evt.value()) {
+                                            set(Value::from(c));
+                                        }
+                                    },
+                                }
+                                input {
+                                    r#type: "range",
+                                    min: "0",
+                                    max: "100",
+                                    value: "{alpha}",
+                                    title: "Alpha {alpha}%",
+                                    onchange: move |evt| {
+                                        if let Ok(a) = evt.value().parse::<f64>()
+                                            && let Some(c) = color::with_alpha(&cur_b, a / 100.0)
+                                        {
+                                            set(Value::from(c));
+                                        }
+                                    },
+                                }
+                                span { class: "dim", "{alpha}%" }
+                            }
                         }
                     }
                 }
@@ -618,6 +660,18 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             div { class: "field wide",
                 span { class: "field-label", "{prop.label}" }
                 {input}
+            }
+        };
+    }
+    if matches!(prop.kind, Kind::Color) {
+        // A div, not a label: clicks in the color popover must not be
+        // forwarded to the color chip.
+        return rsx! {
+            {dialog}
+            div { class: "field",
+                span { class: "field-label", "{prop.label}" }
+                {input}
+                {key_button}
             }
         };
     }

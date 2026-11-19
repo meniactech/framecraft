@@ -156,146 +156,157 @@ pub fn StockGradientDialog(
     }
 }
 
-/// The Palettes dialog: the user's palettes, which one is active, and
-/// their colors. Saved to the data folder on every change.
+/// The Palettes tab of the Project view (FRAME's dashboard → Palettes):
+/// your palettes (set active, rename, delete, edit colors) and the stock
+/// palettes (Use copies one into your palettes and makes it active).
+/// Saved to the data folder on every change.
 #[component]
-pub fn PaletteManager(ui: Ui) -> Element {
-    let mut open = ui.palette_dialog;
-    let mut stock = use_signal(|| false);
-    if !open() {
-        return rsx! {};
-    }
+pub fn PalettesTab(ui: Ui) -> Element {
     let all = ui.palettes.read().clone();
     let active = all.active().map(|p| p.id.clone());
     let count = all.palettes.len();
+    let full = count >= MAX_PALETTES;
     let edit = move |f: Box<dyn FnOnce(&mut framecraft_core::palettes::UserPalettes)>| {
         let mut next = ui.palettes.peek().clone();
         f(&mut next);
         ui.set_palettes(next);
     };
     rsx! {
-        div { class: "modal-backdrop", onclick: move |_| open.set(false),
-            div {
-                class: "modal pick-dialog",
-                onclick: move |evt| evt.stop_propagation(),
-                div { class: "modal-head",
-                    span { class: "panel-title", "My palettes" }
-                    button {
-                        disabled: count >= MAX_PALETTES,
-                        title: "An empty palette",
-                        onclick: move |_| {
-                            edit(Box::new(|u| {
-                                u.add_copy(&Palette { id: String::new(), name: "Palette".into(), colors: Vec::new() });
-                            }))
-                        },
-                        "+ New"
-                    }
-                    button {
-                        disabled: count >= MAX_PALETTES,
-                        onclick: move |_| stock.set(true),
-                        "From stock…"
-                    }
-                    button { onclick: move |_| open.set(false), "Close" }
+        section { class: "lib-section",
+            div { class: "lib-section-head",
+                h3 { "Your palettes" }
+                button {
+                    disabled: full,
+                    title: "A new empty palette",
+                    onclick: move |_| {
+                        edit(
+                            Box::new(|u| {
+                                u.add_copy(
+                                    &Palette {
+                                        id: String::new(),
+                                        name: "Palette".into(),
+                                        colors: Vec::new(),
+                                    },
+                                );
+                            }),
+                        )
+                    },
+                    "+ New palette"
                 }
-                p { class: "dim",
-                    "The active palette shows under every color field and colors charts. Up to {MAX_PALETTES} palettes of {MAX_COLORS} colors."
-                }
-                if count == 0 {
-                    p { class: "dim", "No palettes yet. Start from a stock palette or a new one." }
-                }
-                div { class: "pick-list",
-                    for p in all.palettes.clone() {
-                        {
-                            let id = p.id.clone();
-                            let is_active = active.as_deref() == Some(id.as_str());
-                            let (i1, i2, i3, i4) = (id.clone(), id.clone(), id.clone(), id.clone());
-                            let n = p.colors.len();
-                            rsx! {
-                                div { class: if is_active { "pick-row active" } else { "pick-row" },
-                                    div { class: "pick-name",
-                                        input {
-                                            r#type: "radio",
-                                            name: "fc-active-palette",
-                                            checked: is_active,
-                                            title: "Active palette",
-                                            onchange: move |_| {
-                                                let id = i1.clone();
-                                                edit(Box::new(move |u| u.active = Some(id)))
-                                            },
-                                        }
-                                        input {
-                                            r#type: "text",
-                                            value: "{p.name}",
-                                            onchange: move |evt| {
-                                                let (id, name) = (i2.clone(), evt.value());
-                                                edit(Box::new(move |u| {
+            }
+            p { class: "dim",
+                "The active palette shows in the editor's color pickers and colors charts. Up to {MAX_PALETTES} palettes of {MAX_COLORS} colors."
+            }
+            if count == 0 {
+                p { class: "dim", "No palettes yet. Create one, or use a stock palette below." }
+            }
+            div { class: "palette-grid",
+                for p in all.palettes.clone() {
+                    {
+                        let id = p.id.clone();
+                        let is_active = active.as_deref() == Some(id.as_str());
+                        let (i1, i2, i3, i4) = (id.clone(), id.clone(), id.clone(), id.clone());
+                        let n = p.colors.len();
+                        rsx! {
+                            article { class: if is_active { "palette-card active" } else { "palette-card" },
+                                div { class: "pick-name",
+                                    input {
+                                        r#type: "text",
+                                        value: "{p.name}",
+                                        onchange: move |evt| {
+                                            let (id, name) = (i2.clone(), evt.value());
+                                            edit(
+                                                Box::new(move |u| {
                                                     if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
                                                         p.name = name.trim().to_string();
                                                     }
-                                                }))
-                                            },
-                                        }
+                                                }),
+                                            )
+                                        },
+                                    }
+                                    if is_active {
+                                        span { class: "badge", title: "Used in the editor color pickers", "Active" }
+                                    } else {
                                         button {
-                                            class: "key-button",
-                                            title: "Delete palette",
+                                            title: "Use this palette in the editor",
                                             onclick: move |_| {
-                                                let id = i3.clone();
-                                                edit(Box::new(move |u| u.palettes.retain(|p| p.id != id)))
+                                                let id = i1.clone();
+                                                edit(Box::new(move |u| u.active = Some(id)))
                                             },
-                                            "×"
+                                            "Set active"
                                         }
                                     }
-                                    div { class: "swatches",
-                                        for (ci , c) in p.colors.iter().cloned().enumerate() {
-                                            {
-                                                let (ia, ib) = (id.clone(), id.clone());
-                                                let hex = swatch_css(&c.hex, 100.0);
-                                                let tip = c.label.clone().unwrap_or_else(|| c.hex.clone());
-                                                rsx! {
-                                                    span { class: "swatch-edit", title: "{tip}",
-                                                        input {
-                                                            r#type: "color",
-                                                            value: "{hex}",
-                                                            onchange: move |evt| {
-                                                                let (id, v) = (ia.clone(), evt.value().to_uppercase());
-                                                                edit(Box::new(move |u| {
+                                    button {
+                                        class: "key-button",
+                                        title: "Delete palette",
+                                        onclick: move |_| {
+                                            let id = i3.clone();
+                                            edit(Box::new(move |u| u.palettes.retain(|p| p.id != id)))
+                                        },
+                                        "✕"
+                                    }
+                                }
+                                div { class: "swatches",
+                                    for (ci , c) in p.colors.iter().cloned().enumerate() {
+                                        {
+                                            let (ia, ib) = (id.clone(), id.clone());
+                                            let hex = swatch_css(&c.hex, 100.0);
+                                            let tip = c.label.clone().unwrap_or_else(|| c.hex.clone());
+                                            rsx! {
+                                                span { class: "swatch-edit", title: "{tip}",
+                                                    input {
+                                                        r#type: "color",
+                                                        value: "{hex}",
+                                                        onchange: move |evt| {
+                                                            let (id, v) = (ia.clone(), evt.value().to_uppercase());
+                                                            edit(
+                                                                Box::new(move |u| {
                                                                     if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
                                                                         p.colors[ci].hex = v;
                                                                     }
-                                                                }))
-                                                            },
-                                                        }
-                                                        button {
-                                                            class: "swatch-x",
-                                                            title: "Remove color",
-                                                            onclick: move |_| {
-                                                                let id = ib.clone();
-                                                                edit(Box::new(move |u| {
+                                                                }),
+                                                            )
+                                                        },
+                                                    }
+                                                    button {
+                                                        class: "swatch-x",
+                                                        title: "Remove color",
+                                                        onclick: move |_| {
+                                                            let id = ib.clone();
+                                                            edit(
+                                                                Box::new(move |u| {
                                                                     if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
                                                                         p.colors.remove(ci);
                                                                     }
-                                                                }))
-                                                            },
-                                                            "×"
-                                                        }
+                                                                }),
+                                                            )
+                                                        },
+                                                        "✕"
                                                     }
                                                 }
                                             }
                                         }
-                                        if n < MAX_COLORS {
-                                            button {
-                                                class: "swatch-add",
-                                                title: "Add a color",
-                                                onclick: move |_| {
-                                                    let id = i4.clone();
-                                                    edit(Box::new(move |u| {
+                                    }
+                                    if n < MAX_COLORS {
+                                        button {
+                                            class: "swatch-add",
+                                            title: "Add color",
+                                            onclick: move |_| {
+                                                let id = i4.clone();
+                                                edit(
+                                                    Box::new(move |u| {
                                                         if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
-                                                            p.colors.push(PaletteColor { hex: "#FFFFFF".into(), alpha: 100.0, label: None });
+                                                            p.colors
+                                                                .push(PaletteColor {
+                                                                    hex: "#FFFFFF".into(),
+                                                                    alpha: 100.0,
+                                                                    label: None,
+                                                                });
                                                         }
-                                                    }))
-                                                },
-                                                "+"
-                                            }
+                                                    }),
+                                                )
+                                            },
+                                            "+"
                                         }
                                     }
                                 }
@@ -305,16 +316,52 @@ pub fn PaletteManager(ui: Ui) -> Element {
                 }
             }
         }
-        if stock() {
-            StockPaletteDialog {
-                on_close: move |_| stock.set(false),
-                on_color: None,
-                on_palette: move |p: Palette| {
-                    stock.set(false);
-                    edit(Box::new(move |u| {
-                        u.add_copy(&p);
-                    }));
-                },
+        section { class: "lib-section",
+            div { class: "lib-section-head",
+                div {
+                    h3 { "Stock palettes" }
+                    p { class: "dim",
+                        "Built-in presets. Use copies one into your palettes and sets it active (counts toward the {MAX_PALETTES} palette limit)."
+                    }
+                }
+                if full {
+                    p { class: "dim", "Limit reached — delete a palette to use stock." }
+                }
+            }
+            div { class: "palette-grid",
+                for stock in stock_palettes().iter().cloned() {
+                    {
+                        let take = stock.clone();
+                        rsx! {
+                            article { class: "palette-card",
+                                div { class: "pick-name",
+                                    span { title: "{stock.name}", "{stock.name}" }
+                                    button {
+                                        disabled: full,
+                                        title: "Copy into your palettes and set active",
+                                        onclick: move |_| {
+                                            let p = take.clone();
+                                            edit(
+                                                Box::new(move |u| {
+                                                    u.add_copy(&p);
+                                                }),
+                                            )
+                                        },
+                                        "Use"
+                                    }
+                                }
+                                div { class: "stock-strip",
+                                    for c in stock.colors.iter().take(MAX_COLORS) {
+                                        div {
+                                            style: "--sw: {swatch_css(&c.hex, c.alpha)};",
+                                            title: "{c.label.clone().unwrap_or_else(|| c.hex.clone())}",
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
     }

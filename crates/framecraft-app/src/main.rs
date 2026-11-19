@@ -16,6 +16,7 @@ mod outliner;
 mod palettes;
 mod preview;
 mod project;
+mod project_view;
 mod properties;
 mod state;
 mod timeline;
@@ -93,7 +94,7 @@ fn App() -> Element {
             }
             Timeline { ui }
             media::MediaDialog { ui }
-            palettes::PaletteManager { ui }
+            project_view::ProjectView { ui }
         }
     }
 }

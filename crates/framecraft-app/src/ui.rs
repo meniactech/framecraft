@@ -117,12 +117,12 @@ pub fn Header(ui: Ui) -> Element {
                 }
             }
             button {
-                title: "Your color palettes (the active one shows under color fields and colors charts)",
+                title: "The project's graphics, media and your palettes",
                 onclick: move |_| {
-                    let mut open = ui.palette_dialog;
+                    let mut open = ui.project_view;
                     open.set(true);
                 },
-                "Palettes"
+                "Project"
             }
             span { class: "status", "{ui.status}" }
         }

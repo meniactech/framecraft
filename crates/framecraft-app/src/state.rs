@@ -68,8 +68,8 @@ pub struct Ui {
     pub media: Signal<Option<MediaPick>>,
     /// The user's palettes (saved in the data folder).
     pub palettes: Signal<framecraft_core::palettes::UserPalettes>,
-    /// The Palettes dialog is open.
-    pub palette_dialog: Signal<bool>,
+    /// The Project view (graphics and Media Manager) covers the editor.
+    pub project_view: Signal<bool>,
 }
 
 /// An open media library: what it lists and where the pick goes.
@@ -120,7 +120,7 @@ impl Ui {
                     .map(|p| framecraft_core::palettes::UserPalettes::load(&p))
                     .unwrap_or_default()
             }),
-            palette_dialog: use_signal(|| false),
+            project_view: use_signal(|| false),
         }
     }
 
