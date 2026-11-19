@@ -189,6 +189,26 @@
       }
       return;
     }
+    if (m.action === 'snapshot') {
+      // Export → PNG Frame: the scene as drawn now, at its own size.
+      var src = event.source;
+      var reply = function (r) {
+        r.type = 'framecraft-editor';
+        r.action = 'snapshot';
+        r.seq = m.seq;
+        if (src) src.postMessage(r, '*');
+      };
+      if (!window.htmlToImage) {
+        reply({ error: 'The snapshot library did not load' });
+        return;
+      }
+      var root = document.getElementById('gfx') || document.body;
+      window.htmlToImage
+        .toPng(root, { width: m.width, height: m.height, pixelRatio: 1, cacheBust: false })
+        .then(function (url) { reply({ dataUrl: url }); })
+        .catch(function (err) { reply({ error: String((err && err.message) || err) }); });
+      return;
+    }
     if (m.action === 'hit') {
       if (event.source) event.source.postMessage({ type: 'framecraft-editor', action: 'hits', ids: hits(m.x, m.y), seq: m.seq }, '*');
       return;

@@ -447,6 +447,39 @@ pub async fn play(from_ms: f64, duration_ms: f64) -> Option<f64> {
     eval.recv::<Option<f64>>().await.ok().flatten()
 }
 
+/// The visible preview as a PNG data URL, rendered at the scene's size by
+/// the page's editor script (Export → PNG Frame).
+pub async fn snapshot(width: f64, height: f64) -> Result<String, String> {
+    let mut eval = document::eval(&format!(
+        r#"
+        const f = window.__fc;
+        if (!f || !f.active) {{ dioxus.send({{ error: 'No preview' }}); return; }}
+        const seq = 'snap' + Date.now() + Math.random();
+        const got = await new Promise((done) => {{
+          const on = (e) => {{
+            const m = e.data;
+            if (m && m.type === 'framecraft-editor' && m.action === 'snapshot' && m.seq === seq) {{
+              window.removeEventListener('message', on);
+              done(m);
+            }}
+          }};
+          window.addEventListener('message', on);
+          f.postTo(f.active, {{ type: 'framecraft-editor', action: 'snapshot', width: {width}, height: {height}, seq }});
+          setTimeout(() => {{ window.removeEventListener('message', on); done({{ error: 'Timed out' }}); }}, 30000);
+        }});
+        dioxus.send(got);
+        "#
+    ));
+    let reply: Value = eval.recv().await.map_err(|e| format!("{e:?}"))?;
+    match reply["dataUrl"].as_str() {
+        Some(url) => Ok(url.to_string()),
+        None => Err(reply["error"]
+            .as_str()
+            .unwrap_or("Snapshot failed")
+            .to_string()),
+    }
+}
+
 /// The bridge's counters, for `FRAMECRAFT_DEBUG`.
 pub async fn stats() -> Option<Value> {
     document::eval(

@@ -27,6 +27,10 @@ use serde_json::{Value, json};
 /// Package path of the editor script.
 pub const EDITOR_SCRIPT_PATH: &str = "js/framecraft-editor.js";
 const EDITOR_SCRIPT: &str = include_str!("preview/framecraft-editor.js");
+/// html-to-image 1.11.13 (MIT, see `preview/html-to-image.LICENSE`): renders
+/// the page to a PNG for Export → PNG Frame. Preview only.
+pub const SNAPSHOT_SCRIPT_PATH: &str = "js/html-to-image.js";
+const SNAPSHOT_SCRIPT: &[u8] = include_bytes!("preview/html-to-image.js");
 
 /// Layer types the runtime sets up once at start (image slots are filled
 /// only by the runtime's field update, which also seeks to 0).
@@ -82,7 +86,9 @@ pub fn build(req: &ExportRequest, media: &dyn MediaSource, p: &Profile) -> (Pack
         .position(|(path, _)| path.ends_with(".html") && !path.contains('/'));
     if let Some(i) = entry {
         let html = String::from_utf8_lossy(&pkg.files[i].1).into_owned();
-        let tag = format!("<script src=\"{EDITOR_SCRIPT_PATH}\"></script>\n");
+        let tag = format!(
+            "<script src=\"{SNAPSHOT_SCRIPT_PATH}\"></script>\n  <script src=\"{EDITOR_SCRIPT_PATH}\"></script>\n"
+        );
         let html = match html.find("</head>") {
             Some(at) => format!("{}  {tag}{}", &html[..at], &html[at..]),
             None => html,
@@ -93,6 +99,8 @@ pub fn build(req: &ExportRequest, media: &dyn MediaSource, p: &Profile) -> (Pack
         EDITOR_SCRIPT_PATH.to_string(),
         EDITOR_SCRIPT.as_bytes().to_vec(),
     ));
+    pkg.files
+        .push((SNAPSHOT_SCRIPT_PATH.to_string(), SNAPSHOT_SCRIPT.to_vec()));
     (pkg, prepare(req, media, p))
 }
 
@@ -243,6 +251,14 @@ mod tests {
         let html = String::from_utf8(pkg.get("G.html").unwrap().to_vec()).unwrap();
         assert!(html.contains("<script src=\"js/framecraft-editor.js\"></script>\n</head>"));
         assert!(pkg.get(EDITOR_SCRIPT_PATH).is_some());
+        // The PNG snapshot library is in the preview, never in exports.
+        assert!(html.contains("<script src=\"js/html-to-image.js\"></script>"));
+        assert!(pkg.get(SNAPSHOT_SCRIPT_PATH).is_some());
+        let export =
+            crate::export::package::spx_package(&req(&doc()), &no_media, &Profile::framecraft());
+        assert!(
+            export.get(SNAPSHOT_SCRIPT_PATH).is_none() && export.get(EDITOR_SCRIPT_PATH).is_none()
+        );
     }
 
     #[test]

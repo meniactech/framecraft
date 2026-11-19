@@ -176,7 +176,7 @@ pub fn Properties(ui: Ui) -> Element {
         .as_ref()
         .and_then(|id| doc.items.iter().find(|i| &i.id == id));
     // FRAME: Scene and Script always, then the layer's tabs.
-    let mut tabs = vec![Tab::Scene, Tab::Script];
+    let mut tabs = vec![Tab::Scene, Tab::Script, Tab::Export];
     if let Some(i) = item {
         tabs.extend(Tab::for_item(i));
     }
@@ -243,7 +243,7 @@ pub fn Properties(ui: Ui) -> Element {
     });
     let id = item.map(|i| i.id.clone());
     let heading = match item {
-        Some(i) if tab != Tab::Scene && tab != Tab::Script => i.name.clone(),
+        Some(i) if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) => i.name.clone(),
         _ => doc.scene.name.clone(),
     };
     drop(editor);
@@ -273,7 +273,10 @@ pub fn Properties(ui: Ui) -> Element {
             if tab == Tab::Script {
                 crate::script_editor::ScriptTab { ui }
             }
-            if tab != Tab::Scene && tab != Tab::Script && id.is_none() {
+            if tab == Tab::Export {
+                crate::export::ExportTab { ui }
+            }
+            if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) && id.is_none() {
                 p { class: "dim", "Select a layer" }
             }
             for (i , f) in fields.iter().enumerate() {

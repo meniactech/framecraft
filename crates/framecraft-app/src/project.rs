@@ -277,18 +277,49 @@ impl Project {
         )
     }
 
-    /// Writes one export ZIP next to the project file and returns its path.
-    pub fn export(&self, index: usize, format: &str) -> Result<PathBuf, String> {
+    /// One graphic's export package: `ograf`, `banner` or `spx`.
+    pub fn package(&self, index: usize, format: &str) -> Package {
         let now = now_iso();
         let req = self.request(index, &now);
         let p = Profile::framecraft();
-        let pkg = match format {
+        match format {
             "ograf" => ograf_package(&req, &self.media, &p),
             "banner" => banner_package(&req, &self.media, &p),
             _ => spx_package(&req, &self.media, &p),
+        }
+    }
+
+    /// Every graphic in one package: an OGraf or SPX suite.
+    pub fn suite(&self, ograf: bool) -> Package {
+        use framecraft_core::export::package::{SuiteGraphic, SuiteRequest, suite_package};
+        let now = now_iso();
+        let graphics: Vec<SuiteGraphic> = self
+            .media
+            .pack
+            .graphics
+            .iter()
+            .zip(&self.docs)
+            .map(|(g, doc)| SuiteGraphic {
+                id: &g.id,
+                name: &g.name,
+                doc,
+            })
+            .collect();
+        let req = SuiteRequest {
+            project_name: self.name(),
+            graphics: &graphics,
+            palette_colors: &self.palette_colors,
+            user_fonts: &[],
+            exported_at: &now,
         };
-        let file = format!("{}-{format}.zip", self.graphic_name(index));
-        self.write_next_to_project(&file, &pkg)
+        suite_package(&req, ograf, &self.media, &Profile::framecraft())
+    }
+
+    /// The folder the project file is in (where exports start).
+    pub fn folder(&self) -> PathBuf {
+        self.path
+            .parent()
+            .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
     }
 
     /// Saves the project, with edits, as a new pack next to the original.

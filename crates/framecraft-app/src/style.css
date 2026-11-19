@@ -378,3 +378,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .cue-seek { display: grid; grid-template-columns: 50px 60px 1fr; gap: 6px; text-align: left; font-size: 12px; padding: 3px 6px; }
 .cue-kind { font-weight: 600; }
 .cue-detail { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Export tab */
+.export-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.export-row > div { min-width: 0; }
+.export-row p { margin: 2px 0 0; font-size: 11px; }
+.export-title { font-weight: 600; margin-right: 6px; }
+.export-row button { flex: none; }
+.export-missing { border: 1px solid #f59e0b; border-radius: 6px; padding: 8px; margin: 6px 0; background: #2a2416; font-size: 12px; }
+.export-missing ul { margin: 6px 0; padding-left: 18px; max-height: 140px; overflow: auto; }

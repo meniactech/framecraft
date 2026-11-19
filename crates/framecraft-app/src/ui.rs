@@ -48,20 +48,6 @@ pub fn Header(ui: Ui) -> Element {
     };
     let has_project = !graphics.is_empty();
 
-    let export = move |format: &'static str| {
-        let mut status = ui.status;
-        let result = ui
-            .editor
-            .read()
-            .as_ref()
-            .map(|e| e.project.export(e.graphic, format));
-        match result {
-            Some(Ok(path)) => status.set(format!("Exported {}", path.display())),
-            Some(Err(e)) => status.set(e),
-            None => {}
-        }
-    };
-
     rsx! {
         div { class: "header",
             span { class: "brand", "FrameCraft" }
@@ -100,9 +86,14 @@ pub fn Header(ui: Ui) -> Element {
                     onclick: move |_| ui.redo(),
                     "↷ Redo"
                 }
-                button { onclick: move |_| export("spx"), "Export SPX" }
-                button { onclick: move |_| export("ograf"), "Export OGraf" }
-                button { onclick: move |_| export("banner"), "Export banner" }
+                button {
+                    title: "Export OGraf, SPX, banner or PNG (Properties → Export)",
+                    onclick: move |_| {
+                        let mut tab = ui.tab;
+                        tab.set(framecraft_core::schema::Tab::Export);
+                    },
+                    "Export…"
+                }
                 button {
                     onclick: move |_| {
                         let mut status = ui.status;

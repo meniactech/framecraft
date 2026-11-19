@@ -14,6 +14,8 @@ pub enum Tab {
     Scene,
     /// Script functions and globals (FRAME's Js tab).
     Script,
+    /// Export (FRAME's Exp tab).
+    Export,
     Transform,
     Look,
     Text,
@@ -32,6 +34,7 @@ impl Tab {
         match self {
             Tab::Scene => "Scene",
             Tab::Script => "Script",
+            Tab::Export => "Export",
             Tab::Transform => "Transform",
             Tab::Look => "Look",
             Tab::Text => "Text",
@@ -51,6 +54,7 @@ impl Tab {
         match self {
             Tab::Scene => "scene",
             Tab::Script => "script",
+            Tab::Export => "export",
             Tab::Transform => "transform",
             Tab::Look => "look",
             Tab::Text => "text",
