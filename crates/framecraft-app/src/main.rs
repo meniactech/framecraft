@@ -107,22 +107,35 @@ fn App() -> Element {
         };
         dioxus::desktop::window().set_close_behavior(behaviour);
     });
+    // Dioxus hides the window right after this handler sees the close
+    // request (app handlers run first), so the window is shown again on the
+    // next event the loop delivers.
+    let reshow = std::rc::Rc::new(std::cell::Cell::new(false));
     dioxus::desktop::use_wry_event_handler(move |event, _| {
-        if let dioxus::desktop::tao::event::Event::WindowEvent {
+        use dioxus::desktop::tao::event::Event;
+        if let Event::WindowEvent {
             event: dioxus::desktop::WindowEvent::CloseRequested,
             ..
         } = event
-            && *ui.dirty.peek()
         {
-            // Dioxus hides the window right after this handler runs (event
-            // handlers come first), so show it again a moment later.
-            close_prompt.set(true);
-            spawn(async move {
-                tokio::time::sleep(std::time::Duration::from_millis(60)).await;
-                let w = dioxus::desktop::window();
-                w.set_visible(true);
-                w.set_focus();
-            });
+            let dirty = *ui.dirty.peek();
+            if state::debug() {
+                eprintln!("[close] requested, unsaved changes: {dirty}");
+            }
+            if dirty {
+                close_prompt.set(true);
+                reshow.set(true);
+            }
+            return;
+        }
+        if reshow.get() {
+            reshow.set(false);
+            let w = dioxus::desktop::window();
+            w.set_visible(true);
+            w.set_focus();
+            if state::debug() {
+                eprintln!("[close] window shown again with the prompt");
+            }
         }
     });
 
