@@ -1386,7 +1386,11 @@ export function initIonFrameSpx(data) {
   function applyEasing(id, t) {
     const x = Math.max(0, Math.min(1, t));
     const key = ION_EASING_TO_ANIME[id] || 'linear';
-    const fn = (eases && eases[key]) || eases.linear;
+    let fn = (eases && eases[key]) || eases.linear;
+    // Anime.js v4: Back and Elastic eases are factories (`eases.outElastic()`
+    // returns the curve). Calling them with `x` returned a function, so the
+    // value became NaN and those keyframes jumped instead of easing.
+    if (/(Back|Elastic)$/.test(key)) fn = fn();
     return fn(x);
   }
 
