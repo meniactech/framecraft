@@ -342,6 +342,9 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     let help = schema::help(prop.path, board_hook).unwrap_or("");
     let mut stock_open = use_signal(|| false);
     let mut picker_open = use_signal(|| false);
+    // Where the color chip was clicked: the popover is placed there on the
+    // window, so the scrolling panel does not clip it.
+    let mut picker_at = use_signal(|| (0.0_f64, 0.0_f64));
     let default = if field.modifier.is_some() {
         modifiers::field_default(prop.group, prop.path)
     } else {
@@ -399,7 +402,11 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                         class: "color-chip",
                         title: "Pick a color",
                         style: "--sw: {text};",
-                        onclick: move |_| picker_open.toggle(),
+                        onclick: move |evt| {
+                            let p = evt.client_coordinates();
+                            picker_at.set((p.x, p.y));
+                            picker_open.toggle();
+                        },
                     }
                     input {
                         r#type: "text",
@@ -415,6 +422,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                         }
                         div {
                             class: "color-popover",
+                            style: "left:min(calc(100vw - 276px), max(8px, {picker_at().0 - 20.0}px));top:min(calc(100vh - 350px), {picker_at().1 + 16.0}px);",
                             // FRAME: the active palette first, then stock.
                             if !swatches.is_empty() {
                                 div { class: "palette-label", "{palette_name}" }
