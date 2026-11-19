@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=FrameCraft
+GenericName=Broadcast Graphics Editor
+Comment=Design animated broadcast and web graphics; export SPX, OGraf and HTML
+Exec=framecraft %f
+Icon=framecraft
+Terminal=false
+Categories=Graphics;
+Keywords=graphics;broadcast;SPX;OGraf;lower third;animation;

@@ -1,0 +1,38 @@
+# Pushing a version tag (v0.2.0, …) builds the installers and publishes
+# them as a GitHub release. Linux .deb for now; AppImage, Windows and
+# macOS follow.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  linux-deb:
+    # The oldest supported Ubuntu with WebKitGTK 4.1, so the package also
+    # installs on older systems.
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: System libraries
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Version matches the tag
+        run: |
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "Cargo.toml version $v does not match tag $GITHUB_REF_NAME"; exit 1; }
+      - name: Build .deb
+        run: packaging/linux/build-deb.sh
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: target/dist/*.deb
+          generate_release_notes: true

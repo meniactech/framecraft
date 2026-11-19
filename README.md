@@ -27,6 +27,16 @@ Exported graphics are plain HTML, CSS and JavaScript. Every package also carries
 | `crates/framecraft-core` | Document model, timeline evaluation, motions, modifiers and exporters. No UI. |
 | `crates/framecraft-app` | The desktop app (`framecraft` binary). |
 
+## Install
+
+Linux (Debian / Ubuntu 22.04 or newer): download `framecraft_<version>_amd64.deb` from [Releases](https://github.com/meniactech/framecraft/releases) and install it with
+
+```bash
+sudo apt install ./framecraft_*_amd64.deb
+```
+
+Windows and macOS installers are coming.
+
 ## Build
 
 Requires Rust 1.88 or newer ([rustup.rs](https://rustup.rs)). On Linux the desktop app needs WebKitGTK:

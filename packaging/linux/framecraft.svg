@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- FrameCraft placeholder icon (MIT). A frame with a keyframe diamond. -->
+<svg xmlns="http://www.w3.org/2000/svg" width="256" height="256" viewBox="0 0 256 256">
+  <rect x="8" y="8" width="240" height="240" rx="48" fill="#16181d"/>
+  <rect x="44" y="64" width="168" height="112" rx="10" fill="none" stroke="#4f8cff" stroke-width="14"/>
+  <path d="M128 150 L150 172 L128 194 L106 172 Z" fill="#f5b942"/>
+  <rect x="64" y="200" width="128" height="8" rx="4" fill="#333845"/>
+</svg>
