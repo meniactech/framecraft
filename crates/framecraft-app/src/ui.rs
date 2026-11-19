@@ -112,7 +112,6 @@ pub fn Header(ui: Ui) -> Element {
                 },
                 "Project"
             }
-            span { class: "status", "{ui.status}" }
         }
     }
 }
@@ -259,6 +258,63 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// The status bar at the bottom (FRAME's): what the pointer is over (its
+/// tooltip), else the last message, else Ready; then the selected layer,
+/// layer count, resolution, frame rate and version.
+#[component]
+pub fn StatusBar(ui: Ui) -> Element {
+    let hint = (ui.hint)();
+    let status = (ui.status)();
+    let (text, class) = if !hint.is_empty() {
+        (hint, "status-text hover")
+    } else if !status.is_empty() {
+        (status, "status-text")
+    } else {
+        ("Ready".to_string(), "status-text idle")
+    };
+    let info = ui.editor.read().as_ref().map(|e| {
+        let d = e.doc();
+        let selected = e
+            .selected
+            .as_ref()
+            .and_then(|id| d.items.iter().find(|i| &i.id == id))
+            .map_or_else(
+                || "Scene".to_string(),
+                |i| {
+                    if i.name.trim().is_empty() {
+                        "—".to_string()
+                    } else {
+                        i.name.trim().to_string()
+                    }
+                },
+            );
+        (
+            selected,
+            d.items.len(),
+            format!("{}×{}", d.scene.width.round(), d.scene.height.round()),
+            format!("{} fps", d.timeline.fps.round()),
+        )
+    });
+    rsx! {
+        footer { class: "status-bar",
+            span { class: "{class}", "{text}" }
+            span { class: "status-info",
+                if let Some((selected, count, res, fps)) = info {
+                    span { class: "status-sel", title: "Selected layer", "{selected}" }
+                    span { class: "sep", "|" }
+                    span { title: "Layer count", "{count}" }
+                    span { class: "sep", "|" }
+                    span { title: "Scene resolution", "{res}" }
+                    span { class: "sep", "|" }
+                    span { title: "Timeline frame rate", "{fps}" }
+                    span { class: "sep", "|" }
+                }
+                span { title: "FrameCraft version", "v{env!(\"CARGO_PKG_VERSION\")}" }
             }
         }
     }

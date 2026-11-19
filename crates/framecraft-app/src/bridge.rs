@@ -357,6 +357,22 @@ if (!window.__fc) {
     tlEmit({ action: 'zoom', factor: e.deltaY < 0 ? 1.25 : 0.8 });
   }, { passive: false });
 
+  // Status bar hints: the tooltip (or label) of what the pointer is over.
+  fc.hint = '';
+  const hintOf = (el) => {
+    if (!el || !el.closest || el.closest('.status-bar')) return '';
+    const t = el.closest('[title], [aria-label]');
+    if (!t) return '';
+    return (t.getAttribute('title') || t.getAttribute('aria-label') || '').trim();
+  };
+  document.addEventListener('pointerover', (e) => {
+    const h = hintOf(e.target);
+    if (h !== fc.hint) { fc.hint = h; fc.emit({ type: 'hint', text: h }); }
+  }, true);
+  document.addEventListener('pointerleave', () => {
+    if (fc.hint) { fc.hint = ''; fc.emit({ type: 'hint', text: '' }); }
+  });
+
   // Editor keys, outside text fields.
   document.addEventListener('keydown', (e) => {
     const t = e.target;

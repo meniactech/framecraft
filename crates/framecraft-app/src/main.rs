@@ -121,6 +121,7 @@ fn App() -> Element {
                 }
             }
             Timeline { ui }
+            ui::StatusBar { ui }
             media::MediaDialog { ui }
             project_view::ProjectView { ui }
             motions::MotionDialog { ui }

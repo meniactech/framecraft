@@ -76,6 +76,8 @@ pub struct Ui {
     pub user_motions: Signal<framecraft_core::motion::UserMotions>,
     /// Edits not saved yet.
     pub dirty: Signal<bool>,
+    /// The tooltip of what the pointer is over (status bar).
+    pub hint: Signal<String>,
     /// A project folder whose autosave copy waits for Restore / Discard.
     pub recovery: Signal<Option<PathBuf>>,
     /// The user's components (data folder).
@@ -145,6 +147,7 @@ impl Ui {
             }),
             pending_component: use_signal(|| None),
             dirty: use_signal(|| false),
+            hint: use_signal(String::new),
             recovery: use_signal(|| None),
             component_library: use_signal(|| false),
             script_editor: use_signal(|| false),
