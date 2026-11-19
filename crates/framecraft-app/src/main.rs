@@ -10,6 +10,7 @@
 //! `FRAMECRAFT_DEBUG=1` logs preview requests, edits and bridge activity.
 
 mod bridge;
+mod interact;
 mod preview;
 mod project;
 mod state;
@@ -67,14 +68,9 @@ fn App() -> Element {
         }
     });
 
-    // Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y outside text fields.
+    // Pointer, geometry and key events from the page.
     use_future(move || async move {
-        bridge::shortcuts(move |key| match key {
-            "undo" => ui.undo(),
-            "redo" => ui.redo(),
-            _ => {}
-        })
-        .await;
+        bridge::events(move |ev| interact::on_event(ui, ev)).await;
     });
 
     rsx! {

@@ -78,3 +78,16 @@ button:disabled { opacity: .45; cursor: default; }
   transform: rotate(45deg); cursor: pointer;
 }
 .playhead { position: absolute; top: 0; bottom: 0; width: 1px; background: #ff5a5a; pointer-events: none; z-index: 3; }
+
+/* Viewport overlay: selection and handles, drawn in scene units with
+   strokes that stay 1 px on screen. */
+.stage iframe { pointer-events: none; }
+.overlay { position: absolute; inset: 0; z-index: 2; cursor: default; touch-action: none; }
+.overlay svg { display: block; overflow: visible; }
+.overlay * { vector-effect: non-scaling-stroke; }
+.sel-outline { fill: none; stroke: var(--accent); stroke-width: 1.5px; }
+.sel-outline.locked { stroke: #8a90a0; stroke-dasharray: 5 4; }
+.sel-handle { fill: #fff; stroke: var(--accent); stroke-width: 1px; }
+.sel-stem { stroke: var(--accent); stroke-width: 1px; }
+.sel-rotate { fill: var(--accent); stroke: #fff; stroke-width: 1px; }
+.sel-pivot { fill: none; stroke: #ff5a5a; stroke-width: 1.5px; }

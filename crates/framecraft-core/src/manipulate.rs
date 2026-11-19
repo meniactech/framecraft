@@ -14,7 +14,10 @@
 //! the rendered page. Every drag computes absolute values from where it
 //! started, so nothing accumulates rounding.
 
-use crate::timeline::Pose;
+use crate::export::css::border_widths;
+use crate::model::{Item, ItemType, ShapeType};
+use crate::normalize::Document;
+use crate::timeline::{Pose, pose_at};
 
 pub type Vec2 = (f64, f64);
 
@@ -274,6 +277,69 @@ pub fn inside(quad: &[Vec2; 4], p: Vec2) -> bool {
     true
 }
 
+/// Left and top border a layer draws as CSS (its children are placed
+/// inside it): boxes, ellipses, image slots, charts and QR codes. Paths and
+/// polygons draw their outline in SVG instead.
+fn css_border(item: &Item) -> Vec2 {
+    let draws_border = match item.item_type {
+        Some(ItemType::ImageSlot | ItemType::Chart | ItemType::Qr) => true,
+        Some(ItemType::Shape) | None => {
+            !matches!(item.shape_type, Some(ShapeType::Path | ShapeType::Polygon))
+        }
+        _ => false,
+    };
+    if !draws_border {
+        return (0.0, 0.0);
+    }
+    let mode = item.border_width_mode.as_deref().unwrap_or("single");
+    let [top, _, _, left] = border_widths(item.border_width, mode, item.border_widths);
+    (left, top)
+}
+
+/// The scene frame of the coordinates a layer's `x`/`y` are in: its
+/// parents' poses at `time_ms`, chained up to the scene.
+pub fn parent_frame(doc: &Document, id: &str, time_ms: f64) -> Frame {
+    let Some(item) = doc.items.iter().find(|i| i.id == id) else {
+        return Frame::SCENE;
+    };
+    let Some(parent) = item
+        .parent_id
+        .clone()
+        .flatten()
+        .and_then(|pid| doc.items.iter().find(|i| i.id == pid))
+    else {
+        return Frame::SCENE;
+    };
+    let mut seen = vec![id.to_string()];
+    frame_inside(doc, parent, time_ms, &mut seen)
+}
+
+/// The frame of `item`'s inside (its padding box) in the scene.
+fn frame_inside(doc: &Document, item: &Item, time_ms: f64, seen: &mut Vec<String>) -> Frame {
+    if seen.contains(&item.id) || seen.len() > 64 {
+        return Frame::SCENE;
+    }
+    seen.push(item.id.clone());
+    let outer = match item
+        .parent_id
+        .clone()
+        .flatten()
+        .and_then(|pid| doc.items.iter().find(|i| i.id == pid))
+    {
+        Some(p) => frame_inside(doc, p, time_ms, seen),
+        None => Frame::SCENE,
+    };
+    let pose = pose_at(doc, item, time_ms);
+    let (bl, bt) = css_border(item);
+    let at = |p: Vec2| outer.to_scene(box_to_parent(&pose, add(p, (bl, bt))));
+    let origin = at((0.0, 0.0));
+    Frame {
+        origin,
+        ux: sub(at((1.0, 0.0)), origin),
+        uy: sub(at((0.0, 1.0)), origin),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -446,6 +512,33 @@ mod tests {
         for (a, b) in before.iter().zip(&after) {
             assert!(close(*a, *b));
         }
+    }
+
+    #[test]
+    fn parent_frames_chain_poses_and_borders() {
+        use crate::model::Graphic;
+        use crate::normalize::normalize;
+        use crate::profile::Profile;
+        let item = |id: &str, parent: Option<&str>, x: f64, rot: f64, border: f64| {
+            serde_json::json!({
+                "id": id, "name": id, "parentId": parent, "itemType": "shape",
+                "x": x, "y": 0, "width": 100, "height": 100, "rotation": rot, "opacity": 1, "bg_color": "#fff",
+                "borderWidth": border, "borderColor": "#000", "borderRadius": [0, 0, 0, 0],
+                "shadow": { "color": "#000", "x": 0, "y": 0, "blur": 0 }
+            })
+        };
+        let g: Graphic = serde_json::from_value(serde_json::json!({
+            "scene": { "id": "scene", "name": "S", "backgroundColor": "#000", "width": 1920, "height": 1080 },
+            "items": [item("p", None, 10.0, 90.0, 5.0), item("c", Some("p"), 0.0, 0.0, 0.0)]
+        }))
+        .unwrap();
+        let d = normalize(&g, &Profile::framecraft());
+        assert_eq!(parent_frame(&d, "p", 0.0), Frame::SCENE);
+        let f = parent_frame(&d, "c", 0.0);
+        // Parent turned 90° about its center (60, 50): its inner origin
+        // (5, 5) lands at (105, 5); its x axis points down the screen.
+        assert!(close(f.origin, (105.0, 5.0)), "{f:?}");
+        assert!(close(f.ux, (0.0, 1.0)) && close(f.uy, (-1.0, 0.0)), "{f:?}");
     }
 
     #[test]

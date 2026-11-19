@@ -3,6 +3,7 @@
 //! command → document → undo history → preview update.
 
 use crate::bridge;
+use crate::interact::{Drag, Geom};
 use crate::preview::STORE;
 use crate::project::Project;
 use dioxus::prelude::*;
@@ -42,6 +43,11 @@ pub struct Ui {
     pub zoom: Signal<f64>,
     /// Timeline Auto-key: every field edit writes a keyframe at the playhead.
     pub auto_key: Signal<bool>,
+    /// Where the selected layers are drawn, as measured in the page.
+    pub geometry: Signal<Vec<Geom>>,
+    /// The viewport drag in progress (read with `peek`: it changes every
+    /// pointer move and nothing renders from it).
+    pub drag: Signal<Option<Drag>>,
     pub status: Signal<String>,
 }
 
@@ -58,6 +64,8 @@ impl Ui {
             playing: use_signal(|| false),
             zoom: use_signal(|| 0.5),
             auto_key: use_signal(|| false),
+            geometry: use_signal(Vec::new),
+            drag: use_signal(|| None),
             status: use_signal(|| "Open a .frameproject.zip or .framepack.zip".to_string()),
         }
     }
@@ -120,6 +128,8 @@ impl Ui {
             e.graphic = index;
             e.selected = None;
         }
+        self.geometry.set(Vec::new());
+        bridge::select(&[]);
         bridge::stop(false);
         self.playing.set(false);
         self.time.set(0.0);
@@ -127,9 +137,53 @@ impl Ui {
     }
 
     pub fn select_layer(mut self, id: Option<String>) {
+        let changed = self
+            .editor
+            .peek()
+            .as_ref()
+            .is_some_and(|e| e.selected != id);
         if let Some(e) = self.editor.write().as_mut() {
-            e.selected = id;
+            e.selected = id.clone();
         }
+        if changed {
+            self.geometry.set(Vec::new());
+        }
+        bridge::select(&id.into_iter().collect::<Vec<_>>());
+    }
+
+    /// Starts an undo gesture (a drag): commands until
+    /// [`Ui::end_gesture`] are one undo step.
+    pub fn begin_gesture(mut self, label: String) {
+        if let Some(e) = self.editor.write().as_mut() {
+            let g = e.graphic;
+            e.histories[g].begin_gesture(&e.project.docs[g], label);
+        }
+    }
+
+    pub fn end_gesture(mut self) {
+        if let Some(e) = self.editor.write().as_mut() {
+            let g = e.graphic;
+            e.histories[g].end_gesture(&e.project.docs[g]);
+        }
+    }
+
+    /// Runs several commands and updates the preview once.
+    pub fn execute_all(mut self, cmds: &[Box<dyn Command>]) {
+        let mut change = Change::None;
+        let mut error = None;
+        if let Some(e) = self.editor.write().as_mut() {
+            let g = e.graphic;
+            for cmd in cmds {
+                match e.histories[g].execute(&mut e.project.docs[g], cmd.as_ref()) {
+                    Ok(c) => change = change.merge(c),
+                    Err(err) => error = Some(err.to_string()),
+                }
+            }
+        }
+        if let Some(err) = error {
+            self.set_status(err);
+        }
+        self.show(change);
     }
 
     /// Loads a freshly built preview of the current graphic.

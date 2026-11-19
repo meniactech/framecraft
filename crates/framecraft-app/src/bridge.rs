@@ -26,6 +26,7 @@ if (!window.__fc) {
     labelWidth: 200, pxPerMs: 0.1,
     active: null, pending: null, retry: null, queue: [], seq: 0,
     loads: 0, swaps: 0, applied: 0, failed: 0,
+    selection: [], send: null, outbox: [], drag: null, down: null,
   });
   const frames = () => ['fc-preview-a', 'fc-preview-b'].map((id) => document.getElementById(id)).filter(Boolean);
   fc.postTo = (frame, msg) => {
@@ -60,6 +61,7 @@ if (!window.__fc) {
     for (const m of fc.queue) fc.postTo(next, m);
     fc.queue = [];
     fc.postTo(next, { type: 'ionframe-spx', action: 'goToTime', timestamp: fc.time });
+    fc.postTo(next, { type: 'framecraft-editor', action: 'select', ids: fc.selection });
     next.classList.add('active');
     const old = fc.active;
     fc.active = next;
@@ -77,6 +79,10 @@ if (!window.__fc) {
       if (fc.pending && e.source === fc.pending.contentWindow) fc.swap();
     } else if (m.type === 'framecraft-editor' && m.action === 'applied') {
       if (m.ok) fc.applied++; else fc.failed++;
+    } else if (m.type === 'framecraft-editor' && m.action === 'geometry') {
+      if (fc.active && e.source === fc.active.contentWindow) fc.emit({ type: 'geometry', items: m.items || [] });
+    } else if (m.type === 'framecraft-editor' && m.action === 'hits') {
+      if (fc.down && m.seq === fc.down.seq) fc.releaseDown(m.ids || []);
     }
   });
   // Iframe load events do not bubble; listen in the capture phase. Seek the
@@ -93,6 +99,77 @@ if (!window.__fc) {
       if (++n >= 80) fc.swap(); // runtime never answered: show it anyway
     }, 50);
   }, true);
+
+  // Events for Rust (see `events`): queued until the channel is open.
+  fc.emit = (m) => {
+    if (fc.send) fc.send(m);
+    else fc.outbox.push(m);
+  };
+  fc.select = (ids) => {
+    fc.selection = ids;
+    fc.post({ type: 'framecraft-editor', action: 'select', ids });
+  };
+
+  // Pointer input on the viewport overlay, in scene coordinates. A press
+  // first asks the page what is under it; moves arriving meanwhile wait,
+  // so Rust always sees down, moves, up in order.
+  const scenePoint = (ov, e) => {
+    const r = ov.getBoundingClientRect();
+    const w = parseFloat(ov.dataset.w) || r.width;
+    const s = r.width / w || 1;
+    return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s };
+  };
+  const pointerEvent = (kind, ov, e) => Object.assign(
+    { type: 'pointer', kind, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey },
+    scenePoint(ov, e)
+  );
+  fc.releaseDown = (hits) => {
+    const d = fc.down;
+    if (!d) return;
+    fc.down = null;
+    d.event.hits = hits;
+    fc.emit(d.event);
+    for (const m of d.queue) fc.emit(m);
+  };
+  document.addEventListener('pointerdown', (e) => {
+    const ov = e.target && e.target.closest ? e.target.closest('#fc-overlay') : null;
+    if (!ov || e.button !== 0) return;
+    e.preventDefault();
+    ov.setPointerCapture(e.pointerId);
+    const ev = pointerEvent('down', ov, e);
+    const seq = ++fc.seq;
+    fc.drag = { ov, pointer: e.pointerId };
+    fc.down = { seq, event: ev, queue: [] };
+    fc.post({ type: 'framecraft-editor', action: 'hit', x: ev.x, y: ev.y, seq });
+    // No page to ask (or it does not answer): go on without hits.
+    setTimeout(() => { if (fc.down && fc.down.seq === seq) fc.releaseDown([]); }, 250);
+  });
+  const onMove = (kind) => (e) => {
+    const d = fc.drag;
+    if (!d || e.pointerId !== d.pointer) return;
+    const ev = pointerEvent(kind, d.ov, e);
+    if (kind !== 'move') fc.drag = null;
+    if (fc.down) fc.down.queue.push(ev);
+    else fc.emit(ev);
+  };
+  document.addEventListener('pointermove', onMove('move'));
+  document.addEventListener('pointerup', onMove('up'));
+  document.addEventListener('pointercancel', onMove('up'));
+
+  // Editor keys, outside text fields.
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
+    const k = e.key;
+    const mod = e.ctrlKey || e.metaKey;
+    let key = null;
+    if (mod && k.toLowerCase() === 'z') key = e.shiftKey ? 'redo' : 'undo';
+    else if (mod && k.toLowerCase() === 'y') key = 'redo';
+    else if (!mod && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Backspace', 'Escape'].includes(k)) key = k;
+    if (!key) return;
+    e.preventDefault();
+    fc.emit({ type: 'key', key, shift: e.shiftKey });
+  });
 
   fc.drawPlayhead = (t) => {
     const p = document.getElementById('fc-playhead');
@@ -173,22 +250,30 @@ pub async fn stats() -> Option<Value> {
     .ok()
 }
 
-/// Delivers Undo / Redo keys pressed outside text fields.
-pub async fn shortcuts(mut on_key: impl FnMut(&str)) {
+/// Tells the editor script which layers to track (it then reports their
+/// geometry).
+pub fn select(ids: &[String]) {
+    let ids = serde_json::to_string(ids).expect("ids serialize");
+    let _ = document::eval(&format!("window.__fc && window.__fc.select({ids});"));
+}
+
+/// Delivers events from the page to `on_event`, for as long as the page
+/// lives: `{type: "pointer", kind: "down"|"move"|"up", x, y, shift, alt,
+/// ctrl, hits?}`, `{type: "geometry", items: [{id, corners}]}` and
+/// `{type: "key", key, shift}`.
+pub async fn events(mut on_event: impl FnMut(Value)) {
+    install();
     let mut eval = document::eval(
         r#"
-document.addEventListener('keydown', (e) => {
-  const t = e.target;
-  const typing = t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable);
-  if (typing || !(e.ctrlKey || e.metaKey)) return;
-  const k = e.key.toLowerCase();
-  if (k === 'z' && !e.shiftKey) { e.preventDefault(); dioxus.send('undo'); }
-  else if ((k === 'z' && e.shiftKey) || k === 'y') { e.preventDefault(); dioxus.send('redo'); }
-});
+const fc = window.__fc;
+fc.send = (m) => dioxus.send(m);
+const waiting = fc.outbox;
+fc.outbox = [];
+for (const m of waiting) fc.send(m);
 await new Promise(() => {});
 "#,
     );
-    while let Ok(key) = eval.recv::<String>().await {
-        on_key(&key);
+    while let Ok(event) = eval.recv::<Value>().await {
+        on_event(event);
     }
 }

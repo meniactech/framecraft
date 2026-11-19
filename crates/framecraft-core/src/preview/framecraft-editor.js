@@ -10,7 +10,12 @@
 //   { action: 'pose', tracks }
 //   { action: 'layers', nodes: [{ domId, html }], tracks, textLayers,
 //     imageLayers, visibilityLayers, hidden: [{ id, value }] }
-// Each is answered with { type: 'framecraft-editor', action: 'applied', ok, seq }.
+//   { action: 'select', ids }   track these layers' geometry
+//   { action: 'hit', x, y, seq } which layers are under a scene point
+// Edits are answered with { action: 'applied', ok, seq }, hits with
+// { action: 'hits', ids, seq }. While layers are selected, their corners
+// in scene coordinates are posted as { action: 'geometry', items } whenever
+// they change (every frame at most).
 (function () {
   'use strict';
 
@@ -84,9 +89,110 @@
     if (typeof window.__ionframeRefreshFrame === 'function') window.__ionframeRefreshFrame();
   }
 
+  var PREFIXES = ['shp', 'txt', 'img', 'isl', 'cht', 'qr', 'prt', 'ltn', 'pat', 'lot', 'vid', 'emp'];
+
+  function layerElement(id) {
+    for (var i = 0; i < PREFIXES.length; i++) {
+      var el = document.getElementById(PREFIXES[i] + '_' + id);
+      if (el) return el;
+    }
+    return null;
+  }
+
+  function num(v) {
+    var n = parseFloat(v);
+    return isFinite(n) ? n : 0;
+  }
+
+  // A point in an element's border box, mapped through every CSS transform
+  // up to #gfx (scene coordinates).
+  function toScene(el, x, y) {
+    var px = x;
+    var py = y;
+    var node = el;
+    while (node && node.id !== 'gfx') {
+      var cs = getComputedStyle(node);
+      if (cs.transform && cs.transform !== 'none') {
+        var m = new DOMMatrix(cs.transform);
+        var o = cs.transformOrigin.split(' ');
+        var ox = num(o[0]);
+        var oy = num(o[1]);
+        var dx = px - ox;
+        var dy = py - oy;
+        px = m.a * dx + m.c * dy + m.e + ox;
+        py = m.b * dx + m.d * dy + m.f + oy;
+      }
+      var parent = node.parentElement;
+      var pcs = parent ? getComputedStyle(parent) : null;
+      px += num(cs.left) + (pcs ? num(pcs.borderLeftWidth) : 0);
+      py += num(cs.top) + (pcs ? num(pcs.borderTopWidth) : 0);
+      node = parent;
+    }
+    return [px, py];
+  }
+
+  function corners(el) {
+    var cs = getComputedStyle(el);
+    var w = num(cs.width) || el.offsetWidth;
+    var h = num(cs.height) || el.offsetHeight;
+    return [toScene(el, 0, 0), toScene(el, w, 0), toScene(el, w, h), toScene(el, 0, h)];
+  }
+
+  var selection = [];
+  var lastGeometry = '';
+
+  function measureLoop() {
+    requestAnimationFrame(measureLoop);
+    if (!selection.length || !window.parent) return;
+    var items = [];
+    for (var i = 0; i < selection.length; i++) {
+      var el = layerElement(selection[i]);
+      if (el) items.push({ id: selection[i], corners: corners(el) });
+    }
+    var json = JSON.stringify(items);
+    if (json === lastGeometry) return;
+    lastGeometry = json;
+    window.parent.postMessage({ type: 'framecraft-editor', action: 'geometry', items: items }, '*');
+  }
+  requestAnimationFrame(measureLoop);
+
+  // Every layer can be picked in the editor, even ones that ignore the
+  // pointer in playout (paths, SVG shapes). Preview only.
+  var pickable = document.createElement('style');
+  pickable.textContent = '#gfx, #gfx * { pointer-events: auto !important; }';
+  (document.head || document.documentElement).appendChild(pickable);
+
+  // Layers under a scene point, topmost first. Invisible path guides and
+  // layers hidden by live data are skipped.
+  function hits(x, y) {
+    var out = [];
+    var stack = document.elementsFromPoint(x, y);
+    for (var i = 0; i < stack.length; i++) {
+      var node = stack[i];
+      while (node && node.id !== 'gfx' && !LAYER_ID.test(node.id || '')) node = node.parentElement;
+      if (!node || node.id === 'gfx') continue;
+      if (node.hasAttribute('data-ion-path-guide') || node.hasAttribute('data-ion-live-hidden')) continue;
+      var id = node.id.slice(node.id.indexOf('_') + 1);
+      if (out.indexOf(id) < 0) out.push(id);
+    }
+    return out;
+  }
+
   window.addEventListener('message', function (event) {
     var m = event.data;
     if (!m || m.type !== 'framecraft-editor') return;
+    if (m.action === 'select') {
+      selection = Array.isArray(m.ids) ? m.ids.slice() : [];
+      lastGeometry = '';
+      if (!selection.length && window.parent) {
+        window.parent.postMessage({ type: 'framecraft-editor', action: 'geometry', items: [] }, '*');
+      }
+      return;
+    }
+    if (m.action === 'hit') {
+      if (event.source) event.source.postMessage({ type: 'framecraft-editor', action: 'hits', ids: hits(m.x, m.y), seq: m.seq }, '*');
+      return;
+    }
     var ok = true;
     if (m.action === 'pose') {
       ok = patchTracks(m.tracks);

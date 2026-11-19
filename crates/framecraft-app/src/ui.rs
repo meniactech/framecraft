@@ -2,11 +2,15 @@
 //! The editor's panels: header, viewport, properties and timeline.
 
 use crate::bridge::{self, FRAME_A, FRAME_B};
+use crate::interact::{Geom, ROTATE_OFFSET};
 use crate::state::{Editor, Ui};
 use dioxus::prelude::*;
 use framecraft_core::commands::{SetKeyframe, SetText, SetValueAt};
+use framecraft_core::manipulate::Handle;
 use framecraft_core::model::{Item, ItemType};
 use framecraft_core::normalize::CLIP_START;
+use framecraft_core::selection::movable;
+use framecraft_core::timeline::pose_at;
 use framecraft_core::timeline::{base_value, lane_value};
 
 /// Timeline scale: pixels per millisecond (10 s = 1000 px). The bridge
@@ -157,9 +161,70 @@ pub fn Viewport(ui: Ui) -> Element {
                     style: if open { "width:{w * zoom}px;height:{h * zoom}px;" } else { "display:none;" },
                     iframe { id: FRAME_A, style: "{frame_style}" }
                     iframe { id: FRAME_B, style: "{frame_style}" }
+                    Overlay { ui, width: w, height: h }
                 }
                 if !open {
                     div { class: "empty", "No graphic open" }
+                }
+            }
+        }
+    }
+}
+
+/// Selection outline and handles over the preview. It also receives all
+/// pointer input on the stage (the bridge listens on `#fc-overlay`).
+#[component]
+fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
+    let zoom = (ui.zoom)().max(0.01);
+    let time = (ui.time)();
+    let geometry = ui.geometry.read();
+    let editor = ui.editor.read();
+    // What to draw for the selection, in scene coordinates.
+    let drawn = editor.as_ref().and_then(|e| {
+        let id = e.selected.as_ref()?;
+        let g: &Geom = geometry.iter().find(|g| &g.id == id)?;
+        let doc = e.doc();
+        let item = doc.items.iter().find(|i| &i.id == id)?;
+        let pose = pose_at(doc, item, time);
+        let outline = g
+            .corners
+            .iter()
+            .map(|(x, y)| format!("{x},{y}"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        let handles: Vec<(f64, f64)> = Handle::ALL.iter().map(|h| g.at(h.at())).collect();
+        let pivot = g.at((pose.pivot_x / 100.0, pose.pivot_y / 100.0));
+        let top = g.at((0.5, 0.0));
+        let rotate = g.rotate_handle(ROTATE_OFFSET / zoom);
+        Some((outline, handles, pivot, top, rotate, movable(doc, id)))
+    });
+    drop(geometry);
+    drop(editor);
+    let hs = 8.0 / zoom;
+    rsx! {
+        div { id: "fc-overlay", class: "overlay", "data-w": "{width}", "data-h": "{height}",
+            svg {
+                view_box: "0 0 {width} {height}",
+                width: "100%",
+                height: "100%",
+                if let Some((outline, handles, pivot, top, rotate, can_move)) = drawn {
+                    polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }
+                    if can_move {
+                        line { class: "sel-stem", x1: "{top.0}", y1: "{top.1}", x2: "{rotate.0}", y2: "{rotate.1}" }
+                        circle { class: "sel-rotate", cx: "{rotate.0}", cy: "{rotate.1}", r: "{hs * 0.6}" }
+                        for (x , y) in handles {
+                            rect {
+                                class: "sel-handle",
+                                x: "{x - hs / 2.0}",
+                                y: "{y - hs / 2.0}",
+                                width: "{hs}",
+                                height: "{hs}",
+                            }
+                        }
+                        circle { class: "sel-pivot", cx: "{pivot.0}", cy: "{pivot.1}", r: "{hs * 0.55}" }
+                        line { class: "sel-pivot", x1: "{pivot.0 - hs}", y1: "{pivot.1}", x2: "{pivot.0 + hs}", y2: "{pivot.1}" }
+                        line { class: "sel-pivot", x1: "{pivot.0}", y1: "{pivot.1 - hs}", x2: "{pivot.0}", y2: "{pivot.1 + hs}" }
+                    }
                 }
             }
         }
