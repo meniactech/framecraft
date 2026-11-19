@@ -251,7 +251,11 @@ impl Project {
                     id: g.id.clone(),
                     name: g.name.clone(),
                     graphic: g.doc.to_graphic(),
-                    thumbnail: None,
+                    thumbnail: std::fs::read(
+                        dir.join(THUMBS_DIR)
+                            .join(format!("{}.jpg", thumb_name(&g.id))),
+                    )
+                    .ok(),
                 })
                 .collect(),
             media,
@@ -324,6 +328,18 @@ impl Project {
             &self.media.pack.media,
         )
         .map_err(|e| e.to_string())?;
+        // Thumbnails: thumbs/<graphic id>.jpg (kept out of the core format).
+        let thumbs = dir.join(THUMBS_DIR);
+        for g in &self.media.pack.graphics {
+            if let Some(t) = &g.thumbnail {
+                let path = thumbs.join(format!("{}.jpg", thumb_name(&g.id)));
+                if std::fs::read(&path).ok().as_deref() != Some(t.as_slice()) {
+                    std::fs::create_dir_all(&thumbs)
+                        .and_then(|()| std::fs::write(&path, t))
+                        .map_err(|e| format!("{}: {e}", path.display()))?;
+                }
+            }
+        }
         self.folder = Some(dir.to_path_buf());
         self.path = dir.to_path_buf();
         Ok(())
@@ -598,6 +614,22 @@ impl Project {
     }
 }
 
+/// Graphic thumbnails in a project folder.
+const THUMBS_DIR: &str = "thumbs";
+
+/// A graphic id as a file name (letters, digits, `_`, `-`).
+fn thumb_name(id: &str) -> String {
+    id.chars()
+        .map(|c| {
+            if c.is_ascii_alphanumeric() || c == '_' || c == '-' {
+                c
+            } else {
+                '_'
+            }
+        })
+        .collect()
+}
+
 /// The project folder `path` points at: the folder itself or its
 /// `project.json`; `None` for anything else (a pack).
 pub fn project_dir(path: &Path) -> Option<PathBuf> {
@@ -713,6 +745,14 @@ mod folder_tests {
         assert_eq!(opened.docs[0].scene.width, 1920.0);
         let restored = Project::open_folder(&dir, true).unwrap();
         assert_eq!(restored.docs[0].scene.width, 1280.0);
+        // Thumbnails are kept in the folder.
+        p.media.pack.graphics[0].thumbnail = Some(vec![0xff, 0xd8, 1]);
+        p.save_to(&dir).unwrap();
+        let again = Project::open_folder(&dir, false).unwrap();
+        assert_eq!(
+            again.media.pack.graphics[0].thumbnail.as_deref(),
+            Some(&[0xff, 0xd8, 1][..])
+        );
         // Saving clears the autosave.
         let mut r = restored;
         r.save_to(&dir).unwrap();

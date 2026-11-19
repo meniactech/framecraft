@@ -473,6 +473,21 @@ pub async fn play(from_ms: f64, duration_ms: f64) -> Option<f64> {
 /// The visible preview as a PNG data URL, rendered at the scene's size by
 /// the page's editor script (Export → PNG Frame).
 pub async fn snapshot(width: f64, height: f64) -> Result<String, String> {
+    snapshot_sized(width, height, None).await
+}
+
+/// A small JPEG of the visible preview (`thumb` = its pixel size), as a
+/// data URL: graphic thumbnails.
+pub async fn thumbnail(width: f64, height: f64, thumb: (u32, u32)) -> Result<String, String> {
+    snapshot_sized(width, height, Some(thumb)).await
+}
+
+async fn snapshot_sized(
+    width: f64,
+    height: f64,
+    thumb: Option<(u32, u32)>,
+) -> Result<String, String> {
+    let thumb = thumb.map_or("null".to_string(), |(w, h)| format!("[{w}, {h}]"));
     let mut eval = document::eval(&format!(
         r#"
         const f = window.__fc;
@@ -487,7 +502,7 @@ pub async fn snapshot(width: f64, height: f64) -> Result<String, String> {
             }}
           }};
           window.addEventListener('message', on);
-          f.postTo(f.active, {{ type: 'framecraft-editor', action: 'snapshot', width: {width}, height: {height}, seq }});
+          f.postTo(f.active, {{ type: 'framecraft-editor', action: 'snapshot', width: {width}, height: {height}, thumb: {thumb}, seq }});
           setTimeout(() => {{ window.removeEventListener('message', on); done({{ error: 'Timed out' }}); }}, 30000);
         }});
         dioxus.send(got);

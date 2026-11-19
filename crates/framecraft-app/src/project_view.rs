@@ -22,6 +22,12 @@ const TABS: &[(&str, &str)] = &[
 pub fn ProjectView(ui: Ui) -> Element {
     let mut open = ui.project_view;
     let mut tab = use_signal(|| "palettes");
+    // Opening the view refreshes the open graphic's thumbnail.
+    use_effect(move || {
+        if open() {
+            spawn(async move { ui.capture_thumbnail().await });
+        }
+    });
     if !open() {
         return rsx! {};
     }

@@ -300,8 +300,55 @@ impl Ui {
             .as_ref()
             .and_then(|e| e.project.folder.clone());
         match folder {
-            Some(dir) => self.save_into(dir),
+            Some(_) => {
+                spawn(async move {
+                    self.save_now().await;
+                });
+            }
             None => self.save_as(),
+        }
+    }
+
+    /// Refreshes the open graphic's thumbnail and saves into the project
+    /// folder; `true` when saved (a project without a folder is not).
+    pub async fn save_now(self) -> bool {
+        let Some(dir) = self
+            .editor
+            .peek()
+            .as_ref()
+            .and_then(|e| e.project.folder.clone())
+        else {
+            return false;
+        };
+        self.capture_thumbnail().await;
+        self.save_into(dir);
+        !*self.dirty.peek()
+    }
+
+    /// Renders the open graphic (at the playhead) as its thumbnail, a
+    /// 480 px wide JPEG. Failures are ignored: a thumbnail is a nicety.
+    pub async fn capture_thumbnail(mut self) {
+        let Some((w, h, index)) = self.editor.peek().as_ref().map(|e| {
+            let s = &e.doc().scene;
+            (s.width.max(1.0), s.height.max(1.0), e.graphic)
+        }) else {
+            return;
+        };
+        let tw = 480u32;
+        let th = ((h / w) * f64::from(tw)).round().clamp(1.0, 960.0) as u32;
+        let Ok(url) = bridge::thumbnail(w, h, (tw, th)).await else {
+            return;
+        };
+        let Some(bytes) = url
+            .split_once(',')
+            .and_then(|(_, b)| crate::export::decode_base64(b))
+        else {
+            return;
+        };
+        if let Some(e) = self.editor.write().as_mut()
+            && let Some(g) = e.project.media.pack.graphics.get_mut(index)
+        {
+            g.thumbnail = Some(bytes);
         }
     }
 

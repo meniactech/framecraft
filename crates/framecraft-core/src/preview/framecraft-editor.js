@@ -203,8 +203,20 @@
         return;
       }
       var root = document.getElementById('gfx') || document.body;
-      window.htmlToImage
-        .toPng(root, { width: m.width, height: m.height, pixelRatio: 1, cacheBust: false })
+      // A thumbnail (`thumb: [w, h]`) is a small JPEG on black; else a full PNG.
+      var shot = m.thumb
+        ? window.htmlToImage.toJpeg(root, {
+            width: m.width,
+            height: m.height,
+            canvasWidth: m.thumb[0],
+            canvasHeight: m.thumb[1],
+            pixelRatio: 1,
+            quality: 0.8,
+            backgroundColor: '#000000',
+            cacheBust: false
+          })
+        : window.htmlToImage.toPng(root, { width: m.width, height: m.height, pixelRatio: 1, cacheBust: false });
+      shot
         .then(function (url) { reply({ dataUrl: url }); })
         .catch(function (err) { reply({ error: String((err && err.message) || err) }); });
       return;

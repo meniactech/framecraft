@@ -257,10 +257,11 @@ fn ClosePrompt(ui: Ui, open: Signal<bool>) -> Element {
                         onclick: move |_| {
                             open.set(false);
                             if has_folder {
-                                ui.save();
-                                if !*ui.dirty.peek() {
-                                    close_now();
-                                }
+                                spawn(async move {
+                                    if ui.save_now().await {
+                                        close_now();
+                                    }
+                                });
                             } else {
                                 ui.save_as();
                             }
