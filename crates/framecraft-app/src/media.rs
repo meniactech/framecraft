@@ -24,6 +24,7 @@ pub fn MediaDialog(ui: Ui) -> Element {
     // Lottie: the project's files or the stock emoji.
     let mut stock = use_signal(|| false);
     let stock_list = use_hook(stock_lottie);
+    let sprite_list = use_hook(crate::project::builtin_sprites);
     // How SVGs go in: FRAME starts uploads as Image, stock shapes as Polygon.
     // Remembered per category.
     let mut svg_mode = use_signal(|| None::<(&'static str, SvgMode)>);
@@ -32,6 +33,9 @@ pub fn MediaDialog(ui: Ui) -> Element {
     };
     let category = pick.category;
     let shapes = category == "shapes";
+    // The particle sprite field also offers FRAME's built-in sprites.
+    let sprites =
+        matches!(&pick.target, PickTarget::Field { prop, .. } if prop.path == "particleSpriteUrl");
     let title = match category {
         "lottie" => "Lottie Library",
         "videos" => "Video Library",
@@ -79,7 +83,7 @@ pub fn MediaDialog(ui: Ui) -> Element {
         &[]
     };
     let q = query().trim().to_lowercase();
-    let showing_stock = category == "lottie" && stock();
+    let showing_stock = (category == "lottie" || sprites) && stock();
     let tiles: Vec<Tile> = if shapes {
         (1..=40)
             .map(|n| {
@@ -89,6 +93,15 @@ pub fn MediaDialog(ui: Ui) -> Element {
                     url,
                     name: format!("Shape {n:02}"),
                 }
+            })
+            .collect()
+    } else if showing_stock && sprites {
+        sprite_list
+            .iter()
+            .map(|(url, name)| Tile {
+                url: url.clone(),
+                name: name.clone(),
+                thumb: Some(library_url(url)),
             })
             .collect()
     } else if showing_stock {
@@ -133,7 +146,7 @@ pub fn MediaDialog(ui: Ui) -> Element {
                 onclick: move |evt| evt.stop_propagation(),
                 div { class: "modal-head",
                     span { class: "panel-title", "{title}" }
-                    if category == "lottie" {
+                    if category == "lottie" || sprites {
                         div { class: "seg",
                             button {
                                 class: if !showing_stock { "active" } else { "" },
@@ -143,7 +156,7 @@ pub fn MediaDialog(ui: Ui) -> Element {
                             button {
                                 class: if showing_stock { "active" } else { "" },
                                 onclick: move |_| stock.set(true),
-                                "Noto emoji"
+                                if sprites { "Built-in sprites" } else { "Noto emoji" }
                             }
                         }
                     }
@@ -187,6 +200,8 @@ pub fn MediaDialog(ui: Ui) -> Element {
                 p { class: "dim count",
                     if shapes {
                         "Built-in SVG shapes. Insert as an editable polygon or a tintable SVG."
+                    } else if showing_stock && sprites {
+                        "FRAME's built-in sprites: white on black, best with Additive blend. {tiles.len()} of {total}."
                     } else if showing_stock {
                         "Google Noto Animated Emoji. {tiles.len()} of {total}."
                     } else if total == 0 {

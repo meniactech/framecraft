@@ -77,6 +77,42 @@ fn builtin_text(rel: &str) -> String {
         .unwrap_or_default()
 }
 
+/// FRAME's built-in particle sprites (`particles/Particle-{64|128}-NN.png`):
+/// `(url, label)`, 64 px first.
+pub fn builtin_sprites() -> Vec<(String, String)> {
+    let Some(dir) = builtin_dir() else {
+        return Vec::new();
+    };
+    let mut files: Vec<String> = std::fs::read_dir(dir.join("particles"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .filter_map(|e| e.file_name().into_string().ok())
+        .filter(|n| n.starts_with("Particle-") && n.ends_with(".png"))
+        .collect();
+    files.sort_by_key(|n| {
+        let mut parts = n.trim_end_matches(".png").split('-').skip(1);
+        let size: u32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+        let index: u32 = parts.next().and_then(|p| p.parse().ok()).unwrap_or(0);
+        (size, index)
+    });
+    files
+        .into_iter()
+        .map(|n| {
+            let mut parts = n.trim_end_matches(".png").split('-').skip(1);
+            let label = format!(
+                "{} · {}",
+                parts.next().unwrap_or(""),
+                parts
+                    .next()
+                    .and_then(|p| p.parse::<u32>().ok())
+                    .unwrap_or(0)
+            );
+            (format!("/particles/{n}"), label)
+        })
+        .collect()
+}
+
 /// FRAME's stock palettes (read once).
 pub fn stock_palettes() -> &'static [framecraft_core::palettes::Palette] {
     static CACHE: std::sync::OnceLock<Vec<framecraft_core::palettes::Palette>> =

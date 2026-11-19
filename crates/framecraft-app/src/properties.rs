@@ -253,6 +253,13 @@ pub fn Properties(ui: Ui) -> Element {
                             let mut current = ui.tab;
                             current.set(t);
                         },
+                        title: "{t.label()}",
+                        img {
+                            class: "tab-icon",
+                            src: crate::preview::library_url(&format!("/icons/properties/{}.svg", t.icon())),
+                            alt: "",
+                            draggable: "false",
+                        }
                         "{t.label()}"
                     }
                 }
@@ -266,6 +273,9 @@ pub fn Properties(ui: Ui) -> Element {
                     h3 { "{f.prop.group}" }
                 }
                 FieldRow { ui, field: f.clone(), item: id.clone() }
+            }
+            if tab == Tab::Scene && ui.editor.read().is_some() {
+                Plates { ui }
             }
             if tab == Tab::Modifiers {
                 if let Some(item) = id.clone() {
@@ -1414,6 +1424,242 @@ fn PolygonPoints(ui: Ui, item: String, value: Value, set: Callback<Value>) -> El
                     title: "Insert a point on the longest edge",
                     onclick: move |_| send(polygon::insert_on_longest_edge(&add_points)),
                     "+ Point"
+                }
+            }
+        }
+    }
+}
+
+/// FRAME's built-in plates: `(id, label, image, css fallback)`.
+pub const PLATES: &[(&str, &str, Option<&str>, &str)] = &[
+    (
+        "news-room",
+        "News Room",
+        Some("/backgrounds/news-room.png"),
+        "linear-gradient(165deg, #1a2744 0%, #16181d 40%, #1e293b 70%, #334155 100%)",
+    ),
+    (
+        "news-room-2",
+        "News Room 2",
+        Some("/backgrounds/news-room-2.png"),
+        "linear-gradient(165deg, #1a2744 0%, #16181d 40%, #1e293b 70%, #334155 100%)",
+    ),
+    (
+        "reporter",
+        "Reporter",
+        Some("/backgrounds/reporter.png"),
+        "radial-gradient(ellipse 90% 70% at 50% 40%, #2a3348 0%, #12161f 55%, #0a0c10 100%)",
+    ),
+    (
+        "web-cam",
+        "Web Cam",
+        Some("/backgrounds/web-cam.png"),
+        "radial-gradient(ellipse 90% 70% at 50% 40%, #2a3348 0%, #12161f 55%, #0a0c10 100%)",
+    ),
+    (
+        "sports",
+        "Sports",
+        Some("/backgrounds/sports.png"),
+        "radial-gradient(ellipse 90% 70% at 50% 40%, #1e3a5f 0%, #16181d 55%, #0a0c10 100%)",
+    ),
+    (
+        "studio-dark",
+        "Studio Dark",
+        None,
+        "radial-gradient(ellipse 90% 70% at 50% 40%, #2a3348 0%, #12161f 55%, #0a0c10 100%)",
+    ),
+    (
+        "studio-blue",
+        "Studio Blue",
+        None,
+        "radial-gradient(ellipse 85% 65% at 50% 35%, #3b82c4 0%, #1e3a5f 50%, #16181d 100%)",
+    ),
+    (
+        "greenscreen",
+        "Green Screen",
+        None,
+        "linear-gradient(180deg, #19c45a 0%, #00a83f 45%, #008a34 100%)",
+    ),
+    (
+        "news-desk",
+        "News Desk",
+        None,
+        "linear-gradient(165deg, #1a2744 0%, #16181d 40%, #1e293b 70%, #334155 100%)",
+    ),
+    (
+        "soft-grey",
+        "Soft Grey",
+        None,
+        "linear-gradient(180deg, #e2e8f0 0%, #cbd5e1 50%, #94a3b8 100%)",
+    ),
+];
+
+/// CSS `background` for the scene's plate, or `None` when plates are off.
+pub fn plate_css(scene: &framecraft_core::model::Scene) -> Option<String> {
+    if scene.fake_background_enabled != Some(true) {
+        return None;
+    }
+    if scene.fake_background_source.as_deref() == Some("media") {
+        let url = scene
+            .fake_background_media_url
+            .as_deref()
+            .unwrap_or("")
+            .trim();
+        return (!url.is_empty()).then(|| {
+            format!(
+                "center / cover no-repeat url('{}')",
+                crate::preview::library_url(url)
+            )
+        });
+    }
+    let id = scene
+        .fake_background_builtin_id
+        .as_deref()
+        .unwrap_or("news-room");
+    let (_, _, image, css) = PLATES.iter().find(|p| p.0 == id).unwrap_or(&PLATES[0]);
+    Some(match image {
+        Some(img) => format!(
+            "center / cover no-repeat url('{}'), {css}",
+            crate::preview::library_url(img)
+        ),
+        None => css.to_string(),
+    })
+}
+
+/// Scene → Plates (FRAME): an editor-only picture behind the graphic, to
+/// judge it over a studio shot. Never exported.
+#[component]
+fn Plates(ui: Ui) -> Element {
+    use framecraft_core::commands::{FieldTarget, SetField, Update};
+    let scene = match ui.editor.read().as_ref() {
+        Some(e) => e.doc().scene.clone(),
+        None => return rsx! {},
+    };
+    let on = scene.fake_background_enabled == Some(true);
+    let opacity = scene
+        .fake_background_opacity
+        .unwrap_or(100.0)
+        .clamp(0.0, 100.0);
+    let blur = scene.fake_background_blur.unwrap_or(0.0).clamp(0.0, 20.0);
+    let media = scene.fake_background_source.as_deref() == Some("media");
+    let builtin = scene
+        .fake_background_builtin_id
+        .clone()
+        .unwrap_or_else(|| "news-room".into());
+    let chosen = scene.fake_background_media_url.clone().unwrap_or_default();
+    let set = move |path: &'static str, value: Value| {
+        ui.execute(&SetField {
+            target: FieldTarget::Scene,
+            path: path.into(),
+            value,
+            update: Update::None,
+        });
+    };
+    let images: Vec<(String, String)> = ui
+        .editor
+        .read()
+        .as_ref()
+        .map(|e| {
+            framecraft_core::media::of_category(&e.project.media.pack, "images")
+                .into_iter()
+                .map(|m| (m.url.clone(), m.original_name.clone().unwrap_or_default()))
+                .collect()
+        })
+        .unwrap_or_default();
+    rsx! {
+        h3 { "Plates" }
+        label { class: "field",
+            span { class: "field-label", title: "Editor-only underlay plate behind your graphics. Never exported to OGraf / SPX / HTML.", "Show plate" }
+            input {
+                r#type: "checkbox",
+                checked: on,
+                onchange: move |_| set("fakeBackgroundEnabled", Value::from(!on)),
+            }
+            span {}
+        }
+        if on {
+            label { class: "field",
+                span { class: "field-label", "Opacity" }
+                input {
+                    r#type: "range",
+                    min: "0",
+                    max: "100",
+                    value: "{opacity}",
+                    onchange: move |evt| {
+                        if let Ok(v) = evt.value().parse::<f64>() {
+                            set("fakeBackgroundOpacity", Value::from(v));
+                        }
+                    },
+                }
+                span { class: "dim", "{opacity}" }
+            }
+            label { class: "field",
+                span { class: "field-label", title: "Soften the plate so graphics stay readable. ~6–12 is typical; 20 is already heavy.", "Blur" }
+                input {
+                    r#type: "range",
+                    min: "0",
+                    max: "20",
+                    value: "{blur}",
+                    onchange: move |evt| {
+                        if let Ok(v) = evt.value().parse::<f64>() {
+                            set("fakeBackgroundBlur", Value::from(v));
+                        }
+                    },
+                }
+                span { class: "dim", "{blur}" }
+            }
+            div { class: "seg plate-source",
+                button {
+                    class: if !media { "active" } else { "" },
+                    onclick: move |_| set("fakeBackgroundSource", Value::from("builtin")),
+                    "Built-in"
+                }
+                button {
+                    class: if media { "active" } else { "" },
+                    onclick: move |_| set("fakeBackgroundSource", Value::from("media")),
+                    "My plates"
+                }
+            }
+            div { class: "plate-grid",
+                if !media {
+                    for (id , label , image , css) in PLATES.iter().copied() {
+                        button {
+                            class: if builtin == id { "plate-tile active" } else { "plate-tile" },
+                            title: "{label}",
+                            onclick: move |_| {
+                                set("fakeBackgroundBuiltinId", Value::from(id));
+                            },
+                            div {
+                                class: "plate-thumb",
+                                style: match image {
+                                    Some(img) => format!("background: center / cover no-repeat url('{}'), {css};", crate::preview::library_url(img)),
+                                    None => format!("background: {css};"),
+                                },
+                            }
+                            span { "{label}" }
+                        }
+                    }
+                } else {
+                    if images.is_empty() {
+                        p { class: "dim", "No images in this project. Import some in Project → Images." }
+                    }
+                    for (url , name) in images {
+                        {
+                            let u = url.clone();
+                            rsx! {
+                                button {
+                                    class: if chosen == url { "plate-tile active" } else { "plate-tile" },
+                                    title: "{name}",
+                                    onclick: move |_| set("fakeBackgroundMediaUrl", Value::from(u.clone())),
+                                    div {
+                                        class: "plate-thumb",
+                                        style: format!("background: center / cover no-repeat url('{}');", crate::preview::library_url(&url)),
+                                    }
+                                    span { "{name}" }
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }

@@ -703,20 +703,7 @@ fn Inspector(ui: Ui) -> Element {
                 span { class: "insp-title", "{keys.len()} keys" }
             }
             if !only_starts {
-            label { title: "Easing of the move arriving at the key",
-                "Easing"
-                select {
-                    onchange: move |evt| {
-                        ui.execute(&SetKeysEasing { keys: r1.clone(), easing: evt.value() });
-                    },
-                    if easing.is_empty() {
-                        option { value: "", selected: true, disabled: true, "Mixed" }
-                    }
-                    for id in EASING_IDS {
-                        option { value: id, selected: easing == id, "{easing_label(id)}" }
-                    }
-                }
-            }
+            EasingPicker { ui, keys: r1.clone(), current: easing.clone() }
             button {
                 title: "Delete keys (Delete)",
                 onclick: move |_| {
@@ -1153,5 +1140,63 @@ mod tests {
     fn easing_names() {
         assert_eq!(easing_label("ease-in-out-back"), "In Out Back");
         assert_eq!(easing_label("linear"), "Linear");
+    }
+}
+
+/// FRAME's easing button: the curve icon of the selected keys' easing; it
+/// opens a palette of every easing with its curve.
+#[component]
+fn EasingPicker(ui: Ui, keys: Vec<KeyRef>, current: String) -> Element {
+    let mut open = use_signal(|| false);
+    let icon = |id: &str| crate::preview::library_url(&format!("/icons/easing/{id}.svg"));
+    let label = if current.is_empty() {
+        "Mixed".to_string()
+    } else {
+        easing_label(&current)
+    };
+    rsx! {
+        div { class: "easing-picker",
+            button {
+                class: "easing-button",
+                title: "Easing of the move arriving at the key",
+                onclick: move |_| open.toggle(),
+                span { class: "dim", "Easing" }
+                if !current.is_empty() {
+                    img { src: "{icon(&current)}", alt: "", draggable: "false" }
+                }
+                span { "{label}" }
+            }
+            if open() {
+                div { class: "modal-backdrop", onclick: move |_| open.set(false),
+                    div {
+                        class: "modal easing-palette",
+                        onclick: move |evt| evt.stop_propagation(),
+                        div { class: "modal-head",
+                            span { class: "panel-title", "Easing" }
+                            button { onclick: move |_| open.set(false), "Close" }
+                        }
+                        div { class: "easing-grid",
+                            for id in EASING_IDS {
+                                {
+                                    let k = keys.clone();
+                                    rsx! {
+                                        button {
+                                            class: if current == id { "easing-tile active" } else { "easing-tile" },
+                                            title: "{easing_label(id)}",
+                                            onclick: move |_| {
+                                                open.set(false);
+                                                ui.execute(&SetKeysEasing { keys: k.clone(), easing: id.to_string() });
+                                            },
+                                            img { src: "{icon(id)}", alt: "", draggable: "false" }
+                                            span { "{easing_label(id)}" }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }

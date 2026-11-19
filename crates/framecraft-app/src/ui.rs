@@ -131,9 +131,19 @@ pub fn Header(ui: Ui) -> Element {
 
 #[component]
 pub fn Viewport(ui: Ui) -> Element {
-    let (w, h, open) = match ui.editor.read().as_ref() {
-        Some(e) => (e.doc().scene.width, e.doc().scene.height, true),
-        None => (1920.0, 1080.0, false),
+    let (w, h, open, plate) = match ui.editor.read().as_ref() {
+        Some(e) => {
+            let s = &e.doc().scene;
+            let plate = crate::properties::plate_css(s).map(|bg| {
+                (
+                    bg,
+                    s.fake_background_opacity.unwrap_or(100.0).clamp(0.0, 100.0) / 100.0,
+                    s.fake_background_blur.unwrap_or(0.0).clamp(0.0, 20.0),
+                )
+            });
+            (s.width, s.height, true, plate)
+        }
+        None => (1920.0, 1080.0, false, None),
     };
     let zoom = (ui.zoom)();
     let frame_style = format!("width:{w}px;height:{h}px;transform:scale({zoom});");
@@ -159,6 +169,13 @@ pub fn Viewport(ui: Ui) -> Element {
                 div {
                     class: "stage",
                     style: if open { "width:{w * zoom}px;height:{h * zoom}px;" } else { "display:none;" },
+                    // Editor-only plate behind the graphic (Scene → Plates).
+                    if let Some((bg, opacity, blur)) = plate {
+                        div {
+                            class: "plate",
+                            style: "background:{bg};opacity:{opacity};filter:blur({blur * zoom}px);",
+                        }
+                    }
                     iframe { id: FRAME_A, style: "{frame_style}" }
                     iframe { id: FRAME_B, style: "{frame_style}" }
                     Overlay { ui, width: w, height: h }
