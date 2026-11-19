@@ -13,5 +13,6 @@ name = "framecraft"
 path = "src/main.rs"
 
 [dependencies]
+dioxus = { version = "0.7.10", features = ["desktop"] }
 framecraft-core.workspace = true
-# The Dioxus desktop UI is added in step 4 (UI test build).
+tokio = { version = "1.54.1", default-features = false, features = ["time"] }
