@@ -74,6 +74,12 @@ pub struct Ui {
     pub motion_dialog: Signal<Option<&'static str>>,
     /// The user's saved motions (data folder).
     pub user_motions: Signal<framecraft_core::motion::UserMotions>,
+    /// The user's components (data folder).
+    pub user_components: Signal<framecraft_core::components::UserComponents>,
+    /// Make Component waiting for its name.
+    pub pending_component: Signal<Option<crate::components::PendingComponent>>,
+    /// Add → Insert Component… is open.
+    pub component_library: Signal<bool>,
 }
 
 /// An open media library: what it lists and where the pick goes.
@@ -126,6 +132,13 @@ impl Ui {
             }),
             project_view: use_signal(|| false),
             motion_dialog: use_signal(|| None),
+            user_components: use_signal(|| {
+                crate::components::components_path()
+                    .map(|p| framecraft_core::components::UserComponents::load(&p))
+                    .unwrap_or_default()
+            }),
+            pending_component: use_signal(|| None),
+            component_library: use_signal(|| false),
             user_motions: use_signal(|| {
                 crate::motions::motions_path()
                     .map(|p| framecraft_core::motion::UserMotions::load(&p))

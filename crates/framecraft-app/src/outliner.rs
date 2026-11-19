@@ -142,6 +142,8 @@ pub fn Outliner(ui: Ui) -> Element {
     let mut collapsed = use_signal(Vec::<String>::new);
     let mut renaming = use_signal(|| None::<String>);
     let mut menu = use_signal(|| false);
+    // Right-click menu: where, and for which layer.
+    let mut context = use_signal(|| None::<(f64, f64, String)>);
 
     let (rows, selected) = match ui.editor.read().as_ref() {
         Some(e) => (rows(e.doc(), &collapsed.read()), e.selected.clone()),
@@ -164,6 +166,15 @@ pub fn Outliner(ui: Ui) -> Element {
                             div { class: "menu", onmouseleave: move |_| menu.set(false),
                                 for kind in NewLayer::ALL {
                                     if kind == NewLayer::ImageSlot {
+                                        button {
+                                            title: "Insert a copy of a saved component",
+                                            onclick: move |_| {
+                                                menu.set(false);
+                                                let mut open = ui.component_library;
+                                                open.set(true);
+                                            },
+                                            "Insert Component…"
+                                        }
                                         button {
                                             title: "FRAME's built-in SVG shapes, as a polygon or a tintable SVG",
                                             onclick: move |_| {
@@ -215,6 +226,46 @@ pub fn Outliner(ui: Ui) -> Element {
                     }
                 }
             }
+            if let Some((x, y, id)) = context() {
+                // A full-window catcher closes the menu on any click.
+                div {
+                    class: "context-catcher",
+                    onclick: move |_| context.set(None),
+                    oncontextmenu: move |evt| {
+                        evt.prevent_default();
+                        context.set(None);
+                    },
+                }
+                div { class: "menu context-menu", style: "left:{x}px;top:{y}px;",
+                    {
+                        let a = id.clone();
+                        rsx! {
+                            button {
+                                title: "Save this layer with everything under it as a reusable component",
+                                onclick: move |_| {
+                                    context.set(None);
+                                    crate::components::make_component(ui, &a);
+                                },
+                                "Make Component…"
+                            }
+                            button {
+                                onclick: move |_| {
+                                    context.set(None);
+                                    ui.duplicate_selected();
+                                },
+                                "Duplicate"
+                            }
+                            button {
+                                onclick: move |_| {
+                                    context.set(None);
+                                    ui.delete_selected();
+                                },
+                                "Delete"
+                            }
+                        }
+                    }
+                }
+            }
             div { class: "layer-list",
                 if rows.is_empty() {
                     p { class: "dim pad", if open { "No layers. Add one with + Add." } else { "Nothing open" } }
@@ -238,6 +289,7 @@ pub fn Outliner(ui: Ui) -> Element {
                             id.clone(),
                             id.clone(),
                         );
+                        let id_ctx = id.clone();
                         rsx! {
                             // Dragging is done by the bridge (`data-id`); see `on_drop`.
                             div {
@@ -246,6 +298,12 @@ pub fn Outliner(ui: Ui) -> Element {
                                 "data-id": "{id}",
                                 style: "padding-left:{4 + depth * 14}px;",
                                 onclick: move |_| ui.select_layer(Some(id1.clone())),
+                                oncontextmenu: move |evt| {
+                                    evt.prevent_default();
+                                    ui.select_layer(Some(id_ctx.clone()));
+                                    let p = evt.client_coordinates();
+                                    context.set(Some((p.x, p.y, id_ctx.clone())));
+                                },
                                 if has_children {
                                     span {
                                         class: "caret",

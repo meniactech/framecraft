@@ -470,7 +470,7 @@ impl Command for SetEasing {
 }
 
 /// Ids of an item and everything nested under it.
-fn subtree(doc: &Document, id: &str) -> Vec<String> {
+pub(crate) fn subtree(doc: &Document, id: &str) -> Vec<String> {
     let mut out = vec![id.to_string()];
     let mut i = 0;
     while i < out.len() {

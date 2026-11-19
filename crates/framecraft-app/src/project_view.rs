@@ -9,12 +9,13 @@ use crate::state::Ui;
 use dioxus::prelude::*;
 use framecraft_core::media::{accept, of_category};
 
-/// Media Manager tabs, as FRAME's (Plates, Fonts and Components come later).
+/// Media Manager tabs, in FRAME's order (Plates and Fonts come later).
 const TABS: &[(&str, &str)] = &[
     ("images", "Images"),
+    ("palettes", "Palettes"),
+    ("components", "Components"),
     ("lottie", "Lottie"),
     ("videos", "Videos (exp.)"),
-    ("palettes", "Palettes"),
 ];
 
 #[component]
@@ -69,7 +70,7 @@ pub fn ProjectView(ui: Ui) -> Element {
                 main { class: "media-manager",
                     div { class: "lib-head",
                         h3 { "Media Manager" }
-                        span { class: "dim", "The project's images, Lottie and video files, and your palettes" }
+                        span { class: "dim", "The project's images, Lottie and video files; your palettes and components" }
                     }
                     div { class: "seg lib-tabs",
                         for (id , label) in TABS.iter().copied() {
@@ -83,6 +84,8 @@ pub fn ProjectView(ui: Ui) -> Element {
                     div { class: "lib-content",
                         if current_tab == "palettes" {
                             crate::palettes::PalettesTab { ui }
+                        } else if current_tab == "components" {
+                            crate::components::ComponentsTab { ui }
                         } else {
                             MediaTab { ui, category: current_tab }
                         }

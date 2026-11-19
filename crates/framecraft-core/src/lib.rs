@@ -12,6 +12,7 @@
 
 pub mod color;
 pub mod commands;
+pub mod components;
 pub mod easing;
 pub mod export;
 pub mod js;

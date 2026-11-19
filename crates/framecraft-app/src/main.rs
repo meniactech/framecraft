@@ -10,6 +10,7 @@
 //! `FRAMECRAFT_DEBUG=1` logs preview requests, edits and bridge activity.
 
 mod bridge;
+mod components;
 mod interact;
 mod media;
 mod motions;
@@ -97,6 +98,8 @@ fn App() -> Element {
             media::MediaDialog { ui }
             project_view::ProjectView { ui }
             motions::MotionDialog { ui }
+            components::ComponentNameDialog { ui }
+            components::ComponentLibraryDialog { ui }
         }
     }
 }
