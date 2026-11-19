@@ -10,7 +10,14 @@
 //! files this crate writes stay compatible with SPX, OGraf hosts,
 //! MENiAC Air and BOARD.
 
+pub mod easing;
+pub mod export;
+pub mod js;
 pub mod model;
+pub mod normalize;
+pub mod profile;
+pub mod ramp;
+pub mod script;
 
 /// Product name used in generated files (`generator` fields and similar).
 pub const GENERATOR: &str = "FrameCraft";
