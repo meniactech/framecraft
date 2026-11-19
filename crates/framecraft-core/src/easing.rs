@@ -55,148 +55,91 @@ pub fn normalize(value: Option<&str>) -> &'static str {
     }
 }
 
-/// Eased progress for `t` in 0–1. Unknown ids behave as linear.
+/// Eased progress for `t` in 0–1, exactly as exported graphics play it.
+///
+/// The playout runtime eases with anime.js v4 (`eases.outQuad`, …; Back and
+/// Elastic with their default settings), so these are anime.js's
+/// definitions: one "in" curve per family, with "out" and "in-out" derived
+/// from it the way anime.js derives them. Unknown ids behave as linear.
 pub fn apply(id: &str, t: f64) -> f64 {
     let x = t.clamp(0.0, 1.0);
-    match id {
-        "ease-in-sine" => 1.0 - (x * PI / 2.0).cos(),
-        "ease-out-sine" => (x * PI / 2.0).sin(),
-        "ease-in-out-sine" => -((PI * x).cos() - 1.0) / 2.0,
-        "ease-in-quad" => x * x,
-        "ease-out-quad" => 1.0 - (1.0 - x) * (1.0 - x),
-        "ease-in-out-quad" => {
-            if x < 0.5 {
-                2.0 * x * x
-            } else {
-                1.0 - (-2.0 * x + 2.0).powi(2) / 2.0
-            }
-        }
-        "ease-in-cubic" => x * x * x,
-        "ease-out-cubic" => 1.0 - (1.0 - x).powi(3),
-        "ease-in-out-cubic" => {
-            if x < 0.5 {
-                4.0 * x * x * x
-            } else {
-                1.0 - (-2.0 * x + 2.0).powi(3) / 2.0
-            }
-        }
-        "ease-in-quart" => x * x * x * x,
-        "ease-out-quart" => 1.0 - (1.0 - x).powi(4),
-        "ease-in-out-quart" => {
-            if x < 0.5 {
-                8.0 * x * x * x * x
-            } else {
-                1.0 - (-2.0 * x + 2.0).powi(4) / 2.0
-            }
-        }
-        "ease-in-quint" => x * x * x * x * x,
-        "ease-out-quint" => 1.0 - (1.0 - x).powi(5),
-        "ease-in-out-quint" => {
-            if x < 0.5 {
-                16.0 * x * x * x * x * x
-            } else {
-                1.0 - (-2.0 * x + 2.0).powi(5) / 2.0
-            }
-        }
-        "ease-in-expo" => {
-            if x == 0.0 {
+    let Some(rest) = id.strip_prefix("ease-") else {
+        return x;
+    };
+    let (mode, family) = if let Some(f) = rest.strip_prefix("in-out-") {
+        (Mode::InOut, f)
+    } else if let Some(f) = rest.strip_prefix("out-") {
+        (Mode::Out, f)
+    } else if let Some(f) = rest.strip_prefix("in-") {
+        (Mode::In, f)
+    } else {
+        return x;
+    };
+    let curve: fn(f64) -> f64 = match family {
+        "quad" => |t| t.powf(2.0),
+        "cubic" => |t| t.powf(3.0),
+        "quart" => |t| t.powf(4.0),
+        "quint" => |t| t.powf(5.0),
+        "sine" => |t| 1.0 - (t * PI / 2.0).cos(),
+        "circ" => |t| 1.0 - (1.0 - t * t).sqrt(),
+        "expo" => |t| {
+            if t == 0.0 {
                 0.0
             } else {
-                2f64.powf(10.0 * x - 10.0)
+                2f64.powf(10.0 * t - 10.0)
             }
-        }
-        "ease-out-expo" => {
-            if x == 1.0 {
-                1.0
-            } else {
-                1.0 - 2f64.powf(-10.0 * x)
-            }
-        }
-        "ease-in-out-expo" => {
-            if x == 0.0 {
-                0.0
-            } else if x == 1.0 {
-                1.0
-            } else if x < 0.5 {
-                2f64.powf(20.0 * x - 10.0) / 2.0
-            } else {
-                (2.0 - 2f64.powf(-20.0 * x + 10.0)) / 2.0
-            }
-        }
-        "ease-in-circ" => 1.0 - (1.0 - x * x).sqrt(),
-        "ease-out-circ" => (1.0 - (x - 1.0).powi(2)).sqrt(),
-        "ease-in-out-circ" => {
+        },
+        "bounce" => bounce_in,
+        "back" => |t| {
+            let o = 1.7;
+            (o + 1.0) * t * t * t - o * t * t
+        },
+        "elastic" => elastic_in,
+        _ => return x,
+    };
+    match mode {
+        Mode::In => curve(x),
+        Mode::Out => 1.0 - curve(1.0 - x),
+        Mode::InOut => {
             if x < 0.5 {
-                (1.0 - (1.0 - (2.0 * x).powi(2)).sqrt()) / 2.0
+                curve(2.0 * x) / 2.0
             } else {
-                ((1.0 - (-2.0 * x + 2.0).powi(2)).sqrt() + 1.0) / 2.0
+                1.0 - curve(-2.0 * x + 2.0) / 2.0
             }
         }
-        "ease-in-back" => {
-            let (c1, c3) = (1.70158, 2.70158);
-            c3 * x * x * x - c1 * x * x
-        }
-        "ease-out-back" => {
-            let (c1, c3) = (1.70158, 2.70158);
-            1.0 + c3 * (x - 1.0).powi(3) + c1 * (x - 1.0).powi(2)
-        }
-        "ease-in-out-back" => {
-            let c2 = 1.70158 * 1.525;
-            if x < 0.5 {
-                ((2.0 * x).powi(2) * ((c2 + 1.0) * 2.0 * x - c2)) / 2.0
-            } else {
-                ((2.0 * x - 2.0).powi(2) * ((c2 + 1.0) * (2.0 * x - 2.0) + c2) + 2.0) / 2.0
-            }
-        }
-        "ease-in-elastic" => {
-            if x == 0.0 || x == 1.0 {
-                return x;
-            }
-            let c4 = 2.0 * PI / 3.0;
-            -(2f64.powf(10.0 * x - 10.0)) * ((x * 10.0 - 10.75) * c4).sin()
-        }
-        "ease-out-elastic" => {
-            if x == 0.0 || x == 1.0 {
-                return x;
-            }
-            let c4 = 2.0 * PI / 3.0;
-            2f64.powf(-10.0 * x) * ((x * 10.0 - 0.75) * c4).sin() + 1.0
-        }
-        "ease-in-out-elastic" => {
-            if x == 0.0 || x == 1.0 {
-                return x;
-            }
-            let c5 = 2.0 * PI / 4.5;
-            if x < 0.5 {
-                -(2f64.powf(20.0 * x - 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0
-            } else {
-                (2f64.powf(-20.0 * x + 10.0) * ((20.0 * x - 11.125) * c5).sin()) / 2.0 + 1.0
-            }
-        }
-        "ease-in-bounce" => 1.0 - bounce_out(1.0 - x),
-        "ease-out-bounce" => bounce_out(x),
-        "ease-in-out-bounce" => {
-            if x < 0.5 {
-                (1.0 - bounce_out(1.0 - 2.0 * x)) / 2.0
-            } else {
-                (1.0 + bounce_out(2.0 * x - 1.0)) / 2.0
-            }
-        }
-        _ => x,
     }
 }
 
-fn bounce_out(x: f64) -> f64 {
-    let (n1, d1) = (7.5625, 2.75);
-    if x < 1.0 / d1 {
-        n1 * x * x
-    } else if x < 2.0 / d1 {
-        n1 * (x - 1.5 / d1) * (x - 1.5 / d1) + 0.75
-    } else if x < 2.5 / d1 {
-        n1 * (x - 2.25 / d1) * (x - 2.25 / d1) + 0.9375
-    } else {
-        n1 * (x - 2.625 / d1) * (x - 2.625 / d1) + 0.984375
+#[derive(Clone, Copy)]
+enum Mode {
+    In,
+    Out,
+    InOut,
+}
+
+/// anime.js `Bounce`.
+fn bounce_in(t: f64) -> f64 {
+    let mut s = 4i32;
+    let mut e;
+    loop {
+        s -= 1;
+        e = 2f64.powi(s);
+        if t >= (e - 1.0) / 11.0 {
+            break;
+        }
     }
+    1.0 / 4f64.powi(3 - s) - 7.5625 * ((3.0 * e - 2.0) / 22.0 - t).powf(2.0)
+}
+
+/// anime.js `Elastic` with its defaults (amplitude 1, period 0.3).
+fn elastic_in(t: f64) -> f64 {
+    if t == 0.0 || t == 1.0 {
+        return t;
+    }
+    let (amplitude, period) = (1.0f64, 0.3f64);
+    let r = period / (2.0 * PI) * (1.0 / amplitude).asin();
+    let n = 2.0 * PI / period;
+    -amplitude * 2f64.powf(-10.0 * (1.0 - t)) * ((1.0 - t - r) * n).sin()
 }
 
 #[cfg(test)]
@@ -210,6 +153,27 @@ mod tests {
         assert_eq!(normalize(Some("ease-out-back")), "ease-out-back");
         assert_eq!(normalize(Some("easeInOutQuad")), "ease-in-out-quad");
         assert_eq!(normalize(Some("bogus")), "linear");
+    }
+
+    /// Every curve against anime.js itself (201 samples each, made by
+    /// running the runtime's easing function in Node).
+    #[test]
+    fn matches_anime_js() {
+        let data: serde_json::Value =
+            serde_json::from_str(include_str!("../tests/data/eases.json")).unwrap();
+        let samples = data["samples"].as_object().unwrap();
+        assert_eq!(samples.len(), EASING_IDS.len());
+        for id in EASING_IDS {
+            for (i, want) in samples[id].as_array().unwrap().iter().enumerate() {
+                let want = want.as_f64().unwrap();
+                let got = apply(id, i as f64 / 200.0);
+                assert!(
+                    (got - want).abs() < 1e-12,
+                    "{id} at t={}: {got} vs anime.js {want}",
+                    i as f64 / 200.0
+                );
+            }
+        }
     }
 
     #[test]

@@ -19,6 +19,7 @@ pub mod pack;
 pub mod profile;
 pub mod ramp;
 pub mod script;
+pub mod timeline;
 
 /// Product name used in generated files (`generator` fields and similar).
 pub const GENERATOR: &str = "FrameCraft";
