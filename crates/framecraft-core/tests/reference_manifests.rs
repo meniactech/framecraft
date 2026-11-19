@@ -139,14 +139,14 @@ fn metadata_matches_frame_byte_for_byte() {
             ),
             (
                 "banner/meta/air-render.json".into(),
-                air(PackageFormat::HtmlBanner, None, "index.html"),
+                air(PackageFormat::HtmlBanner, None, &html),
             ),
             (
                 "banner/meta/export-info.json".into(),
                 stringify_pretty(&export_info(
                     &t,
                     ExportInfoKind::Banner,
-                    "index.html",
+                    &html,
                     EXPORTED_AT,
                     &p,
                 )),

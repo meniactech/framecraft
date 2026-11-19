@@ -98,3 +98,49 @@ fn short(v: &Value) -> String {
         s
     }
 }
+
+/// The line holding `window.__ionframeSpx`.
+const DATA_PREFIX: &str = "    window.__ionframeSpx = ";
+
+/// Differences between two exported HTML pages. Lines must match byte for
+/// byte, except the runtime data line, which FRAME fills from input
+/// objects in their original key order: that one is compared as JSON.
+pub fn html_diffs(want: &str, got: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    let (w, g): (Vec<&str>, Vec<&str>) = (want.split('\n').collect(), got.split('\n').collect());
+    if w.len() != g.len() {
+        out.push(format!("{} lines, want {}", g.len(), w.len()));
+    }
+    for (i, (wl, gl)) in w.iter().zip(&g).enumerate() {
+        if let (Some(wj), Some(gj)) = (wl.strip_prefix(DATA_PREFIX), gl.strip_prefix(DATA_PREFIX)) {
+            let parse = |s: &str| {
+                serde_json::from_str::<serde_json::Value>(s.trim_end_matches(';')).unwrap()
+            };
+            let diffs = json_diffs(&parse(wj), &parse(gj));
+            out.extend(
+                diffs
+                    .into_iter()
+                    .take(15)
+                    .map(|d| format!("line {} (runtime data) {d}", i + 1)),
+            );
+        } else if wl != gl {
+            let at = wl
+                .bytes()
+                .zip(gl.bytes())
+                .position(|(a, b)| a != b)
+                .unwrap_or(wl.len().min(gl.len()));
+            let from = at.saturating_sub(60);
+            let cut = |s: &str| s.get(from..(at + 80).min(s.len())).unwrap_or(s).to_string();
+            out.push(format!(
+                "line {}:\n      want: …{}\n      got:  …{}",
+                i + 1,
+                cut(wl),
+                cut(gl)
+            ));
+        }
+        if out.len() > 15 {
+            break;
+        }
+    }
+    out
+}

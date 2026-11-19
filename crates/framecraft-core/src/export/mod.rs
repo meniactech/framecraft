@@ -7,4 +7,5 @@ pub mod css;
 pub mod html;
 pub mod manifest;
 pub mod names;
+pub mod package;
 pub mod template;

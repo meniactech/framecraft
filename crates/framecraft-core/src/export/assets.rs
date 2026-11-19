@@ -168,6 +168,9 @@ pub const BUILTIN_FONTS: [(&str, &str); 6] = [
 /// `@font-face` rules for the fonts the export uses (uploaded fonts first,
 /// then built-in ones), and the files to copy into `fonts/`.
 ///
+/// `available` says whether a font file can be read; unreadable fonts are
+/// skipped.
+///
 /// When an uploaded font has a built-in font's family, SPX packages still
 /// add the built-in rule (pointing at a file that is not copied); banners
 /// skip it. Both as in FRAME.
@@ -175,6 +178,7 @@ pub fn font_faces(
     t: &TemplateExport,
     uploaded: &[UserFont],
     banner: bool,
+    available: &dyn Fn(&str) -> bool,
 ) -> (Vec<String>, Vec<AssetCopy>) {
     let used: Vec<String> = t
         .elements
@@ -193,6 +197,10 @@ pub fn font_faces(
         }
         let target = format!("fonts/{}", basename(source));
         if !exported.contains(&key) {
+            // A font that cannot be read gets no rule, as in FRAME.
+            if !available(source) {
+                return;
+            }
             exported.push(key);
             copies.push(AssetCopy {
                 source: source.to_string(),

@@ -15,48 +15,6 @@ use framecraft_core::normalize::normalize;
 use framecraft_core::profile::Profile;
 use std::path::Path;
 
-const DATA_PREFIX: &str = "    window.__ionframeSpx = ";
-
-fn compare(want: &str, got: &str) -> Vec<String> {
-    let mut out = Vec::new();
-    let (w, g): (Vec<&str>, Vec<&str>) = (want.split('\n').collect(), got.split('\n').collect());
-    if w.len() != g.len() {
-        out.push(format!("{} lines, want {}", g.len(), w.len()));
-    }
-    for (i, (wl, gl)) in w.iter().zip(&g).enumerate() {
-        if let (Some(wj), Some(gj)) = (wl.strip_prefix(DATA_PREFIX), gl.strip_prefix(DATA_PREFIX)) {
-            let parse = |s: &str| {
-                serde_json::from_str::<serde_json::Value>(s.trim_end_matches(';')).unwrap()
-            };
-            let diffs = common::json_diffs(&parse(wj), &parse(gj));
-            out.extend(
-                diffs
-                    .into_iter()
-                    .take(15)
-                    .map(|d| format!("line {} (runtime data) {d}", i + 1)),
-            );
-        } else if wl != gl {
-            let at = wl
-                .bytes()
-                .zip(gl.bytes())
-                .position(|(a, b)| a != b)
-                .unwrap_or(wl.len().min(gl.len()));
-            let from = at.saturating_sub(60);
-            let cut = |s: &str| s.get(from..(at + 80).min(s.len())).unwrap_or(s).to_string();
-            out.push(format!(
-                "line {}:\n      want: …{}\n      got:  …{}",
-                i + 1,
-                cut(wl),
-                cut(gl)
-            ));
-        }
-        if out.len() > 15 {
-            break;
-        }
-    }
-    out
-}
-
 fn entry_html(dir: &Path) -> String {
     let files = common::read_json(&dir.join("files.json"));
     files
@@ -96,10 +54,10 @@ fn html_matches_frame() {
         let t = build(&normalize(&graphic, &p), &opts, &p);
 
         let spx = AssetMap::spx().remap(&t);
-        let (spx_fonts, _) = font_faces(&spx, &[], false);
+        let (spx_fonts, _) = font_faces(&spx, &[], false, &|_| true);
         let spx_html = page_html(&spx, &spx_fonts, PageKind::Spx, template_js_src(&spx), &p);
         let banner = AssetMap::banner().remap(&t);
-        let (banner_fonts, _) = font_faces(&banner, &[], true);
+        let (banner_fonts, _) = font_faces(&banner, &[], true, &|_| true);
         let banner_html = page_html(
             &banner,
             &banner_fonts,
@@ -112,11 +70,11 @@ fn html_matches_frame() {
         for (file, got) in [
             (format!("spx/{entry}"), &spx_html),
             (format!("ograf/{entry}"), &spx_html),
-            ("banner/index.html".to_string(), &banner_html),
+            (format!("banner/{entry}"), &banner_html),
         ] {
             let want = std::fs::read_to_string(dir.join(&file)).unwrap();
             checked += 1;
-            let diffs = compare(&want, got);
+            let diffs = common::html_diffs(&want, got);
             if !diffs.is_empty() {
                 failures.push(format!("{name}/{file}:\n  {}", diffs.join("\n  ")));
             }
