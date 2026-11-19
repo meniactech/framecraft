@@ -1,17 +1,23 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! Serves the current preview package to the webview from memory.
 //!
-//! The viewport is an iframe on `/preview/<revision>/<entry>.html`: the
-//! real exported page with its runtime, so the editor shows exactly what
+//! The viewport is an iframe on `framecraft://preview/<revision>/<entry>.html`:
+//! the real exported page with its runtime, so the editor shows exactly what
 //! SPX, OGraf hosts and Air will play. Each rebuild gets a new revision,
 //! which also keeps the webview from reusing cached files.
+//!
+//! The preview has its own URL scheme because Dioxus allows only one
+//! navigation on `dioxus://` (its own page) and opens `http(s)://` links
+//! in the system browser; both would keep the iframe empty.
 
 use framecraft_core::export::package::Package;
 use std::cell::RefCell;
 use std::rc::Rc;
 
-/// URL prefix the asset handler is registered under.
-pub const PREFIX: &str = "preview";
+/// URL scheme of the preview, registered on the webview at start.
+pub const SCHEME: &str = "framecraft";
+/// Host part of preview URLs.
+pub const HOST: &str = "preview";
 
 #[derive(Default)]
 pub struct PreviewFiles {
@@ -21,6 +27,12 @@ pub struct PreviewFiles {
 }
 
 pub type SharedPreview = Rc<RefCell<PreviewFiles>>;
+
+thread_local! {
+    /// The preview the protocol handler serves. The UI and the webview's
+    /// protocol handler both run on the main thread.
+    pub static STORE: SharedPreview = SharedPreview::default();
+}
 
 impl PreviewFiles {
     /// Replaces the package; returns the iframe URL of the new revision.
@@ -35,7 +47,7 @@ impl PreviewFiles {
             .to_string();
         self.package = package;
         format!(
-            "/{PREFIX}/{}/{}",
+            "{SCHEME}://{HOST}/{}/{}",
             self.revision,
             percent_encode_path(&self.entry)
         )
@@ -45,13 +57,10 @@ impl PreviewFiles {
         self.revision
     }
 
-    /// The file for a request path, if it belongs to the current revision.
+    /// The file for a request path (`/<revision>/<file>`), if it belongs to
+    /// the current revision.
     pub fn lookup(&self, request_path: &str) -> Option<(Vec<u8>, &'static str)> {
-        let rest = request_path
-            .trim_start_matches('/')
-            .strip_prefix(PREFIX)?
-            .strip_prefix('/')?;
-        let (rev, file) = rest.split_once('/')?;
+        let (rev, file) = request_path.trim_start_matches('/').split_once('/')?;
         if rev.parse::<u64>().ok()? != self.revision {
             return None;
         }
@@ -128,14 +137,14 @@ mod tests {
         pkg.files.push(("js/a.js".into(), b"x".to_vec()));
         pkg.files.push(("Name Tag.html".into(), b"<html>".to_vec()));
         let url = files.publish(pkg);
-        assert_eq!(url, "/preview/1/Name%20Tag.html");
+        assert_eq!(url, "framecraft://preview/1/Name%20Tag.html");
         assert_eq!(
-            files.lookup("/preview/1/Name%20Tag.html"),
+            files.lookup("/1/Name%20Tag.html"),
             Some((b"<html>".to_vec(), "text/html; charset=utf-8"))
         );
-        assert!(files.lookup("/preview/1/js/a.js").is_some());
-        assert!(files.lookup("/preview/0/js/a.js").is_none());
-        assert!(files.lookup("/other/1/js/a.js").is_none());
+        assert!(files.lookup("/1/js/a.js").is_some());
+        assert!(files.lookup("/0/js/a.js").is_none());
+        assert!(files.lookup("/x/1/js/a.js").is_none());
     }
 
     #[test]

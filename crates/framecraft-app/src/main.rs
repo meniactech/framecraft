@@ -11,11 +11,11 @@
 mod preview;
 mod project;
 
-use dioxus::desktop::{Config, LogicalSize, WindowBuilder, use_asset_handler, wry::http::Response};
+use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
 use dioxus::prelude::*;
 use framecraft_core::model::{Item, ItemType};
 use framecraft_core::normalize::CLIP_START;
-use preview::{PREFIX, PreviewFiles, SharedPreview};
+use preview::{HOST, SCHEME, STORE, SharedPreview};
 use project::Project;
 use std::path::PathBuf;
 use std::time::Duration;
@@ -32,7 +32,26 @@ fn main() {
     let config = Config::new()
         .with_window(window)
         .with_menu(None)
-        .with_custom_head(format!("<style>{STYLE}</style>"));
+        .with_custom_head(format!("<style>{STYLE}</style>"))
+        .with_custom_protocol(SCHEME, |_, request| {
+            let found = (request.uri().host() == Some(HOST))
+                .then(|| STORE.with(|s| s.borrow().lookup(request.uri().path())))
+                .flatten();
+            if debug() {
+                let status = found.as_ref().map_or("404".to_string(), |(b, m)| {
+                    format!("200 {m} {} bytes", b.len())
+                });
+                eprintln!("[preview] {} -> {status}", request.uri());
+            }
+            let response = match found {
+                Some((bytes, mime)) => Response::builder()
+                    .header("Content-Type", mime)
+                    .header("Access-Control-Allow-Origin", "*")
+                    .body(bytes.into()),
+                None => Response::builder().status(404).body(Vec::new().into()),
+            };
+            response.expect("valid response")
+        });
     dioxus::LaunchBuilder::desktop()
         .with_cfg(config)
         .launch(App);
@@ -73,6 +92,7 @@ struct Ui {
 impl Ui {
     /// Rebuilds the preview package and points the viewport at it.
     fn refresh(mut self, store: &SharedPreview) {
+        install_bridge();
         let pkg = match self.editor.read().as_ref() {
             Some(ed) => ed.project.preview(ed.graphic),
             None => return,
@@ -110,6 +130,9 @@ impl Ui {
                     tokio::time::sleep(Duration::from_millis(150)).await;
                     fit(self).await;
                 });
+                if debug() {
+                    spawn(report_preview_state());
+                }
             }
             Err(e) => self.status.set(e),
         }
@@ -123,26 +146,68 @@ impl Ui {
     }
 }
 
-/// Seeks the preview of revision `rev` once its runtime is ready.
-fn seek(rev: u64, time_ms: f64) {
-    let js = format!(
-        r#"(function () {{
-  const f = document.getElementById('fc-preview');
-  const prefix = '/{PREFIX}/{rev}/';
-  let tries = 0;
-  (function go() {{
-    try {{
-      const w = f && f.contentWindow;
-      if (w && w.location.pathname.indexOf(prefix) === 0 && typeof w.goToTime === 'function') {{
-        w.goToTime({{ timestamp: {time_ms} }});
-        return;
-      }}
-    }} catch (e) {{}}
-    if (tries++ < 200) setTimeout(go, 25);
-  }})();
-}})();"#
-    );
-    let _ = document::eval(&js);
+/// Talks to the preview iframe. The preview runs on its own origin
+/// (`framecraft://`), so the app cannot call into it directly; it sends the
+/// runtime's `postMessage` commands instead. After each load it repeats the
+/// seek until the runtime has started (it starts asynchronously).
+const BRIDGE_JS: &str = r#"
+if (!window.__fc) {
+  const fc = (window.__fc = { time: 0, loads: 0, pongs: 0, retry: null });
+  const frame = () => document.getElementById('fc-preview');
+  fc.post = (msg) => {
+    const f = frame();
+    if (f && f.contentWindow) f.contentWindow.postMessage(msg, '*');
+  };
+  fc.seek = (t) => {
+    fc.time = t;
+    fc.post({ type: 'ionframe-spx', action: 'goToTime', timestamp: t });
+  };
+  window.addEventListener('message', (e) => {
+    const m = e.data;
+    if (m && m.type === 'ionframe-spx' && (m.action === 'pong' || m.action === 'goToTimeDone')) {
+      fc.pongs++;
+      if (fc.retry) { clearInterval(fc.retry); fc.retry = null; }
+    }
+  });
+  // Iframe load events do not bubble; listen in the capture phase.
+  document.addEventListener('load', (e) => {
+    if (!e.target || e.target.id !== 'fc-preview') return;
+    fc.loads++;
+    if (fc.retry) clearInterval(fc.retry);
+    let n = 0;
+    fc.retry = setInterval(() => {
+      fc.seek(fc.time);
+      fc.post({ type: 'ionframe-spx', action: 'ping' });
+      if (++n >= 60) { clearInterval(fc.retry); fc.retry = null; }
+    }, 50);
+  }, true);
+}
+"#;
+
+/// Installs [`BRIDGE_JS`] (once per page).
+fn install_bridge() {
+    let _ = document::eval(BRIDGE_JS);
+}
+
+/// Moves the preview to `time_ms`.
+fn seek(_rev: u64, time_ms: f64) {
+    let _ = document::eval(&format!("window.__fc && window.__fc.seek({time_ms});"));
+}
+
+/// `FRAMECRAFT_DEBUG=1` logs preview requests and the preview's state.
+fn debug() -> bool {
+    std::env::var_os("FRAMECRAFT_DEBUG").is_some()
+}
+
+/// Prints the preview bridge's state: loads seen and runtime replies.
+async fn report_preview_state() {
+    tokio::time::sleep(Duration::from_millis(3500)).await;
+    let js = "const f = document.getElementById('fc-preview'); \
+              return { src: f && f.src, bridge: window.__fc ? { loads: window.__fc.loads, pongs: window.__fc.pongs, time: window.__fc.time } : null };";
+    match document::eval(js).join::<serde_json::Value>().await {
+        Ok(v) => eprintln!("[preview state] {v:#}"),
+        Err(e) => eprintln!("[preview state] could not inspect: {e:?}"),
+    }
 }
 
 /// Zooms the viewport so the whole scene fits.
@@ -179,18 +244,8 @@ fn App() -> Element {
         preview_url: use_signal(String::new),
         revision: use_signal(|| 0),
     };
-    let store: SharedPreview = use_hook(|| SharedPreview::new(PreviewFiles::default().into()));
+    let store: SharedPreview = STORE.with(Clone::clone);
     use_context_provider(|| store.clone());
-
-    let handler_store = store.clone();
-    use_asset_handler(PREFIX, move |request, responder| {
-        let found = handler_store.borrow().lookup(request.uri().path());
-        let response = match found {
-            Some((bytes, mime)) => Response::builder().header("Content-Type", mime).body(bytes),
-            None => Response::builder().status(404).body(Vec::new()),
-        };
-        responder.respond(response.expect("valid response"));
-    });
 
     // A pack given on the command line opens at start.
     let start_store = store.clone();

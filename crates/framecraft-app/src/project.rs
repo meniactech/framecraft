@@ -216,11 +216,12 @@ mod tests {
                 );
                 let mut files = crate::preview::PreviewFiles::default();
                 let url = files.publish(pkg);
-                assert!(files.lookup(&url).is_some(), "{url} not served");
+                let path = url.strip_prefix("framecraft://preview").unwrap();
+                assert!(files.lookup(path).is_some(), "{url} not served");
                 assert!(
                     files
                         .lookup(&format!(
-                            "/preview/{}/js/ionframe-spx-runtime.mjs",
+                            "/{}/js/ionframe-spx-runtime.mjs",
                             files.revision()
                         ))
                         .is_some()

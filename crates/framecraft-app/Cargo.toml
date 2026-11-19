@@ -15,4 +15,5 @@ path = "src/main.rs"
 [dependencies]
 dioxus = { version = "0.7.10", features = ["desktop"] }
 framecraft-core.workspace = true
+serde_json.workspace = true
 tokio = { version = "1.54.1", default-features = false, features = ["time"] }
