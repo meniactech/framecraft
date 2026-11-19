@@ -411,6 +411,52 @@ if (!window.__fc) {
     if (e.button === 1 && e.target && e.target.closest && e.target.closest('#fc-viewport')) e.preventDefault();
   }, true));
 
+  // Gradient editors (.ramp-track[data-ramp]): a click adds a stop, a
+  // press selects one, middle stops drag with a live preview; Rust gets
+  // add / select / move (on release).
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const track = e.target.closest('.ramp-track[data-ramp]');
+    if (!track) return;
+    e.preventDefault();
+    const id = track.dataset.ramp;
+    const rect = track.getBoundingClientRect();
+    const off = (x) => Math.min(1, Math.max(0, (x - rect.left) / Math.max(1, rect.width)));
+    const dot = e.target.closest('.ramp-dot');
+    if (!dot) { fc.emit({ type: 'ramp', action: 'add', id, offset: off(e.clientX) }); return; }
+    const index = parseInt(dot.dataset.index, 10);
+    fc.emit({ type: 'ramp', action: 'select', id, index });
+    const dots = Array.from(track.querySelectorAll('.ramp-dot'));
+    if (index <= 0 || index >= dots.length - 1) return;
+    const lo = parseFloat(dots[index - 1].dataset.offset) + 0.001;
+    const hi = parseFloat(dots[index + 1].dataset.offset) - 0.001;
+    const start = parseFloat(dot.dataset.offset);
+    let cur = start;
+    const fill = track.querySelector('.ramp-fill');
+    const paint = () => {
+      const parts = dots
+        .map((d) => [d === dot ? cur : parseFloat(d.dataset.offset), d.dataset.color])
+        .sort((a, b) => a[0] - b[0])
+        .map(([o, c]) => c + ' ' + (o * 100).toFixed(2) + '%');
+      if (fill) fill.style.background = 'linear-gradient(90deg, ' + parts.join(', ') + ')';
+    };
+    dot.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      cur = Math.min(hi, Math.max(lo, off(ev.clientX)));
+      dot.style.left = (cur * 100) + '%';
+      paint();
+    };
+    const up = () => {
+      dot.removeEventListener('pointermove', move);
+      dot.removeEventListener('pointerup', up);
+      dot.removeEventListener('pointercancel', up);
+      if (cur !== start) fc.emit({ type: 'ramp', action: 'move', id, index, offset: cur });
+    };
+    dot.addEventListener('pointermove', move);
+    dot.addEventListener('pointerup', up);
+    dot.addEventListener('pointercancel', up);
+  });
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {

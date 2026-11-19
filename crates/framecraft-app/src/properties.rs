@@ -518,7 +518,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             input { r#type: "text", value: "{text}", onchange: move |evt| set(Value::from(evt.value())) }
         },
         Kind::Ramp => rsx! {
-            Ramp { value: field.value.clone(), set }
+            Ramp { ui, path: prop.path, value: field.value.clone(), set }
         },
         Kind::ChartPoints => rsx! {
             ChartPoints { ui, value: field.value.clone(), set }
@@ -718,108 +718,252 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
 }
 
 /// Gradient stops: position (%) and color per stop.
+/// A color ramp's color at `offset` (0–1), mixed between its stops.
+fn ramp_color_at(stops: &[(f64, String)], offset: f64) -> String {
+    let parse = |c: &str| {
+        color::parse(c).unwrap_or(color::Rgba {
+            r: 255.0,
+            g: 255.0,
+            b: 255.0,
+            a: 1.0,
+        })
+    };
+    for w in stops.windows(2) {
+        let ((oa, ca), (ob, cb)) = (&w[0], &w[1]);
+        if offset >= *oa && offset <= *ob {
+            let t = (offset - oa) / (ob - oa).max(1e-9);
+            let (a, b) = (parse(ca), parse(cb));
+            let mix = |x: f64, y: f64| x + (y - x) * t;
+            return color::Rgba {
+                r: mix(a.r, b.r),
+                g: mix(a.g, b.g),
+                b: mix(a.b, b.b),
+                a: mix(a.a, b.a),
+            }
+            .css();
+        }
+    }
+    stops
+        .last()
+        .map_or("rgba(255, 255, 255, 1)".to_string(), |s| s.1.clone())
+}
+
+/// What a new layer has for this ramp (Reset).
+fn ramp_default(path: &str) -> Value {
+    use framecraft_core::layers::{NewLayer, new_layer};
+    NewLayer::ALL
+        .iter()
+        .map(|k| serde_json::to_value(new_layer(*k, None)).unwrap_or_default())
+        .map(|v| schema::lookup(&v, path))
+        .find(|v| v.as_array().is_some_and(|a| a.len() >= 2))
+        .unwrap_or_else(|| {
+            json!([{ "offset": 0, "color": "rgba(255, 255, 255, 1)" }, { "offset": 1, "color": "rgba(255, 255, 255, 0)" }])
+        })
+}
+
+/// A color ramp (FRAME's gradient editor): the gradient on a track; click
+/// it to add a stop, press a stop to select it, drag middle stops (the
+/// ends stay pinned). The bridge does the pointer work and live preview;
+/// changes arrive as `ramp` events. Below: the selected stop's color.
 #[component]
-fn Ramp(value: Value, set: Callback<Value>) -> Element {
-    let stops: Vec<(f64, String)> = value
+fn Ramp(ui: Ui, path: &'static str, value: Value, set: Callback<Value>) -> Element {
+    let mut stops: Vec<(f64, String)> = value
         .as_array()
         .map(|a| {
             a.iter()
                 .map(|s| {
                     (
-                        s["offset"].as_f64().unwrap_or(0.0),
+                        s["offset"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0),
                         s["color"].as_str().unwrap_or("#000000").to_string(),
                     )
                 })
                 .collect()
         })
         .unwrap_or_default();
-    let write = move |stops: Vec<(f64, String)>| {
-        let mut stops = stops;
-        stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+    stops.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut selected = use_signal(|| 0usize);
+    let mut stock = use_signal(|| false);
+    // The effect below reads the latest stops through this.
+    let latest =
+        use_hook(|| std::rc::Rc::new(std::cell::RefCell::new(Vec::<(f64, String)>::new())));
+    *latest.borrow_mut() = stops.clone();
+    let write = move |list: Vec<(f64, String)>| {
+        let mut list = list;
+        list.sort_by(|a, b| a.0.total_cmp(&b.0));
         set(Value::Array(
-            stops
-                .into_iter()
+            list.into_iter()
                 .map(|(o, c)| json!({ "offset": o, "color": c }))
                 .collect(),
         ));
     };
+    {
+        let latest = latest.clone();
+        use_effect(move || {
+            let Some(ev) = (ui.ramp_event)() else { return };
+            if ev["id"].as_str() != Some(path) {
+                return;
+            }
+            let mut ramp_event = ui.ramp_event;
+            ramp_event.set(None);
+            let mut list = latest.borrow().clone();
+            let index = ev["index"].as_u64().unwrap_or(0) as usize;
+            let offset = ev["offset"].as_f64().unwrap_or(0.0).clamp(0.0, 1.0);
+            match ev["action"].as_str() {
+                Some("select") => selected.set(index),
+                Some("add") => {
+                    let c = ramp_color_at(&list, offset);
+                    list.push((offset, c.clone()));
+                    list.sort_by(|a, b| a.0.total_cmp(&b.0));
+                    let at = list
+                        .iter()
+                        .position(|s| s.0 == offset && s.1 == c)
+                        .unwrap_or(0);
+                    selected.set(at);
+                    write(list);
+                }
+                Some("move") if index < list.len() => {
+                    list[index].0 = offset;
+                    write(list);
+                }
+                _ => {}
+            }
+        });
+    }
     let count = stops.len();
-    let mut stock = use_signal(|| false);
+    let sel = selected().min(count.saturating_sub(1));
+    let can_remove = sel > 0 && sel + 1 < count;
+    let gradient = stops
+        .iter()
+        .map(|(o, c)| format!("{c} {}%", number_to_string(round3(o * 100.0))))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let fill = format!("background: linear-gradient(90deg, {gradient});");
+    let current = stops.get(sel).cloned().unwrap_or((0.0, "#ffffff".into()));
+    let hex = color::parse(&current.1).map_or("#ffffff".to_string(), |c| c.hex());
+    let alpha = color::parse(&current.1).map_or(100.0, |c| (c.a * 100.0).round());
+    let pct = number_to_string(round3(current.0 * 100.0));
+    let (s_color, s_alpha, s_pos, s_text, s_remove) = (
+        stops.clone(),
+        stops.clone(),
+        stops.clone(),
+        stops.clone(),
+        stops.clone(),
+    );
     rsx! {
         if stock() {
             crate::palettes::StockGradientDialog {
                 on_close: move |_| stock.set(false),
-                on_pick: move |stops: Vec<framecraft_core::model::RampColor>| {
+                on_pick: move |list: Vec<framecraft_core::model::RampColor>| {
                     stock.set(false);
-                    set(serde_json::to_value(stops).unwrap_or_default());
+                    selected.set(0);
+                    set(serde_json::to_value(list).unwrap_or_default());
                 },
             }
         }
         div { class: "ramp",
-            button {
-                class: "ramp-stock",
-                title: "Replace the stops with a built-in gradient",
-                onclick: move |_| stock.set(true),
-                "Stock gradient…"
-            }
-            for (i , (offset , c)) in stops.iter().cloned().enumerate() {
-                {
-                    let (s1, s2, s3) = (stops.clone(), stops.clone(), stops.clone());
-                    let hex = color::parse(&c).map_or("#000000".to_string(), |c| c.hex());
-                    let pct = number_to_string(round3(offset * 100.0));
-                    rsx! {
-                        div { class: "stop",
-                            input {
-                                r#type: "number",
-                                step: "1",
-                                value: "{pct}",
-                                title: "Position %",
-                                onchange: move |evt| {
-                                    if let Ok(v) = evt.value().trim().parse::<f64>() {
-                                        let mut s = s1.clone();
-                                        s[i].0 = (v / 100.0).clamp(0.0, 1.0);
-                                        write(s);
-                                    }
-                                },
-                            }
-                            input {
-                                r#type: "color",
-                                value: "{hex}",
-                                onchange: move |evt| {
-                                    let mut s = s2.clone();
-                                    if let Some(c) = color::with_rgb(&s[i].1, &evt.value()) {
-                                        s[i].1 = c;
-                                        write(s);
-                                    }
-                                },
-                            }
-                            button {
-                                class: "key-button",
-                                disabled: count <= 2,
-                                title: "Remove stop",
-                                onclick: move |_| {
-                                    let mut s = s3.clone();
-                                    s.remove(i);
-                                    write(s);
-                                },
-                                "×"
-                            }
+            div { class: "ramp-actions",
+                button {
+                    title: "Reset to the default gradient",
+                    onclick: move |_| {
+                        selected.set(0);
+                        set(ramp_default(path));
+                    },
+                    "Reset"
+                }
+                button {
+                    title: "Select from stock gradient",
+                    onclick: move |_| stock.set(true),
+                    "Stock…"
+                }
+                button {
+                    title: "Remove the selected stop (not the ends)",
+                    disabled: !can_remove,
+                    onclick: move |_| {
+                        let mut list = s_remove.clone();
+                        if sel < list.len() {
+                            list.remove(sel);
                         }
+                        selected.set(sel.saturating_sub(1));
+                        write(list);
+                    },
+                    "Remove stop"
+                }
+            }
+            div {
+                class: "ramp-track",
+                "data-ramp": "{path}",
+                title: "Click to add a stop; drag stops to move them",
+                div { class: "ramp-fill", style: "{fill}" }
+                for (i , (o , c)) in stops.iter().cloned().enumerate() {
+                    div {
+                        class: if i == sel { "ramp-dot selected" } else { "ramp-dot" },
+                        "data-index": "{i}",
+                        "data-offset": "{o}",
+                        "data-color": "{c}",
+                        style: "left:{o * 100.0}%;background:{c};",
+                        title: "{number_to_string(round3(o * 100.0))}%",
                     }
                 }
             }
-            {
-                let s = stops.clone();
-                rsx! {
-                    button {
-                        onclick: move |_| {
-                            let mut s = s.clone();
-                            let color = s.last().map_or("#ffffff".to_string(), |l| l.1.clone());
-                            s.push((1.0, color));
-                            write(s);
-                        },
-                        "+ Stop"
-                    }
+            div { class: "ramp-stop",
+                span { class: "dim", "Stop" }
+                input {
+                    r#type: "color",
+                    value: "{hex}",
+                    title: "Stop color",
+                    onchange: move |evt| {
+                        let mut list = s_color.clone();
+                        if let Some(s) = list.get_mut(sel)
+                            && let Some(c) = color::with_rgb(&s.1, &evt.value())
+                        {
+                            s.1 = c;
+                            write(list);
+                        }
+                    },
+                }
+                input {
+                    r#type: "range",
+                    min: "0",
+                    max: "100",
+                    value: "{alpha}",
+                    title: "Alpha {alpha}%",
+                    onchange: move |evt| {
+                        let mut list = s_alpha.clone();
+                        if let (Some(s), Ok(a)) = (list.get_mut(sel), evt.value().parse::<f64>())
+                            && let Some(c) = color::with_alpha(&s.1, a / 100.0)
+                        {
+                            s.1 = c;
+                            write(list);
+                        }
+                    },
+                }
+                input {
+                    r#type: "number",
+                    step: "1",
+                    min: "0",
+                    max: "100",
+                    value: "{pct}",
+                    disabled: sel == 0 || sel + 1 == count,
+                    title: "Position %",
+                    onchange: move |evt| {
+                        let mut list = s_pos.clone();
+                        if let (Some(s), Ok(v)) = (list.get_mut(sel), evt.value().trim().parse::<f64>()) {
+                            s.0 = (v / 100.0).clamp(0.0, 1.0);
+                            write(list);
+                        }
+                    },
+                }
+                input {
+                    r#type: "text",
+                    value: "{current.1}",
+                    title: "Stop color (CSS)",
+                    onchange: move |evt| {
+                        let mut list = s_text.clone();
+                        if let Some(s) = list.get_mut(sel) {
+                            s.1 = evt.value().trim().to_string();
+                            write(list);
+                        }
+                    },
                 }
             }
         }
