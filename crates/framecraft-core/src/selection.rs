@@ -6,6 +6,8 @@ use crate::normalize::Document;
 /// The layer a click selects, from the layers under the pointer (topmost
 /// first, as the page reports them).
 ///
+/// - Locked layers are click-through, as in FRAME: the click goes to what
+///   is behind them (select a locked layer in the Outliner).
 /// - A layer inside a parent with "lock children" selects that parent
 ///   (the outermost one, when they nest), as in FRAME.
 /// - With `cycle` (Alt-click), the layer below the current selection is
@@ -15,7 +17,13 @@ pub fn pick(doc: &Document, hits: &[String], current: Option<&str>, cycle: bool)
     let mut candidates: Vec<String> = Vec::new();
     for id in hits {
         let resolved = locked_group(doc, id).unwrap_or_else(|| id.clone());
-        if !candidates.contains(&resolved) && doc.items.iter().any(|i| i.id == resolved) {
+        let Some(item) = doc.items.iter().find(|i| i.id == resolved) else {
+            continue;
+        };
+        if item.locked == Some(true) {
+            continue;
+        }
+        if !candidates.contains(&resolved) {
             candidates.push(resolved);
         }
     }
@@ -56,8 +64,8 @@ fn locked_group(doc: &Document, id: &str) -> Option<String> {
     found
 }
 
-/// Whether a layer may be moved in the viewport (locked layers can be
-/// selected but not moved).
+/// Whether a layer may be moved in the viewport (a locked layer selected in
+/// the Outliner shows its outline but no handles).
 pub fn movable(doc: &Document, id: &str) -> bool {
     doc.items
         .iter()
@@ -112,20 +120,27 @@ mod tests {
     #[test]
     fn alt_click_cycles_down_the_stack() {
         let d = doc();
-        let hits = ids(&["free", "leaf", "under"]);
-        assert_eq!(pick(&d, &hits, None, true).as_deref(), Some("free"));
-        assert_eq!(
-            pick(&d, &hits, Some("free"), true).as_deref(),
-            Some("group")
-        );
+        let hits = ids(&["leaf", "under"]);
+        assert_eq!(pick(&d, &hits, None, true).as_deref(), Some("group"));
         assert_eq!(
             pick(&d, &hits, Some("group"), true).as_deref(),
             Some("under")
         );
         assert_eq!(
             pick(&d, &hits, Some("under"), true).as_deref(),
-            Some("free")
+            Some("group")
         );
+    }
+
+    #[test]
+    fn locked_layers_are_click_through() {
+        let d = doc();
+        // "free" is locked and on top: the click goes to what is behind it.
+        assert_eq!(
+            pick(&d, &ids(&["free", "under"]), None, false).as_deref(),
+            Some("under")
+        );
+        assert_eq!(pick(&d, &ids(&["free"]), None, false), None);
     }
 
     #[test]
