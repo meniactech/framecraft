@@ -152,7 +152,7 @@ impl Ui {
 /// seek until the runtime has started (it starts asynchronously).
 const BRIDGE_JS: &str = r#"
 if (!window.__fc) {
-  const fc = (window.__fc = { time: 0, loads: 0, pongs: 0, retry: null });
+  const fc = (window.__fc = { time: 0, loads: 0, pongs: 0, retry: null, playing: false, raf: null, onStop: null, labelWidth: 200, pxPerMs: 0.1 });
   const frame = () => document.getElementById('fc-preview');
   fc.post = (msg) => {
     const f = frame();
@@ -161,6 +161,40 @@ if (!window.__fc) {
   fc.seek = (t) => {
     fc.time = t;
     fc.post({ type: 'ionframe-spx', action: 'goToTime', timestamp: t });
+  };
+  // Playback runs here, once per display frame: seek the preview and move
+  // the playhead and time label directly. Rust only hears the final time.
+  fc.drawPlayhead = (t) => {
+    const p = document.getElementById('fc-playhead');
+    if (p) p.style.left = (fc.labelWidth + t * fc.pxPerMs) + 'px';
+    const l = document.getElementById('fc-time');
+    if (l) l.textContent = (t / 1000).toFixed(2);
+  };
+  fc.play = (from, duration, onStop) => {
+    fc.stop(false);
+    const start = performance.now();
+    fc.playing = true;
+    fc.onStop = onStop;
+    const tick = (now) => {
+      if (!fc.playing) return;
+      const t = Math.min(duration, from + (now - start));
+      fc.seek(t);
+      fc.drawPlayhead(t);
+      if (t >= duration) { fc.stop(true); return; }
+      fc.raf = requestAnimationFrame(tick);
+    };
+    fc.raf = requestAnimationFrame(tick);
+  };
+  // `report`: tell Rust where playback stopped (Pause, end); a scrub sets
+  // the time itself and does not report.
+  fc.stop = (report) => {
+    if (fc.raf) cancelAnimationFrame(fc.raf);
+    fc.raf = null;
+    const was = fc.playing;
+    fc.playing = false;
+    const cb = fc.onStop;
+    fc.onStop = null;
+    if (was && cb) cb(report ? fc.time : null);
   };
   window.addEventListener('message', (e) => {
     const m = e.data;
@@ -616,6 +650,9 @@ fn Timeline(ui: Ui) -> Element {
 
     let set_time = move |t: f64| {
         let (mut time, mut playing) = (ui.time, ui.playing);
+        if playing() {
+            let _ = document::eval("window.__fc && window.__fc.stop(false);");
+        }
         playing.set(false);
         let t = t.clamp(0.0, duration);
         time.set(t);
@@ -625,28 +662,26 @@ fn Timeline(ui: Ui) -> Element {
     let toggle = move |_| {
         let mut playing = ui.playing;
         if playing() {
-            playing.set(false);
+            // Pause: the bridge reports the time it stopped at.
+            let _ = document::eval("window.__fc && window.__fc.stop(true);");
             return;
         }
         playing.set(true);
+        let from = if (ui.time)() >= duration {
+            0.0
+        } else {
+            (ui.time)()
+        };
         spawn(async move {
-            let mut time = ui.time;
-            let start = std::time::Instant::now();
-            let from = if time() >= duration { 0.0 } else { time() };
-            loop {
-                tokio::time::sleep(Duration::from_millis(33)).await;
-                if !(ui.playing)() {
-                    break;
-                }
-                let t = (from + start.elapsed().as_secs_f64() * 1000.0).min(duration);
+            let mut eval = document::eval(&format!(
+                "await new Promise((done) => window.__fc.play({from}, {duration}, (t) => {{ dioxus.send(t); done(); }}));"
+            ));
+            let stopped_at = eval.recv::<Option<f64>>().await;
+            let (mut time, mut playing) = (ui.time, ui.playing);
+            if let Ok(Some(t)) = stopped_at {
                 time.set(t);
-                seek((ui.revision)(), t);
-                if t >= duration {
-                    let mut playing = ui.playing;
-                    playing.set(false);
-                    break;
-                }
             }
+            playing.set(false);
         });
     };
 
@@ -655,7 +690,10 @@ fn Timeline(ui: Ui) -> Element {
             div { class: "transport",
                 button { onclick: move |_| set_time(0.0), "⏮" }
                 button { onclick: toggle, if playing { "⏸ Pause" } else { "▶ Play" } }
-                span { class: "time", "{time / 1000.0:.2} s / {duration / 1000.0:.2} s" }
+                span { class: "time",
+                    span { id: "fc-time", "{time / 1000.0:.2}" }
+                    " s / {duration / 1000.0:.2} s"
+                }
             }
             div { class: "tl-body",
                 div { class: "tl-inner", style: "width:{LABEL_WIDTH + width + 40.0}px;",
@@ -705,7 +743,11 @@ fn Timeline(ui: Ui) -> Element {
                             }
                         }
                     }
-                    div { class: "playhead", style: "left:{LABEL_WIDTH + time * PX_PER_MS}px;" }
+                    div {
+                        id: "fc-playhead",
+                        class: "playhead",
+                        style: "left:{LABEL_WIDTH + time * PX_PER_MS}px;",
+                    }
                 }
             }
         }
