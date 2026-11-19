@@ -19,8 +19,8 @@ Assets that FRAME bundled, checked before bringing them into FrameCraft. Only ro
 | `lottie/noto-emoji/` (878 animations, 65 MB) | [Noto Animated Emoji](https://googlefonts.github.io/noto-emoji-animation/) | CC BY 4.0 (to confirm) | Confirm license; consider downloading on demand instead of bundling 65 MB |
 | `icons/align`, `icons/easing`, `icons/properties`, `icons/ui`, `icons/reel.svg` | Made for FRAME (Inkscape) | MENiAC | **Bundled** in `assets/icons/` under MIT (owner, 2026-11-19); `icons/spx` and `icons/ograf` excluded (trademarks) |
 | `svg/basic/` (40 shapes), `samples/` | Made for FRAME (Inkscape) | MENiAC | **Bundled** in `assets/` under MIT (owner, 2026-11-19) |
-| `particles/` (98 sprites) | Unknown | Unknown | Owner OK to use (2026-11-19); loaded from the FRAME checkout. Confirm origin before bundling |
-| `backgrounds/` (5 preview photos, 31 MB) | Unknown; 3 carry Adobe XMP metadata | Unknown | Used as editor-only plates, loaded from the FRAME checkout. Confirm origin (or replace) before bundling |
+| `particles/` (98 sprites) | Made for FRAME (owner) | MENiAC | **Bundled** in `assets/particles/` under MIT (owner, 2026-11-19) |
+| `backgrounds/` (5 preview photos, 31 MB as PNG) | Pexels, Unsplash and Pixabay (owner, 2026-11-19) | Pexels / Unsplash / Pixabay licenses (free use incl. commercial; no selling or standalone redistribution) | **Bundled** as 1920 × 1080 JPEG in `assets/backgrounds/` (1.2 MB); editor-only, never exported |
 | `palettes/stock-palettes.json`, `gradients/stock-gradients.json` | Made for FRAME | MENiAC | **Bundled** in `assets/` under MIT (owner, 2026-11-19) |
 | `icons/spx/` | SPX Graphics logo | Trademark of SPX Graphics | Do not bundle without permission; use a text label |
 | `icons/ograf/` | OGraf logo (EBU) | Trademark of EBU | Check EBU's logo terms |

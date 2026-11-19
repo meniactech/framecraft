@@ -1457,31 +1457,31 @@ pub const PLATES: &[(&str, &str, Option<&str>, &str)] = &[
     (
         "news-room",
         "News Room",
-        Some("/backgrounds/news-room.png"),
+        Some("/backgrounds/news-room.jpg"),
         "linear-gradient(165deg, #1a2744 0%, #16181d 40%, #1e293b 70%, #334155 100%)",
     ),
     (
         "news-room-2",
         "News Room 2",
-        Some("/backgrounds/news-room-2.png"),
+        Some("/backgrounds/news-room-2.jpg"),
         "linear-gradient(165deg, #1a2744 0%, #16181d 40%, #1e293b 70%, #334155 100%)",
     ),
     (
         "reporter",
         "Reporter",
-        Some("/backgrounds/reporter.png"),
+        Some("/backgrounds/reporter.jpg"),
         "radial-gradient(ellipse 90% 70% at 50% 40%, #2a3348 0%, #12161f 55%, #0a0c10 100%)",
     ),
     (
         "web-cam",
         "Web Cam",
-        Some("/backgrounds/web-cam.png"),
+        Some("/backgrounds/web-cam.jpg"),
         "radial-gradient(ellipse 90% 70% at 50% 40%, #2a3348 0%, #12161f 55%, #0a0c10 100%)",
     ),
     (
         "sports",
         "Sports",
-        Some("/backgrounds/sports.png"),
+        Some("/backgrounds/sports.jpg"),
         "radial-gradient(ellipse 90% 70% at 50% 40%, #1e3a5f 0%, #16181d 55%, #0a0c10 100%)",
     ),
     (

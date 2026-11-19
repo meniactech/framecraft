@@ -46,7 +46,7 @@ cargo run -p framecraft-app -- path/to/project.framecraft   # or a .frameproject
 
 ### Built-in assets
 
-Icons, stock shapes, palettes, gradients and fonts are in [`assets/`](assets/) (MIT for MENiAC-made assets, SIL OFL for the fonts). Particle sprites, preview plates and the Noto emoji animations are not bundled yet; FrameCraft reads them from `FRAMECRAFT_BUILTIN_DIR` (or a FRAME checkout next to this one) when available, and those libraries are empty otherwise.
+Icons, stock shapes, palettes, gradients, particle sprites, preview plates and fonts are in [`assets/`](assets/): MIT for MENiAC-made assets, SIL OFL for the fonts, and the plate photos under the Pexels / Unsplash / Pixabay licenses. Only the Noto emoji animations are not bundled yet; FrameCraft reads them from `FRAMECRAFT_BUILTIN_DIR` (or a FRAME checkout next to this one) when available.
 
 ### Reference tests
 
