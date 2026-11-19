@@ -30,6 +30,7 @@ pub async fn fit(mut ui: Ui) {
                 .min((s[1] - 160.0) / sh)
                 .clamp(0.05, 2.0),
         );
+        ui.pan.set((0.0, 0.0));
     }
 }
 
@@ -133,6 +134,7 @@ pub fn Viewport(ui: Ui) -> Element {
         None => (1920.0, 1080.0, false, None),
     };
     let zoom = (ui.zoom)();
+    let (px, py) = (ui.pan)();
     let frame_style = format!("width:{w}px;height:{h}px;transform:scale({zoom});");
     rsx! {
         div { class: "viewport-panel",
@@ -158,7 +160,7 @@ pub fn Viewport(ui: Ui) -> Element {
                     // `display` in both: Dioxus updates style properties one by
                     // one, so a value missing from the new style stays (an
                     // empty start's `display:none` hid the viewport after New).
-                    style: if open { "display:block;width:{w * zoom}px;height:{h * zoom}px;" } else { "display:none;width:0;height:0;" },
+                    style: if open { "display:block;width:{w * zoom}px;height:{h * zoom}px;transform:translate({px}px,{py}px);" } else { "display:none;width:0;height:0;transform:none;" },
                     // Editor-only plate behind the graphic (Scene → Plates).
                     if let Some((bg, opacity, blur)) = plate {
                         div {
@@ -320,5 +322,40 @@ pub fn StatusBar(ui: Ui) -> Element {
                 span { title: "FrameCraft version", "v{env!(\"CARGO_PKG_VERSION\")}" }
             }
         }
+    }
+}
+
+/// Wheel zoom (by `factor`) around a point of the viewport (`x`, `y` from
+/// its top-left; `w`, `h` its size): the scene point under it stays put.
+pub fn zoom_at(mut ui: Ui, factor: f64, x: f64, y: f64, w: f64, h: f64) {
+    let z = *ui.zoom.peek();
+    let next = (z * factor).clamp(0.05, 8.0);
+    if (next - z).abs() < 1e-9 {
+        return;
+    }
+    let (px, py) = *ui.pan.peek();
+    // The stage is centred in the viewport, then moved by the pan.
+    let (cx, cy) = (x - w / 2.0, y - h / 2.0);
+    let k = next / z;
+    ui.zoom.set(next);
+    ui.pan.set((cx - (cx - px) * k, cy - (cy - py) * k));
+}
+
+/// Middle-button drag: moves the view by screen pixels.
+pub fn pan_by(mut ui: Ui, dx: f64, dy: f64) {
+    let (px, py) = *ui.pan.peek();
+    ui.pan.set((px + dx, py + dy));
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn zoom_keeps_the_point_under_the_cursor() {
+        // Stage centred, pan (10, 0), zoom 0.5; cursor 100 px right of centre.
+        let (z, pan, c) = (0.5_f64, (10.0_f64, 0.0_f64), (100.0_f64, 0.0_f64));
+        let scene_x = (c.0 - pan.0) / z; // 180 scene px right of the stage centre
+        let k = 2.0;
+        let next_pan = c.0 - (c.0 - pan.0) * k;
+        assert_eq!(scene_x * (z * k) + next_pan, c.0);
     }
 }

@@ -372,6 +372,45 @@ if (!window.__fc) {
     tlEmit({ action: 'zoom', factor: e.deltaY < 0 ? 1.25 : 0.8 });
   }, { passive: false });
 
+  // Viewport navigation (FRAME's): the wheel zooms around the pointer,
+  // the middle button drags the view.
+  document.addEventListener('wheel', (e) => {
+    const v = e.target && e.target.closest ? e.target.closest('#fc-viewport') : null;
+    if (!v) return;
+    e.preventDefault();
+    const r = v.getBoundingClientRect();
+    fc.emit({ type: 'view', action: 'zoom', factor: e.deltaY < 0 ? 1.1 : 1 / 1.1,
+      x: e.clientX - r.left, y: e.clientY - r.top, w: r.width, h: r.height });
+  }, { passive: false });
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 1) return;
+    const v = e.target && e.target.closest ? e.target.closest('#fc-viewport') : null;
+    if (!v) return;
+    e.preventDefault();
+    v.setPointerCapture(e.pointerId);
+    fc.pan = { pointer: e.pointerId, x: e.clientX, y: e.clientY, el: v };
+    v.classList.add('panning');
+  }, true);
+  document.addEventListener('pointermove', (e) => {
+    const p = fc.pan;
+    if (!p || e.pointerId !== p.pointer) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (dx || dy) fc.emit({ type: 'view', action: 'pan', dx, dy });
+  }, true);
+  const endPan = (e) => {
+    const p = fc.pan;
+    if (!p || e.pointerId !== p.pointer) return;
+    p.el.classList.remove('panning');
+    fc.pan = null;
+  };
+  document.addEventListener('pointerup', endPan, true);
+  document.addEventListener('pointercancel', endPan, true);
+  // No middle-click paste or autoscroll in the viewport.
+  ['mousedown', 'auxclick'].forEach((t) => document.addEventListener(t, (e) => {
+    if (e.button === 1 && e.target && e.target.closest && e.target.closest('#fc-viewport')) e.preventDefault();
+  }, true));
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {

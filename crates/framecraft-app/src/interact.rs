@@ -213,6 +213,14 @@ pub fn on_event(ui: Ui, ev: Value) {
         Some("outliner-drop") => crate::outliner::on_drop(ui, &ev),
         Some("tl") => crate::timeline::on_event(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
+        Some("view") => {
+            let n = |k: &str| ev[k].as_f64().unwrap_or(0.0);
+            match ev["action"].as_str() {
+                Some("zoom") => crate::ui::zoom_at(ui, n("factor"), n("x"), n("y"), n("w"), n("h")),
+                Some("pan") => crate::ui::pan_by(ui, n("dx"), n("dy")),
+                _ => {}
+            }
+        }
         Some("log") => {
             if crate::state::debug() {
                 eprintln!("{}", ev["text"].as_str().unwrap_or(""));
