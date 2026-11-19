@@ -59,6 +59,8 @@ pub struct Ui {
     pub zoom: Signal<f64>,
     /// Viewport pan: the stage's offset (screen px) from the centre.
     pub pan: Signal<(f64, f64)>,
+    /// Viewport guides shown, and snapping to them.
+    pub guides: Signal<framecraft_core::manipulate::GuideToggles>,
     /// Timeline Auto-key: every field edit writes a keyframe at the playhead.
     pub auto_key: Signal<bool>,
     /// Where the selected layers are drawn, as measured in the page.
@@ -139,6 +141,7 @@ impl Ui {
             playing: use_signal(|| false),
             zoom: use_signal(|| 0.5),
             pan: use_signal(|| (0.0, 0.0)),
+            guides: use_signal(crate::layout::load_guides),
             auto_key: use_signal(|| false),
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),

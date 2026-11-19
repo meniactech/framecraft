@@ -340,6 +340,75 @@ fn frame_inside(doc: &Document, item: &Item, time_ms: f64, seen: &mut Vec<String
     }
 }
 
+/// Which viewport guides are shown (FRAME's guide toggles).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GuideToggles {
+    pub safe10: bool,
+    pub safe20: bool,
+    pub center: bool,
+    pub thirds: bool,
+    pub rulers: bool,
+    /// Moving layers snap to the shown guides.
+    pub snap: bool,
+}
+
+impl Default for GuideToggles {
+    /// FRAME's: only the centre cross, snapping on.
+    fn default() -> Self {
+        Self {
+            safe10: false,
+            safe20: false,
+            center: true,
+            thirds: false,
+            rulers: false,
+            snap: true,
+        }
+    }
+}
+
+/// Where the shown guides are along one axis, in scene px (FRAME's
+/// `activeGuideTargetsPx`). `span` is the scene's width or height;
+/// `rulers` the custom rulers on that axis, in percent.
+pub fn guide_targets(g: &GuideToggles, span: f64, rulers: &[f64]) -> Vec<f64> {
+    let mut pct: Vec<f64> = Vec::new();
+    if g.center {
+        pct.push(50.0);
+    }
+    if g.thirds {
+        pct.extend([33.3333, 66.6667]);
+    }
+    if g.safe10 {
+        pct.extend([10.0, 90.0]);
+    }
+    if g.safe20 {
+        pct.extend([20.0, 80.0]);
+    }
+    if g.rulers {
+        pct.extend(rulers.iter().copied().filter(|p| p.is_finite()));
+    }
+    pct.into_iter().map(|p| p / 100.0 * span).collect()
+}
+
+/// A box's start position snapped to the nearest guide within `threshold`
+/// px: its leading edge, centre or trailing edge lands on it (FRAME's
+/// `snapItemToGuides`). Unchanged when nothing is near.
+pub fn snap_to_guides(pos: f64, size: f64, targets: &[f64], threshold: f64) -> f64 {
+    let mut best: Option<(f64, f64)> = None;
+    for (value, offset) in [
+        (pos, 0.0),
+        (pos + size / 2.0, -size / 2.0),
+        (pos + size, -size),
+    ] {
+        for t in targets {
+            let d = (value - t).abs();
+            if d <= threshold && best.is_none_or(|(_, bd)| d < bd) {
+                best = Some((t + offset, d));
+            }
+        }
+    }
+    best.map_or(pos, |(p, _)| p)
+}
+
 /// FRAME's align modes, with the toolbar's titles and icons
 /// (`icons/align/<icon>.svg`).
 pub const ALIGN_MODES: [(&str, &str, &str); 6] = [
@@ -607,5 +676,28 @@ mod tests {
             align_box("right", (200.0, 0.0, 10.0, 10.0), area),
             (200.0, 0.0)
         );
+    }
+
+    #[test]
+    fn guides_and_snapping_as_frame() {
+        let g = GuideToggles {
+            safe10: true,
+            ..GuideToggles::default()
+        };
+        assert_eq!(guide_targets(&g, 1000.0, &[]), [500.0, 100.0, 900.0]);
+        let with_rulers = GuideToggles { rulers: true, ..g };
+        assert_eq!(
+            guide_targets(&with_rulers, 1000.0, &[25.0]).last(),
+            Some(&250.0)
+        );
+        let t = [500.0, 100.0, 900.0];
+        // Left edge 4 px from 100 snaps there.
+        assert_eq!(snap_to_guides(104.0, 50.0, &t, 10.0), 100.0);
+        // Centre 3 px from 500 snaps (200 wide: x 397 -> 400).
+        assert_eq!(snap_to_guides(397.0, 200.0, &t, 10.0), 400.0);
+        // Right edge onto 900.
+        assert_eq!(snap_to_guides(795.0, 100.0, &t, 10.0), 800.0);
+        // Nothing near: unchanged.
+        assert_eq!(snap_to_guides(300.0, 20.0, &t, 10.0), 300.0);
     }
 }

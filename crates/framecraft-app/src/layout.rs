@@ -64,3 +64,41 @@ pub fn on_event(ev: &Value) {
         );
     }
 }
+
+/// The guide toggles from the last session.
+pub fn load_guides() -> framecraft_core::manipulate::GuideToggles {
+    let mut g = framecraft_core::manipulate::GuideToggles::default();
+    if let Some(saved) = load().and_then(|l| l.get("guides").cloned()) {
+        let b = |k: &str, d: bool| saved.get(k).and_then(Value::as_bool).unwrap_or(d);
+        g = framecraft_core::manipulate::GuideToggles {
+            safe10: b("safe10", g.safe10),
+            safe20: b("safe20", g.safe20),
+            center: b("center", g.center),
+            thirds: b("thirds", g.thirds),
+            rulers: b("rulers", g.rulers),
+            snap: b("snap", g.snap),
+        };
+    }
+    g
+}
+
+/// Saves the guide toggles with the panel sizes.
+pub fn save_guides(g: &framecraft_core::manipulate::GuideToggles) {
+    let mut layout = load().unwrap_or_default();
+    layout.insert(
+        "guides".into(),
+        serde_json::json!({
+            "safe10": g.safe10, "safe20": g.safe20, "center": g.center,
+            "thirds": g.thirds, "rulers": g.rulers, "snap": g.snap,
+        }),
+    );
+    if let Some(p) = path() {
+        if let Some(dir) = p.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(
+            p,
+            serde_json::to_vec_pretty(&Value::Object(layout)).unwrap_or_default(),
+        );
+    }
+}

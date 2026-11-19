@@ -155,6 +155,7 @@ pub fn Viewport(ui: Ui) -> Element {
                     }
                 }
                 button { onclick: move |_| { spawn(fit(ui)); }, "Fit" }
+                GuideBar { ui }
                 // FRAME's align tools: one layer aligns to its parent or
                 // the scene.
                 div { class: "align-tools", role: "toolbar",
@@ -275,6 +276,7 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 height: "{height * zoom}",
                 // Other selected layers: a dark halo under a bright dashed
                 // line, readable on light and dark graphics.
+                Guides { ui, width, height }
                 for outline in others {
                     polygon { class: "sel-other-halo", points: "{outline}" }
                     polygon { class: "sel-other", points: "{outline}" }
@@ -402,5 +404,128 @@ mod tests {
         let k = 2.0;
         let next_pan = c.0 - (c.0 - pan.0) * k;
         assert_eq!(scene_x * (z * k) + next_pan, c.0);
+    }
+}
+
+/// A guide toggle: label, tooltip, on, CSS key, and how it flips.
+type GuideButton = (
+    &'static str,
+    &'static str,
+    bool,
+    &'static str,
+    fn(&mut framecraft_core::manipulate::GuideToggles),
+);
+
+/// FRAME's guide toggles: safe areas, centre cross, thirds, rulers, snap.
+#[component]
+fn GuideBar(ui: Ui) -> Element {
+    let g = (ui.guides)();
+    let toggle = move |f: fn(&mut framecraft_core::manipulate::GuideToggles)| {
+        let mut guides = ui.guides;
+        let mut next = *guides.peek();
+        f(&mut next);
+        guides.set(next);
+        crate::layout::save_guides(&next);
+    };
+    let buttons: [GuideButton; 6] = [
+        (
+            "Safe 10%",
+            "Toggle 10% safe area",
+            g.safe10,
+            "safe10",
+            |g| g.safe10 = !g.safe10,
+        ),
+        (
+            "Safe 20%",
+            "Toggle 20% safe area",
+            g.safe20,
+            "safe20",
+            |g| g.safe20 = !g.safe20,
+        ),
+        ("Center +", "Toggle center point", g.center, "center", |g| {
+            g.center = !g.center
+        }),
+        ("Thirds", "Toggle rule of thirds", g.thirds, "thirds", |g| {
+            g.thirds = !g.thirds
+        }),
+        ("Rulers", "Toggle custom rulers", g.rulers, "rulers", |g| {
+            g.rulers = !g.rulers
+        }),
+        (
+            "Snap",
+            "Moving layers snap to the shown guides",
+            g.snap,
+            "snap",
+            |g| g.snap = !g.snap,
+        ),
+    ];
+    rsx! {
+        div { class: "guide-tools",
+            for (label , title , on , key , f) in buttons {
+                button {
+                    class: if on { "guide-btn on {key}" } else { "guide-btn" },
+                    title: "{title}",
+                    onclick: move |_| toggle(f),
+                    "{label}"
+                }
+            }
+        }
+    }
+}
+
+/// The shown guides over the scene, in scene units (FRAME's colours and
+/// line width from the scene settings).
+#[component]
+fn Guides(ui: Ui, width: f64, height: f64) -> Element {
+    let g = (ui.guides)();
+    let Some((lw, c10, c20, cth, cc, cr, rh, rv)) = ui.editor.read().as_ref().map(|e| {
+        let s = &e.doc().scene;
+        let col = |v: &Option<String>, d: &str| {
+            v.clone()
+                .filter(|x| !x.trim().is_empty())
+                .unwrap_or_else(|| d.to_string())
+        };
+        (
+            s.guide_line_width.unwrap_or(5.0).clamp(1.0, 20.0),
+            col(&s.guide_color_safe10, "rgba(110, 231, 183, 0.75)"),
+            col(&s.guide_color_safe20, "rgba(252, 211, 77, 0.75)"),
+            col(&s.guide_color_thirds, "rgba(103, 232, 249, 0.7)"),
+            col(&s.guide_color_center, "rgba(253, 164, 175, 0.8)"),
+            col(&s.custom_ruler_color, "rgba(167, 139, 250, 0.75)"),
+            s.custom_rulers_h.clone().unwrap_or_default(),
+            s.custom_rulers_v.clone().unwrap_or_default(),
+        )
+    }) else {
+        return rsx! {};
+    };
+    let (w, h) = (width, height);
+    let plus = (lw * 6.0).max(24.0);
+    rsx! {
+        g { class: "guides", stroke_width: "{lw}",
+            if g.thirds {
+                for f in [1.0 / 3.0, 2.0 / 3.0] {
+                    line { x1: "{w * f}", y1: "0", x2: "{w * f}", y2: "{h}", stroke: "{cth}" }
+                    line { x1: "0", y1: "{h * f}", x2: "{w}", y2: "{h * f}", stroke: "{cth}" }
+                }
+            }
+            if g.safe10 {
+                rect { x: "{w * 0.1}", y: "{h * 0.1}", width: "{w * 0.8}", height: "{h * 0.8}", fill: "none", stroke: "{c10}" }
+            }
+            if g.safe20 {
+                rect { x: "{w * 0.2}", y: "{h * 0.2}", width: "{w * 0.6}", height: "{h * 0.6}", fill: "none", stroke: "{c20}" }
+            }
+            if g.center {
+                line { x1: "{w / 2.0 - plus / 2.0}", y1: "{h / 2.0}", x2: "{w / 2.0 + plus / 2.0}", y2: "{h / 2.0}", stroke: "{cc}" }
+                line { x1: "{w / 2.0}", y1: "{h / 2.0 - plus / 2.0}", x2: "{w / 2.0}", y2: "{h / 2.0 + plus / 2.0}", stroke: "{cc}" }
+            }
+            if g.rulers {
+                for p in rv {
+                    line { x1: "{w * p / 100.0}", y1: "0", x2: "{w * p / 100.0}", y2: "{h}", stroke: "{cr}" }
+                }
+                for p in rh {
+                    line { x1: "0", y1: "{h * p / 100.0}", x2: "{w}", y2: "{h * p / 100.0}", stroke: "{cr}" }
+                }
+            }
+        }
     }
 }

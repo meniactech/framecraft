@@ -35,8 +35,8 @@ button.active { background: var(--accent); border-color: var(--accent); }
 .button input[type=file] { display: none; }
 
 .main { display: grid; grid-template-columns: 1fr var(--side-w, 300px); min-height: 0; }
-.viewport-panel { display: grid; grid-template-rows: 36px 1fr; min-width: 0; min-height: 0; }
-.viewport-tools { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--line); }
+.viewport-panel { display: grid; grid-template-rows: auto 1fr; min-width: 0; min-height: 0; }
+.viewport-tools { display: flex; align-items: center; gap: 6px; padding: 5px 12px; min-height: 36px; border-bottom: 1px solid var(--line); }
 .viewport { overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .viewport .empty { color: var(--dim); }
 .stage {
@@ -460,3 +460,14 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .split-outliner { left: 0; right: 0; height: 6px; top: calc(var(--outliner-h, 38%) - 3px); cursor: row-resize; }
 .work { position: relative; display: grid; grid-template-rows: 1fr var(--tl-h, 300px); min-width: 0; min-height: 0; }
 .split-timeline { left: 0; right: 0; height: 6px; bottom: calc(var(--tl-h, 300px) - 3px); cursor: row-resize; }
+/* Viewport guides (FRAME's) */
+.viewport-tools { flex-wrap: wrap; row-gap: 4px; }
+.guide-tools { display: flex; gap: 2px; margin-left: 8px; padding-left: 8px; border-left: 1px solid var(--line); }
+.guide-btn { font-size: 11px; padding: 2px 7px; }
+.guide-btn.on.safe10 { background: rgba(5, 150, 105, .7); border-color: #6ee7b7; color: #fff; }
+.guide-btn.on.safe20 { background: rgba(217, 119, 6, .7); border-color: #fcd34d; color: #fff; }
+.guide-btn.on.center { background: rgba(225, 29, 72, .7); border-color: #fda4af; color: #fff; }
+.guide-btn.on.thirds { background: rgba(8, 145, 178, .7); border-color: #67e8f9; color: #fff; }
+.guide-btn.on.rulers { background: rgba(124, 58, 237, .7); border-color: #c4b5fd; color: #fff; }
+.guide-btn.on.snap { background: var(--accent); border-color: var(--accent); color: #fff; }
+.overlay .guides, .overlay .guides * { vector-effect: none; pointer-events: none; }
