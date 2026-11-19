@@ -165,6 +165,16 @@ pub fn Outliner(ui: Ui) -> Element {
                                 for kind in NewLayer::ALL {
                                     if kind == NewLayer::ImageSlot {
                                         button {
+                                            title: "FRAME's built-in SVG shapes, as a polygon or a tintable SVG",
+                                            onclick: move |_| {
+                                                menu.set(false);
+                                                ui.open_media("shapes", PickTarget::NewLayer);
+                                            },
+                                            "SVG Shape…"
+                                        }
+                                    }
+                                    if kind == NewLayer::ImageSlot {
+                                        button {
                                             title: "An image from the project's media",
                                             onclick: move |_| {
                                                 menu.set(false);

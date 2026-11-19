@@ -42,6 +42,8 @@ pub enum NewLayer {
     Ellipse,
     Circle,
     Stadium,
+    Polygon,
+    Path,
     ImageSlot,
     BarChart,
     PieChart,
@@ -55,13 +57,15 @@ pub enum NewLayer {
 }
 
 impl NewLayer {
-    pub const ALL: [NewLayer; 16] = [
+    pub const ALL: [NewLayer; 18] = [
         NewLayer::Empty,
         NewLayer::Text,
         NewLayer::Box,
         NewLayer::Ellipse,
         NewLayer::Circle,
         NewLayer::Stadium,
+        NewLayer::Polygon,
+        NewLayer::Path,
         NewLayer::ImageSlot,
         NewLayer::BarChart,
         NewLayer::PieChart,
@@ -82,6 +86,8 @@ impl NewLayer {
             NewLayer::Ellipse => "Ellipse",
             NewLayer::Circle => "Circle",
             NewLayer::Stadium => "Stadium",
+            NewLayer::Polygon => "Polygon",
+            NewLayer::Path => "Path",
             NewLayer::ImageSlot => "Image Slot",
             NewLayer::BarChart => "Bar Chart",
             NewLayer::PieChart => "Pie Chart",
@@ -178,6 +184,21 @@ pub fn new_layer(kind: NewLayer, parent: Option<&str>) -> Item {
             &mut v,
             json!({ "itemType": "shape", "shapeType": "stadium", "name": "New Stadium", "width": 180, "height": 120,
                 "borderRadius": [9999, 9999, 9999, 9999] }),
+        ),
+        NewLayer::Polygon => set(
+            &mut v,
+            json!({ "itemType": "shape", "shapeType": "polygon", "name": "New Polygon",
+                "x": 80, "y": 80, "width": 220, "height": 180,
+                "polygonPoints": crate::polygon::default_polygon_points(220.0, 180.0),
+                "polygonCurve": "linear" }),
+        ),
+        NewLayer::Path => set(
+            &mut v,
+            json!({ "itemType": "shape", "shapeType": "path", "name": "Path",
+                "x": 40, "y": 200, "width": 720, "height": 120, "bg_color": "rgba(0,0,0,0)",
+                "borderWidth": 2, "borderWidths": [2, 2, 2, 2], "borderColor": "rgba(56, 189, 248, 0.95)",
+                "polygonPoints": crate::polygon::default_path_points(720.0, 120.0),
+                "polygonCurve": "bezier" }),
         ),
         NewLayer::ImageSlot => set(
             &mut v,
@@ -305,9 +326,76 @@ pub fn new_media_layer(
     item
 }
 
+/// How an SVG goes into the scene (FRAME's insert modes).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SvgMode {
+    /// A plain image layer.
+    Image,
+    /// An image recolored with the layer's fill color.
+    Tint,
+    /// An editable polygon traced from the SVG's first path.
+    Polygon,
+}
+
+/// A layer from an SVG file, as FRAME inserts stock shapes (`max_side`
+/// 256) and uploaded SVGs (512): scaled down to fit `max_side`, white.
+/// A polygon falls back to a tinted image when the SVG has no path.
+pub fn new_svg_layer(url: &str, name: &str, svg: &[u8], mode: SvgMode, max_side: f64) -> Item {
+    let (w0, h0) = crate::media::image_size(svg).unwrap_or((256.0, 256.0));
+    if mode == SvgMode::Image {
+        return new_media_layer("images", url, name, Some((w0, h0)), None);
+    }
+    let scale = (max_side / w0.max(h0).max(1.0)).min(1.0);
+    let (w, h) = (
+        (w0 * scale).round().max(24.0),
+        (h0 * scale).round().max(24.0),
+    );
+    let traced = (mode == SvgMode::Polygon)
+        .then(|| std::str::from_utf8(svg).ok())
+        .flatten()
+        .and_then(|text| crate::polygon::svg_to_polygon(text, w, h));
+    let mut v = base();
+    let extra = match traced {
+        Some((points, bezier)) => {
+            json!({ "itemType": "shape", "shapeType": "polygon", "name": name,
+            "width": w, "height": h, "polygonPoints": points,
+            "polygonCurve": if bezier { "bezier" } else { "linear" }, "bg_color": "#ffffffff" })
+        }
+        None => json!({ "itemType": "image", "mediaUrl": url, "name": name, "svgTint": true,
+            "width": w, "height": h, "bg_color": "#ffffffff" }),
+    };
+    for (k, val) in extra.as_object().expect("object") {
+        v[k] = val.clone();
+    }
+    v["id"] = new_id().into();
+    serde_json::from_value(v).expect("layer defaults match the model")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn svg_layers() {
+        let svg = br#"<svg viewBox="0 0 512 256"><path d="M0 0 L512 0 L256 256 Z"/></svg>"#;
+        let poly = new_svg_layer("/svg/basic/x.svg", "Shape", svg, SvgMode::Polygon, 256.0);
+        assert_eq!(poly.shape_type, Some(crate::model::ShapeType::Polygon));
+        assert_eq!((poly.width, poly.height), (256.0, 128.0));
+        let tint = new_svg_layer("/svg/basic/x.svg", "Shape", svg, SvgMode::Tint, 256.0);
+        assert_eq!(
+            (tint.svg_tint, tint.media_url.as_deref()),
+            (Some(true), Some("/svg/basic/x.svg"))
+        );
+        // No path: a tinted image instead of a polygon.
+        let ellipse = br#"<svg viewBox="0 0 10 10"><ellipse cx="5" cy="5" rx="5" ry="5"/></svg>"#;
+        let fallback = new_svg_layer("/e.svg", "E", ellipse, SvgMode::Polygon, 256.0);
+        assert_eq!(fallback.svg_tint, Some(true));
+        for l in [poly, tint, fallback] {
+            let mut unknown = Vec::new();
+            l.collect_unknown("", &mut unknown);
+            assert!(unknown.is_empty(), "{unknown:?}");
+        }
+    }
 
     #[test]
     fn media_layers() {

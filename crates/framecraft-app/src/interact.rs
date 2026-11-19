@@ -85,6 +85,8 @@ pub struct Drag {
     start: Pose,
     parent: Frame,
     from: Vec2,
+    /// A polygon / path's points when the drag began (a resize scales them).
+    points: Option<Vec<framecraft_core::model::PolygonPoint>>,
 }
 
 fn near(a: Vec2, b: Vec2, reach: f64) -> bool {
@@ -149,9 +151,10 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
             pose_at(doc, item, time),
             parent_frame(doc, id, time),
             item.name.clone(),
+            item.polygon_points.clone().filter(|p| p.len() >= 2),
         ))
     });
-    let Some((start, parent, name)) = started else {
+    let Some((start, parent, name, points)) = started else {
         return;
     };
     let verb = match mode {
@@ -168,6 +171,7 @@ fn start_drag(ui: Ui, id: &str, mode: Mode, from: Vec2) {
         start,
         parent,
         from,
+        points,
     }));
 }
 
@@ -251,12 +255,29 @@ fn pointer_move(ui: Ui, ev: &Value) {
         }
         Mode::Resize(h) => {
             let (x, y, w, hh) = resize(&d.start, &d.parent, h, d.from, p, shift, alt);
-            vec![
+            let mut cmds = vec![
                 set(id, "x", t, x, auto),
                 set(id, "y", t, y, auto),
                 set(id, "width", t, w, auto),
                 set(id, "height", t, hh, auto),
-            ]
+            ];
+            // Polygons and paths scale their points with the box (FRAME).
+            if let Some(points) = &d.points {
+                let scaled = framecraft_core::polygon::scale_points(
+                    points,
+                    d.start.width,
+                    d.start.height,
+                    w,
+                    hh,
+                );
+                cmds.push(Box::new(framecraft_core::commands::SetField {
+                    target: framecraft_core::commands::FieldTarget::Item(id.into()),
+                    path: "polygonPoints".into(),
+                    value: serde_json::to_value(scaled).unwrap_or_default(),
+                    update: framecraft_core::commands::Update::Layer,
+                }));
+            }
+            cmds
         }
         Mode::Rotate => vec![set(
             id,

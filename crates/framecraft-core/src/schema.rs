@@ -118,6 +118,10 @@ pub enum Kind {
     /// A media URL, picked from the project's media of this category
     /// (`images`, `videos`, `lottie`) or typed.
     Media(&'static str),
+    /// A polygon or path's points, with bezier handles.
+    PolygonPoints,
+    /// A button that turns a tinted SVG image into a polygon layer.
+    SvgToPolygon,
 }
 
 /// Where a property's value lives.
@@ -724,6 +728,58 @@ pub const PROPERTIES: &[Property] = &[
         Item,
         None,
         Layer
+    ),
+    // Polygon and path shapes
+    p!(
+        Look,
+        "Points",
+        "polygonCurve",
+        "Curves",
+        Kind::Choice(&[("linear", "Linear"), ("bezier", "Bezier")]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Points",
+        "polygonPoints",
+        "Points",
+        Kind::PolygonPoints,
+        Item,
+        None,
+        Layer
+    ),
+    // Image layers
+    p!(
+        Look,
+        "Image",
+        "mediaUrl",
+        "Image",
+        Kind::Media("images"),
+        Item,
+        None,
+        Rebuild
+    ),
+    p!(
+        Look,
+        "Image",
+        "svgTint",
+        "Tint with fill color",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Image",
+        "svgToPolygon",
+        "Convert to polygon",
+        Kind::SvgToPolygon,
+        Item,
+        None,
+        Rebuild
     ),
     // Text
     p!(
@@ -1684,6 +1740,15 @@ fn is_text(item: &Item) -> bool {
 
 /// Layers with FRAME's Look tab (fill, border, corners): all but Lottie,
 /// video, empty groups and patterns.
+fn is_svg(item: &Item) -> bool {
+    let url = item.media_url.as_deref().unwrap_or("");
+    url.split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .to_ascii_lowercase()
+        .ends_with(".svg")
+}
+
 fn is_filled(item: &Item) -> bool {
     !matches!(
         item.item_type,
@@ -1769,6 +1834,12 @@ impl Property {
             "patternCellSize" => pattern_kind(item) != "stripes",
             "patternDotRadius" => pattern_kind(item) == "dots",
             "patternLineWidth" => pattern_kind(item) == "grid",
+            "polygonCurve" | "polygonPoints" => {
+                matches!(shape, Some(ShapeType::Polygon | ShapeType::Path))
+            }
+            "mediaUrl" if self.tab == Tab::Look => item.item_type == Some(ItemType::Image),
+            "svgTint" => item.item_type == Some(ItemType::Image) && is_svg(item),
+            "svgToPolygon" => item.item_type == Some(ItemType::Image) && is_svg(item),
             _ => match self.tab {
                 Tab::Look => is_filled(item),
                 Tab::Text => is_text(item),
@@ -1868,6 +1939,32 @@ impl Property {
         auto_key: bool,
     ) -> Option<Box<dyn Command>> {
         let value = self.parse(value)?;
+        if let (Some(id), true) = (item, matches!(self.path, "polygonCurve" | "polygonPoints")) {
+            // Points: an array, or `{points, curve}` (Reset shape sets both).
+            let (points, curve) = match (&value, self.path) {
+                (Value::String(c), "polygonCurve") => (None, Some(c.clone())),
+                (Value::Array(_), _) => (Some(value.clone()), None),
+                (Value::Object(o), _) => (
+                    o.get("points").cloned(),
+                    o.get("curve").and_then(Value::as_str).map(str::to_string),
+                ),
+                _ => return None,
+            };
+            let points = match points {
+                Some(p) => Some(serde_json::from_value(p).ok()?),
+                None => None,
+            };
+            return Some(Box::new(crate::polygon::SetPolygon {
+                item: id.into(),
+                points,
+                curve,
+                to_shape: false,
+            }));
+        }
+        if self.kind == Kind::SvgToPolygon {
+            // Needs the SVG file: the app builds that command.
+            return None;
+        }
         if let (Kind::ClipStart, Some(id)) = (self.kind, item) {
             let t = match &value {
                 Value::String(s) => s.trim().parse::<f64>().ok()?,
@@ -1937,8 +2034,20 @@ mod tests {
             pattern.pattern_kind = Some(kind.into());
             d.items.push(pattern);
         }
+        let svg = br#"<svg viewBox="0 0 10 10"><path d="M0 0 L10 0 L5 10 Z"/></svg>"#;
+        d.items.push(crate::layers::new_svg_layer(
+            "/media/images/s.svg",
+            "S",
+            svg,
+            crate::layers::SvgMode::Tint,
+            256.0,
+        ));
         let mut h = History::default();
         for p in PROPERTIES {
+            if p.kind == Kind::SvgToPolygon {
+                assert!(p.applies(d.items.last()));
+                continue;
+            }
             let targets: Vec<Option<String>> = match p.scope {
                 Scope::Item => d
                     .items

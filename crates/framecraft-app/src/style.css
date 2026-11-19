@@ -237,3 +237,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .media-field input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
 .media-field button { padding: 3px 8px; }
 .media-mini { width: 24px; height: 24px; object-fit: contain; border-radius: 3px; background: var(--bg); }
+.point.poly { grid-template-columns: 26px auto 1fr 1fr 22px; }
+.point.handles { grid-template-columns: repeat(4, 1fr); padding-left: 30px; }
+.point .smooth { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--dim); }
+.points .hint { margin: 0; font-size: 11px; }

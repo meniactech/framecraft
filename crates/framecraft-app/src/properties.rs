@@ -467,6 +467,19 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 }
             }
         }
+        Kind::PolygonPoints => rsx! {
+            PolygonPoints { ui, item: item.clone().unwrap_or_default(), value: field.value.clone(), set }
+        },
+        Kind::SvgToPolygon => {
+            let id = item.clone().unwrap_or_default();
+            rsx! {
+                button {
+                    title: "Trace the SVG into editable points (its first path)",
+                    onclick: move |_| ui.convert_svg_to_polygon(&id),
+                    "Convert"
+                }
+            }
+        }
         Kind::MaskPoints => rsx! {
             MaskPoints { value: field.value.clone(), area: field.context["transform"].clone(), set }
         },
@@ -533,6 +546,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             | Kind::ValueRamp
             | Kind::ColorList
             | Kind::MaskPoints
+            | Kind::PolygonPoints
     );
     if wide {
         // A div, not a label: these hold several inputs and buttons.
@@ -1104,6 +1118,166 @@ fn MaskPoints(value: Value, area: Value, set: Callback<Value>) -> Element {
                         list.push(p);
                         set(Value::Array(list));
                     },
+                    "+ Point"
+                }
+            }
+        }
+    }
+}
+
+/// A polygon or path's points (FRAME's Look → Polygon / Path): reset, add
+/// on the longest edge, and per point smooth, x / y, remove, and the bezier
+/// handles. Every change fits the layer box to the points.
+#[component]
+fn PolygonPoints(ui: Ui, item: String, value: Value, set: Callback<Value>) -> Element {
+    use framecraft_core::model::{PolygonPoint, ShapeType};
+    use framecraft_core::polygon;
+    let points: Vec<PolygonPoint> = serde_json::from_value(value.clone()).unwrap_or_default();
+    let (path, w, h, curve) = ui
+        .editor
+        .read()
+        .as_ref()
+        .and_then(|e| e.doc().items.iter().find(|i| i.id == item).cloned())
+        .map_or((false, 100.0, 100.0, "linear".to_string()), |i| {
+            (
+                i.shape_type == Some(ShapeType::Path),
+                i.width,
+                i.height,
+                i.polygon_curve.clone().unwrap_or_else(|| "linear".into()),
+            )
+        });
+    let bezier_mode = curve == "bezier";
+    let min = if path { 2 } else { 3 };
+    let count = points.len();
+    let send = move |list: Vec<PolygonPoint>| set(serde_json::to_value(list).unwrap_or_default());
+    let add_points = points.clone();
+    rsx! {
+        div { class: "points",
+            p { class: "dim hint",
+                if path {
+                    "Open stroke: visible while editing, hidden during play."
+                } else {
+                    "The layer box fits the points after each edit."
+                }
+            }
+            for (i , p) in points.iter().cloned().enumerate() {
+                {
+                    let (a, b, c, d, e) = (points.clone(), points.clone(), points.clone(), points.clone(), points.clone());
+                    let smooth = p.curve.as_deref() == Some("bezier");
+                    let num = |v: Option<f64>, d: f64| framecraft_core::js::number_to_string(round3(v.unwrap_or(d)));
+                    let (px, py) = (num(Some(p.x), 0.0), num(Some(p.y), 0.0));
+                    let handles = [
+                        ("In X", num(p.in_x, p.x)),
+                        ("In Y", num(p.in_y, p.y)),
+                        ("Out X", num(p.out_x, p.x)),
+                        ("Out Y", num(p.out_y, p.y)),
+                    ];
+                    let edit = move |mut list: Vec<PolygonPoint>, key: &str, v: String| {
+                        let Ok(v) = v.trim().parse::<f64>() else { return };
+                        let q = &mut list[i];
+                        match key {
+                            "x" => q.x = v,
+                            "y" => q.y = v,
+                            "In X" => q.in_x = Some(v),
+                            "In Y" => q.in_y = Some(v),
+                            "Out X" => q.out_x = Some(v),
+                            _ => q.out_y = Some(v),
+                        }
+                        send(list);
+                    };
+                    rsx! {
+                        div { class: "point poly",
+                            span { class: "dim", "#{i + 1}" }
+                            label { class: "smooth", title: "Bezier handles on this point",
+                                input {
+                                    r#type: "checkbox",
+                                    checked: smooth,
+                                    onchange: move |_| {
+                                        let mut list = a.clone();
+                                        let n = list.len();
+                                        let q = list[i].clone();
+                                        if smooth {
+                                            list[i].curve = Some("linear".into());
+                                            list[i].in_x = Some(q.x);
+                                            list[i].in_y = Some(q.y);
+                                            list[i].out_x = Some(q.x);
+                                            list[i].out_y = Some(q.y);
+                                        } else {
+                                            let one = polygon::normalize_handles(
+                                                &[list[(i + n - 1) % n].clone(), q, list[(i + 1) % n].clone()],
+                                                "bezier",
+                                            );
+                                            list[i] = one[1].clone();
+                                        }
+                                        send(list);
+                                    },
+                                }
+                                "Smooth"
+                            }
+                            input {
+                                r#type: "number",
+                                step: "1",
+                                value: "{px}",
+                                title: "X",
+                                onchange: move |evt| edit(b.clone(), "x", evt.value()),
+                            }
+                            input {
+                                r#type: "number",
+                                step: "1",
+                                value: "{py}",
+                                title: "Y",
+                                onchange: move |evt| edit(c.clone(), "y", evt.value()),
+                            }
+                            button {
+                                class: "key-button",
+                                disabled: count <= min,
+                                title: "Remove point",
+                                onclick: move |_| {
+                                    let mut list = d.clone();
+                                    list.remove(i);
+                                    send(list);
+                                },
+                                "×"
+                            }
+                        }
+                        if bezier_mode && smooth {
+                            div { class: "point handles",
+                                for (key , val) in handles {
+                                    {
+                                        let list = e.clone();
+                                        rsx! {
+                                            input {
+                                                r#type: "number",
+                                                step: "1",
+                                                value: "{val}",
+                                                title: "{key}",
+                                                placeholder: "{key}",
+                                                onchange: move |evt| edit(list.clone(), key, evt.value()),
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            div { class: "row-buttons",
+                button {
+                    title: if path { "Reset to a left → right bezier" } else { "Reset to a rectangle inset in the bounds" },
+                    onclick: move |_| {
+                        let (points, curve) = if path {
+                            (polygon::default_path_points(w, h), "bezier".to_string())
+                        } else {
+                            (polygon::default_polygon_points(w, h), curve.clone())
+                        };
+                        set(json!({ "points": points, "curve": curve }));
+                    },
+                    "Reset shape"
+                }
+                button {
+                    title: "Insert a point on the longest edge",
+                    onclick: move |_| send(polygon::insert_on_longest_edge(&add_points)),
                     "+ Point"
                 }
             }

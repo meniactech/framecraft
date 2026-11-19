@@ -10,7 +10,7 @@ use crate::timeline::TlView;
 use dioxus::prelude::*;
 use framecraft_core::commands::{AddItem, Change, Command, DeleteItems, DuplicateItems, History};
 use framecraft_core::keys::{CopiedKey, KeyRef};
-use framecraft_core::layers::{NewLayer, new_layer};
+use framecraft_core::layers::{NewLayer, SvgMode, new_layer};
 use framecraft_core::normalize::Document;
 use framecraft_core::preview::{PreviewState, PreviewUpdate};
 use framecraft_core::schema::Tab;
@@ -71,7 +71,7 @@ pub struct Ui {
 /// An open media library: what it lists and where the pick goes.
 #[derive(Clone, PartialEq)]
 pub struct MediaPick {
-    /// `images`, `videos` or `lottie`.
+    /// `images`, `videos`, `lottie`, or `shapes` (the built-in SVG shapes).
     pub category: &'static str,
     pub target: PickTarget,
 }
@@ -357,12 +357,40 @@ impl Ui {
 
     /// Uses a picked media file (`url`, shown name `name`) for the open
     /// library's target, and closes the library.
-    pub fn pick_media(mut self, url: String, name: String) {
+    pub fn pick_media(mut self, url: String, name: String, svg_mode: SvgMode) {
         let Some(pick) = self.media.peek().clone() else {
             return;
         };
         self.media.set(None);
+        let is_svg = url
+            .split(['?', '#'])
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase()
+            .ends_with(".svg");
         match pick.target {
+            PickTarget::NewLayer
+                if is_svg && (pick.category == "shapes" || svg_mode != SvgMode::Image) =>
+            {
+                use framecraft_core::export::package::MediaSource;
+                let bytes = self
+                    .editor
+                    .peek()
+                    .as_ref()
+                    .and_then(|e| e.project.media.read(&url))
+                    .unwrap_or_default();
+                // FRAME: stock shapes fit 256 px, uploaded SVGs 512 px.
+                let max_side = if pick.category == "shapes" {
+                    256.0
+                } else {
+                    512.0
+                };
+                let item =
+                    framecraft_core::layers::new_svg_layer(&url, &name, &bytes, svg_mode, max_side);
+                let id = item.id.clone();
+                self.execute(&AddItem { item });
+                self.select_layer(Some(id));
+            }
             PickTarget::NewLayer => {
                 let size = (pick.category == "images")
                     .then(|| {
@@ -400,6 +428,27 @@ impl Ui {
                     self.execute(cmd.as_ref());
                 }
             }
+        }
+    }
+
+    /// Turns a tinted SVG image layer into an editable polygon (FRAME's
+    /// Convert to polygon), traced at the layer's size.
+    pub fn convert_svg_to_polygon(self, id: &str) {
+        use framecraft_core::export::package::MediaSource;
+        let traced = self.editor.peek().as_ref().and_then(|e| {
+            let item = e.doc().items.iter().find(|i| i.id == id)?;
+            let bytes = e.project.media.read(item.media_url.as_deref()?)?;
+            let text = String::from_utf8(bytes).ok()?;
+            framecraft_core::polygon::svg_to_polygon(&text, item.width, item.height)
+        });
+        match traced {
+            Some((points, bezier)) => self.execute(&framecraft_core::polygon::SetPolygon {
+                item: id.to_string(),
+                points: Some(points),
+                curve: Some(if bezier { "bezier" } else { "linear" }.into()),
+                to_shape: true,
+            }),
+            None => self.set_status("This SVG has no path or polygon to trace"),
         }
     }
 
