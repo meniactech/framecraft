@@ -137,7 +137,7 @@ button:disabled { opacity: .45; cursor: default; }
 .layer-row.drop-into { background: rgba(79, 140, 255, .25); }
 .caret { width: 14px; flex: none; color: var(--dim); text-align: center; cursor: pointer; }
 .layer-icon { width: 16px; flex: none; color: var(--dim); text-align: center; font-size: 11px; }
-.layer-row .layer-name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.layer-row .layer-name { flex: 1; min-width: 0; margin: 0; font-weight: normal; line-height: 24px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .layer-row .rename { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--accent); border-radius: 3px; padding: 1px 4px; font: inherit; }
 .row-toggle { flex: none; padding: 0; width: 22px; height: 20px; font-size: 12px; background: none; border-color: transparent; opacity: .55; }
 .row-toggle.on { opacity: 1; color: var(--key); }
