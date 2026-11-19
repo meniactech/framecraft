@@ -507,6 +507,49 @@ if (!window.__fc) {
     dot.addEventListener('pointercancel', up);
   });
 
+  // Panel splitters (.split[data-split]): drag sets a CSS variable on the
+  // page root live; Rust saves the size on release. Double-click resets.
+  const SPLIT_VARS = { side: '--side-w', timeline: '--tl-h', outliner: '--outliner-h' };
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const sp = e.target.closest('.split[data-split]');
+    if (!sp) return;
+    e.preventDefault();
+    const name = sp.dataset.split;
+    const v = SPLIT_VARS[name];
+    if (!v) return;
+    const root = document.documentElement;
+    const side = document.querySelector('.side');
+    const sideRect = side ? side.getBoundingClientRect() : { top: 0, height: window.innerHeight };
+    const size = (ev) => {
+      if (name === 'side') return Math.min(window.innerWidth - 420, Math.max(220, window.innerWidth - ev.clientX));
+      if (name === 'timeline') return Math.min(window.innerHeight - 260, Math.max(120, window.innerHeight - 24 - ev.clientY));
+      return Math.min(sideRect.height - 140, Math.max(80, ev.clientY - sideRect.top));
+    };
+    let px = null;
+    sp.classList.add('dragging');
+    sp.setPointerCapture(e.pointerId);
+    const move = (ev) => { px = size(ev); root.style.setProperty(v, px + 'px'); };
+    const up = () => {
+      sp.classList.remove('dragging');
+      sp.removeEventListener('pointermove', move);
+      sp.removeEventListener('pointerup', up);
+      sp.removeEventListener('pointercancel', up);
+      if (px !== null) fc.emit({ type: 'layout', split: name, px });
+    };
+    sp.addEventListener('pointermove', move);
+    sp.addEventListener('pointerup', up);
+    sp.addEventListener('pointercancel', up);
+  });
+  document.addEventListener('dblclick', (e) => {
+    const sp = e.target && e.target.closest ? e.target.closest('.split[data-split]') : null;
+    if (!sp) return;
+    const v = SPLIT_VARS[sp.dataset.split];
+    if (!v) return;
+    document.documentElement.style.removeProperty(v);
+    fc.emit({ type: 'layout', split: sp.dataset.split, px: null });
+  });
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {

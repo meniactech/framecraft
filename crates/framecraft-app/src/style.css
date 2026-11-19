@@ -28,13 +28,13 @@ select:hover { border-color: var(--accent); }
 select option { background: var(--panel); color: var(--text); }
 button.active { background: var(--accent); border-color: var(--accent); }
 .dim { color: var(--dim); }
-.app { display: grid; grid-template-rows: 44px 1fr 300px 24px; height: 100vh; }
+.app { position: relative; display: grid; grid-template-rows: 44px 1fr var(--tl-h, 300px) 24px; height: 100vh; }
 
 .header { display: flex; align-items: center; gap: 8px; padding: 0 12px; background: var(--panel); border-bottom: 1px solid var(--line); }
 .brand { font-weight: 700; margin-right: 8px; }
 .button input[type=file] { display: none; }
 
-.main { display: grid; grid-template-columns: 1fr 300px; min-height: 0; }
+.main { display: grid; grid-template-columns: 1fr var(--side-w, 300px); min-height: 0; }
 .viewport-panel { display: grid; grid-template-rows: 36px 1fr; min-width: 0; min-height: 0; }
 .viewport-tools { display: flex; align-items: center; gap: 6px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .viewport { overflow: hidden; display: flex; align-items: center; justify-content: center; padding: 16px; }
@@ -112,7 +112,7 @@ button:disabled { opacity: .45; cursor: default; }
 .poly-arm { stroke: var(--key); stroke-width: 1px; opacity: 0.8; }
 
 /* Right column: Outliner above Properties. */
-.side { display: grid; grid-template-rows: minmax(160px, 38%) 1fr; min-height: 0; border-left: 1px solid var(--line); }
+.side { position: relative; display: grid; grid-template-rows: var(--outliner-h, minmax(160px, 38%)) 1fr; min-height: 0; border-left: 1px solid var(--line); }
 .properties { border-left: 0; border-top: 1px solid var(--line); }
 .outliner { display: grid; grid-template-rows: 34px 1fr; min-height: 0; background: var(--panel); }
 .panel-head { display: flex; align-items: center; gap: 6px; padding: 0 8px; border-bottom: 1px solid var(--line); }
@@ -453,3 +453,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .align-btn:disabled { opacity: .35; }
 .sel-other-halo { fill: none; stroke: rgba(0, 0, 0, .65); stroke-width: 4px; }
 .sel-other { fill: rgba(79, 140, 255, .08); stroke: #7fb0ff; stroke-width: 2px; stroke-dasharray: 8 4; }
+/* Panel splitters (drag to resize, double-click to reset) */
+.split { position: absolute; z-index: 15; background: transparent; }
+.split:hover, .split.dragging { background: rgba(79, 140, 255, .45); }
+.split-side { top: 0; bottom: 0; left: -3px; width: 6px; cursor: col-resize; }
+.split-outliner { left: 0; right: 0; height: 6px; top: calc(var(--outliner-h, 38%) - 3px); cursor: row-resize; }
+.split-timeline { left: 0; right: 0; height: 6px; bottom: calc(var(--tl-h, 300px) + 24px - 3px); cursor: row-resize; }

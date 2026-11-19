@@ -13,6 +13,7 @@ mod bridge;
 mod components;
 mod export;
 mod interact;
+mod layout;
 mod media;
 mod motions;
 mod outliner;
@@ -78,6 +79,13 @@ fn App() -> Element {
     use_hook(move || {
         if let Some(path) = std::env::args_os().nth(1) {
             ui.open(PathBuf::from(path));
+        }
+    });
+
+    // Panel sizes from the last session.
+    use_hook(|| {
+        if let Some(layout) = layout::load() {
+            layout::apply(&layout);
         }
     });
 
@@ -158,10 +166,13 @@ fn App() -> Element {
             div { class: "main",
                 Viewport { ui }
                 div { class: "side",
+                    div { class: "split split-side", "data-split": "side", title: "Drag to resize; double-click to reset" }
+                    div { class: "split split-outliner", "data-split": "outliner", title: "Drag to resize; double-click to reset" }
                     Outliner { ui }
                     Properties { ui }
                 }
             }
+            div { class: "split split-timeline", "data-split": "timeline", title: "Drag to resize; double-click to reset" }
             Timeline { ui }
             ui::StatusBar { ui }
             media::MediaDialog { ui }

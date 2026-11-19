@@ -216,6 +216,7 @@ pub fn on_event(ui: Ui, ev: Value) {
         Some("outliner-drop") => crate::outliner::on_drop(ui, &ev),
         Some("tl") => crate::timeline::on_event(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
+        Some("layout") => crate::layout::on_event(&ev),
         Some("ramp") => {
             let mut ramp = ui.ramp_event;
             ramp.set(Some(ev.clone()));
