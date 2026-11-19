@@ -52,11 +52,22 @@ if (!window.__fc) {
     fc.wanted = url;
     if (fc.waiting) return;
     const t0 = performance.now();
+    // What the loader sees (FRAMECRAFT_DEBUG): frames, sizes, the stage.
+    const describe = (all) => {
+      const stage = document.querySelector('.stage');
+      return 'frames=' + all.length + ' ' + all.map((f) => f.id + ':' + f.clientWidth + 'x' + f.clientHeight + ' rects=' + f.getClientRects().length).join(' ') +
+        ' stage=' + (stage ? JSON.stringify(stage.getAttribute('style')) + ' ' + stage.clientWidth + 'x' + stage.clientHeight : 'none');
+    };
+    let logged = false;
     const tryLoad = () => {
       fc.waiting = null;
       const all = frames();
       const next = all.find((f) => f !== fc.active) || all[0];
       const ready = next && next.getClientRects().length > 0 && next.clientWidth > 0;
+      if (!ready && !logged) {
+        logged = true;
+        fc.emit({ type: 'log', text: '[load] waiting for the viewport: ' + describe(all) });
+      }
       // A plain timer, not requestAnimationFrame: animation frames are not
       // delivered while nothing on screen changes (an empty viewport after
       // New), which left the load waiting for good.
@@ -64,6 +75,7 @@ if (!window.__fc) {
         fc.waiting = setTimeout(tryLoad, 30);
         return;
       }
+      fc.emit({ type: 'log', text: '[load] ' + (ready ? 'loading ' : 'gave up waiting, loading ') + fc.wanted + ' into ' + (next ? next.id : 'nothing') + ' (' + describe(all) + ')' });
       if (!next) return;
       fc.pending = next;
       fc.queue = [];

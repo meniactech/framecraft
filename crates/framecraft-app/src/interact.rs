@@ -213,6 +213,11 @@ pub fn on_event(ui: Ui, ev: Value) {
         Some("outliner-drop") => crate::outliner::on_drop(ui, &ev),
         Some("tl") => crate::timeline::on_event(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
+        Some("log") => {
+            if crate::state::debug() {
+                eprintln!("{}", ev["text"].as_str().unwrap_or(""));
+            }
+        }
         Some("hint") => {
             let mut hint = ui.hint;
             let text = ev["text"].as_str().unwrap_or("").to_string();
