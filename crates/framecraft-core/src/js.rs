@@ -161,6 +161,61 @@ fn percent_encode(s: &str, keep: impl Fn(u8) -> bool, space_plus: bool) -> Strin
     out
 }
 
+/// `JSON.stringify(value, null, 2)`: two-space indent, keys in insertion
+/// order, numbers printed the JavaScript way.
+pub fn stringify_pretty(value: &serde_json::Value) -> String {
+    let mut out = String::new();
+    write_json(value, 0, &mut out);
+    out
+}
+
+fn write_json(v: &serde_json::Value, depth: usize, out: &mut String) {
+    use serde_json::Value;
+    let pad = |d: usize| "  ".repeat(d);
+    match v {
+        Value::Null => out.push_str("null"),
+        Value::Bool(b) => out.push_str(if *b { "true" } else { "false" }),
+        Value::Number(n) => out.push_str(&number_to_string(n.as_f64().unwrap_or(f64::NAN))),
+        Value::String(s) => out.push_str(&serde_json::to_string(s).expect("strings serialize")),
+        Value::Array(a) if a.is_empty() => out.push_str("[]"),
+        Value::Object(o) if o.is_empty() => out.push_str("{}"),
+        Value::Array(a) => {
+            out.push_str("[\n");
+            for (i, item) in a.iter().enumerate() {
+                out.push_str(&pad(depth + 1));
+                write_json(item, depth + 1, out);
+                out.push_str(if i + 1 < a.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&pad(depth));
+            out.push(']');
+        }
+        Value::Object(o) => {
+            out.push_str("{\n");
+            for (i, (k, item)) in o.iter().enumerate() {
+                out.push_str(&pad(depth + 1));
+                out.push_str(&serde_json::to_string(k).expect("strings serialize"));
+                out.push_str(": ");
+                write_json(item, depth + 1, out);
+                out.push_str(if i + 1 < o.len() { ",\n" } else { "\n" });
+            }
+            out.push_str(&pad(depth));
+            out.push('}');
+        }
+    }
+}
+
+/// `s.slice(0, n)` on UTF-16 units, without splitting a character.
+pub fn slice_utf16(s: &str, n: usize) -> &str {
+    let mut units = 0;
+    for (i, c) in s.char_indices() {
+        units += c.len_utf16();
+        if units > n {
+            return &s[..i];
+        }
+    }
+    s
+}
+
 /// `String.prototype.trim` (Unicode whitespace and the BOM).
 pub fn trim(s: &str) -> &str {
     s.trim_matches(|c: char| c.is_whitespace() || c == '\u{feff}')
@@ -227,6 +282,27 @@ mod tests {
         assert_eq!(or(Some(0.0), 80.0), 80.0);
         assert_eq!(or(None, 80.0), 80.0);
         assert_eq!(or(Some(-3.0), 80.0), -3.0);
+    }
+
+    #[test]
+    fn stringifies_like_json_stringify() {
+        let v =
+            serde_json::json!({ "b": 1.0, "a": [], "c": { "d": [true, null, "x\"y"] }, "e": {} });
+        assert_eq!(
+            stringify_pretty(&v),
+            "{\n  \"b\": 1,\n  \"a\": [],\n  \"c\": {\n    \"d\": [\n      true,\n      null,\n      \"x\\\"y\"\n    ]\n  },\n  \"e\": {}\n}"
+        );
+        assert_eq!(
+            stringify_pretty(&serde_json::json!("\u{1}\u{2028}")),
+            "\"\\u0001\u{2028}\""
+        );
+    }
+
+    #[test]
+    fn slices_by_utf16_units() {
+        assert_eq!(slice_utf16("abc", 2), "ab");
+        assert_eq!(slice_utf16("a😀b", 2), "a");
+        assert_eq!(slice_utf16("a😀b", 3), "a😀");
     }
 
     #[test]

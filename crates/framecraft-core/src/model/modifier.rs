@@ -9,7 +9,8 @@ use serde_json::Value;
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "camelCase")]
 pub enum Modifier {
-    Mask(MaskModifier),
+    /// Boxed: by far the largest variant.
+    Mask(Box<MaskModifier>),
     Blur(BlurModifier),
     Color(ColorModifier),
     Shadow(ShadowModifier),

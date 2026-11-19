@@ -1,0 +1,200 @@
+
+class Graphic extends HTMLElement {
+  connectedCallback() {
+    // Called when the element is added to the DOM
+    // Note: Don't paint any pixels at this point, wait for load() to be called
+  }
+
+  _graphicWindow() {
+    return this.iframe && this.iframe.contentWindow;
+  }
+
+  _hidePlayoutChrome(win) {
+    try {
+      const doc = win.document;
+      const hide = (id) => {
+        const el = doc.getElementById(id);
+        if (el) el.style.setProperty("display", "none", "important");
+      };
+      hide("layerstate");
+      hide("no-lic");
+      hide("watermarkdevfull");
+      const root = doc.getElementById("root");
+      if (root) root.style.setProperty("background-color", "transparent", "important");
+      doc.querySelectorAll('[id^="state"]').forEach((el) => {
+        el.style.setProperty("display", "none", "important");
+      });
+    } catch (_) { /* ignore */ }
+  }
+
+  _waitPaint(win) {
+    const raf = (win && typeof win.requestAnimationFrame === "function")
+      ? win.requestAnimationFrame.bind(win)
+      : requestAnimationFrame;
+    return Promise.race([
+      new Promise((resolve) => raf(() => raf(resolve))),
+      new Promise((resolve) => setTimeout(resolve, 80))
+    ]);
+  }
+
+  _updateData(params) {
+    const win = this._graphicWindow();
+    if (!win || typeof win.update !== "function") return;
+    const data = params && params.data !== undefined ? params.data : params;
+    if (data) win.update(data);
+  }
+
+  async _applyScheduledUpdates(timestamp) {
+    const schedule = Array.isArray(this._schedule) ? this._schedule : [];
+    let lastData = null;
+    for (const item of schedule) {
+      const ts = Number(item && item.timestamp) || 0;
+      if (ts > timestamp) break;
+      const action = item.action || {};
+      if (action.type === "updateAction") {
+        const raw = action.params;
+        const data = raw && raw.data !== undefined ? raw.data : raw;
+        if (data) lastData = data;
+      }
+    }
+    if (lastData) this._updateData({ data: lastData, skipAnimation: true });
+  }
+
+  async load(params) {
+    const renderType = params && params.renderType;
+    if (renderType && renderType !== "realtime" && renderType !== "non-realtime") {
+      throw new Error("Unsupported renderType: " + renderType);
+    }
+    this._nrt = renderType === "non-realtime";
+    this._schedule = Array.isArray(this._schedule) ? this._schedule : [];
+
+    const iframe = document.createElement("iframe");
+    iframe.width = "100%";
+    iframe.height = "100%";
+    iframe.style.cssText = "border:0;width:100%;height:100%;display:block;background:transparent";
+    iframe.src = import.meta.resolve("./" + @ENTRY_JSON@);
+
+    const loaded = new Promise((resolve, reject) => {
+      iframe.onload = () => resolve();
+      iframe.onerror = () => reject(new Error("Failed to load graphic HTML"));
+    });
+
+    this.appendChild(iframe);
+    this.iframe = iframe;
+@STEP_RESET_4@    await loaded;
+
+    // Wait until SPX play/stop exist (classic script) and preferably IN/OUT (ES module).
+    const ready = await new Promise((resolve, reject) => {
+      const started = Date.now();
+      const tick = () => {
+        try {
+          const win = iframe.contentWindow;
+          if (win && typeof win.play === "function" && typeof win.stop === "function") {
+            if (typeof win.runAnimationIN === "function" || Date.now() - started > 2000) {
+              resolve(win);
+              return;
+            }
+          }
+        } catch (_) { /* retry */ }
+        if (Date.now() - started > 15000) {
+          reject(new Error("Timed out waiting for graphic runtime"));
+          return;
+        }
+        setTimeout(tick, 40);
+      };
+      tick();
+    });
+
+    this._hidePlayoutChrome(ready);
+    if (params && params.data) this._updateData(params);
+
+    console.log("[IonFrame OGraf] load ready", {
+      renderType: renderType || "realtime",
+      hasPlay: typeof ready.play,
+      hasStop: typeof ready.stop,
+      hasIN: typeof ready.runAnimationIN,
+      hasOUT: typeof ready.runAnimationOUT,
+      hasSeek: typeof ready.seek
+    });
+
+    return { statusCode: 200 };
+  }
+
+  async dispose(_params) {
+    this.innerHTML = "";
+    this.iframe = null;
+    this._schedule = [];
+    this._nrt = false;
+@STEP_RESET_4@  }
+
+  async getStatus(_params) {
+    return {
+      statusCode: 200,
+      status: {},
+    };
+  }
+
+  async updateAction(_params) {
+    this._updateData(_params);
+    return { statusCode: 200 };
+  }
+
+  async playAction(_params) {
+    if (this._nrt) {
+      return { statusCode: 200@CURRENT_STEP@ };
+    }
+    console.log("[IonFrame OGraf] playAction"@STEP_LOG@);
+    if (this.iframe && this.iframe.contentWindow) {
+@PLAY_BODY@
+    } else {
+      console.error("[IonFrame OGraf] playAction: no iframe");
+      return { statusCode: 500 };
+    }
+  }
+
+  async stopAction(_params) {
+    if (this._nrt) {
+      return { statusCode: 200 };
+    }
+    console.log("[IonFrame OGraf] stopAction");
+    if (this.iframe && this.iframe.contentWindow) {
+      this.iframe.contentWindow.stop();
+@STEP_RESET_6@      return { statusCode: 200 };
+    } else {
+      console.error("[IonFrame OGraf] stopAction: no iframe");
+      return { statusCode: 500 };
+    }
+  }
+
+  async customAction(params) {
+    if (this._nrt) {
+      return { statusCode: 200 };
+    }
+@CUSTOM_BODY@
+    return { statusCode: 200 };
+  }
+
+  async setActionsSchedule(params) {
+    const schedule = (params && Array.isArray(params.schedule)) ? params.schedule.slice() : [];
+    schedule.sort((a, b) => (Number(a && a.timestamp) || 0) - (Number(b && b.timestamp) || 0));
+    this._schedule = schedule;
+    return { statusCode: 200 };
+  }
+
+  async goToTime(params) {
+    const timestamp = Number(params && params.timestamp) || 0;
+    await this._applyScheduledUpdates(timestamp);
+    const win = this._graphicWindow();
+    if (win && typeof win.goToTime === "function") {
+      await Promise.resolve(win.goToTime({ timestamp: timestamp }));
+    } else if (win && typeof win.seek === "function") {
+      win.seek(timestamp);
+    } else {
+      console.error("[IonFrame OGraf] goToTime: no iframe goToTime/seek");
+    }
+    await this._waitPaint(win);
+    return { statusCode: 200 };
+  }
+}
+
+export default Graphic;

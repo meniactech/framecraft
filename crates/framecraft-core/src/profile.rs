@@ -7,6 +7,12 @@
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct Profile {
+    /// `generator` in export metadata, and the OGraf author.
+    pub generator: String,
+    /// BOARD's product name, used in field labels.
+    pub board_name: String,
+    /// OGraf description when the scene has none: `{id}` is the template id.
+    pub fallback_ograf_description: String,
     /// `version` in template exports.
     pub version: String,
     /// Default SPX description for a new or older scene.
@@ -29,6 +35,8 @@ impl Profile {
     /// FrameCraft's own values.
     pub fn framecraft() -> Self {
         Self {
+            generator: crate::GENERATOR.into(),
+            fallback_ograf_description: "FrameCraft OGraf export ({id})".into(),
             version: crate::VERSION.to_string(),
             default_scene_description: "FrameCraft template".into(),
             fallback_spx_description: "FrameCraft draft export ({id})".into(),
@@ -39,6 +47,9 @@ impl Profile {
     /// FRAME 0.9.0's values, for comparing against FRAME's exports.
     pub fn frame() -> Self {
         Self {
+            generator: "MENiAC FRAME".into(),
+            board_name: "MENiAC BOARD".into(),
+            fallback_ograf_description: "MENiAC FRAME OGraf export ({id})".into(),
             version: "0.9.0".into(),
             default_scene_description: "MENiAC FRAME template".into(),
             fallback_spx_description: "MENiAC FRAME draft export ({id})".into(),
