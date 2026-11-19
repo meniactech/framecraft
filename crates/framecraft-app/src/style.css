@@ -428,3 +428,10 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .curve-dot.selected { background: var(--accent); box-shadow: 0 0 0 2px var(--accent); z-index: 3; }
 .curve-value { display: grid; grid-template-columns: auto 80px; gap: 8px; align-items: center; justify-content: start; }
 .curve-value input { min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
+/* FRAME's info tip (ⓘ next to section titles) */
+.info-tip { display: inline-flex; vertical-align: middle; margin-left: 6px; cursor: help; opacity: .7; }
+.info-tip:hover { opacity: 1; }
+.info-tip img { width: 13px; height: 13px; pointer-events: none; }
+.info-bubble { position: fixed; z-index: 60; width: 260px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--line);
+  background: #0f1115; color: var(--text); font-size: 12px; line-height: 1.4; text-transform: none; letter-spacing: normal;
+  font-weight: normal; box-shadow: 0 8px 24px rgba(0,0,0,.5); pointer-events: none; }

@@ -242,6 +242,8 @@ pub fn Properties(ui: Ui) -> Element {
             .collect()
     });
     let id = item.map(|i| i.id.clone());
+    let item_ref = item.cloned();
+    let board_hook = doc.scene.ionboard_hook_enabled == Some(true);
     let heading = match item {
         Some(i) if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) => i.name.clone(),
         _ => doc.scene.name.clone(),
@@ -282,7 +284,12 @@ pub fn Properties(ui: Ui) -> Element {
             }
             for (i , f) in fields.iter().enumerate() {
                 if i == 0 || fields[i - 1].prop.group != f.prop.group {
-                    h3 { "{f.prop.group}" }
+                    h3 {
+                        "{f.prop.group}"
+                        if let Some(text) = schema::group_help(tab, f.prop.group, item_ref.as_ref(), board_hook) {
+                            InfoTip { text }
+                        }
+                    }
                 }
                 FieldRow { ui, field: f.clone(), item: id.clone() }
             }
@@ -1344,7 +1351,12 @@ fn ModifierStack(
     });
     rsx! {
         div { class: "mod-head",
-            h3 { "Modifier stack" }
+            h3 {
+                "Modifier stack"
+                if let Some(text) = schema::group_help(Tab::Modifiers, "", None, false) {
+                    InfoTip { text }
+                }
+            }
             div { class: "add-wrap",
                 button {
                     title: "Add a modifier. Modifiers apply in list order.",
@@ -1819,7 +1831,12 @@ fn Plates(ui: Ui) -> Element {
         })
         .unwrap_or_default();
     rsx! {
-        h3 { "Plates" }
+        h3 {
+            "Plates"
+            if let Some(text) = schema::group_help(Tab::Scene, "Plates", None, false) {
+                InfoTip { text }
+            }
+        }
         label { class: "field",
             span { class: "field-label", title: "Editor-only underlay plate behind your graphics. Never exported to OGraf / SPX / HTML.", "Show plate" }
             input {
@@ -1940,8 +1957,11 @@ fn SceneCues(ui: Ui) -> Element {
         });
     };
     rsx! {
-        h3 { title: "Edit on the timeline (Pause / API / Script diamonds). Select a diamond for time, delay and type fields.",
+        h3 {
             "Cues"
+            if let Some(text) = schema::group_help(Tab::Scene, "Cues", None, false) {
+                InfoTip { text }
+            }
         }
         div { class: "cue-buttons",
             button { onclick: move |_| add(CueKind::Pause), "+ Pause" }
@@ -2016,6 +2036,43 @@ fn SceneCues(ui: Ui) -> Element {
                         }
                     }
                 }
+            }
+        }
+    }
+}
+
+/// FRAME's ⓘ: hover (or click) shows a short explanation. The bubble is
+/// placed on the window, so the scrolling panel does not clip it.
+#[component]
+pub fn InfoTip(text: &'static str) -> Element {
+    let mut at = use_signal(|| None::<(f64, f64)>);
+    let mut place = move |evt: MouseEvent| {
+        let p = evt.client_coordinates();
+        at.set(Some((p.x, p.y)));
+    };
+    rsx! {
+        span {
+            class: "info-tip",
+            aria_label: "More information",
+            onmouseenter: place,
+            onmouseleave: move |_| at.set(None),
+            onclick: move |evt| {
+                evt.stop_propagation();
+                evt.prevent_default();
+                if at().is_some() { at.set(None) } else { place(evt) }
+            },
+            img {
+                src: crate::preview::library_url("/icons/ui/info.svg"),
+                alt: "",
+                draggable: "false",
+            }
+        }
+        if let Some((x, y)) = at() {
+            div {
+                class: "info-bubble",
+                // Under the pointer, kept inside the window.
+                style: "left:min(calc(100vw - 276px), max(8px, {x - 130.0}px));top:{y + 14.0}px;",
+                "{text}"
             }
         }
     }

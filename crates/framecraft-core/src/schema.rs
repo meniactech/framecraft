@@ -1748,6 +1748,83 @@ fn is_text(item: &Item) -> bool {
 
 /// Layers with FRAME's Look tab (fill, border, corners): all but Lottie,
 /// video, empty groups and patterns.
+/// FRAME's info text for a section title (the ⓘ next to it), if any.
+/// `item` is the selected layer (some texts depend on its kind).
+pub fn group_help(
+    tab: Tab,
+    group: &str,
+    item: Option<&Item>,
+    board_hook: bool,
+) -> Option<&'static str> {
+    let svg_tint =
+        item.is_some_and(|i| i.item_type == Some(ItemType::Image) && i.svg_tint == Some(true));
+    Some(match (tab, group) {
+        (Tab::Scene, "Canvas") => "The viewport and exports use these dimensions immediately.",
+        (Tab::Scene, "SPX template") => {
+            "Metadata written into the SPX template JSON. Out can be a millisecond duration or the word manual. Prevent Toggle: play while already on-air does not stop the graphic."
+        }
+        (Tab::Scene, "BOARD") => "Obtain Magic ID from MENiAC's account page.",
+        (Tab::Scene, "Plates") => {
+            "Editor-only underlay plate behind your graphics. Never exported to OGraf / SPX / HTML."
+        }
+        (Tab::Scene, "Cues") => {
+            "Edit on the timeline (Pause / API / Script diamonds). Select a diamond for time, delay and type fields."
+        }
+        (Tab::Transform, "Live visibility") => {
+            "BOARD Hook key — match a BOARD bool variable or switch name (e.g. is_it_player_1_turn). Polls live JSON and shows/hides this layer. Enable Invert on the opposing arrow for the same bool."
+        }
+        (Tab::Look, "Image slot") => {
+            "Editor shows a placeholder only. The image is chosen in the OGraf / Air host (or SPX filelist) at playout."
+        }
+        (Tab::Look, "Fill") if svg_tint => {
+            "Fill is clipped to the SVG silhouette (same solid / gradient / image options as shapes)."
+        }
+        (Tab::Look, "Border") if svg_tint => {
+            "Follows the SVG silhouette (not the bounding box), like polygon stroke."
+        }
+        (Tab::Look, "Border") => {
+            "Timeline animates a uniform width (all sides). Enable the Border Width channel for keys. 4-sided mode is editor layout only."
+        }
+        (Tab::Text, "Text") if board_hook => {
+            "Display text is the editor default. Variable ID is the OGraf / SPX field id (and the live JSON key when BOARD Hook is on)."
+        }
+        (Tab::Text, "Text") => {
+            "Display text is the editor default. Variable ID is the OGraf / SPX field id."
+        }
+        (Tab::Chart, "Chart") => {
+            "Reveal 0–1: pie sweeps; bar/line values grow. Scrub-safe (no Chart.js tweens). Values accept decimals (e.g. 33.7)."
+        }
+        (Tab::Chart, "Data points") => {
+            "Values accept decimals (e.g. 33.7). With BOARD Hook on, optional Variable ID binds each point to a BOARD int/float counter or number key."
+        }
+        (Tab::Qr, "QR code") => {
+            "Fills the largest square inside the item box. Keep a quiet zone for reliable LED/wall scans."
+        }
+        (Tab::Particles, "Emitter") => {
+            "Simulation is deterministic from seed + timeline time. High rate × long lifetime costs more CPU. Absolute space: trail stays in place (enable Emitter X/Y and keyframe the path). Relative: whole cloud sticks to the emitter."
+        }
+        (Tab::Particles, "Look") => {
+            "Built-in sprites are white on black — best with Additive blend."
+        }
+        (Tab::Lightning, "Bolt") => {
+            "Seek-stable jagged bolt from A→B. Emitting is animatable (step/hold). Flicker reseed buckets by timeline time."
+        }
+        (Tab::Pattern, "Pattern") => {
+            "Seamless canvas fill. Phase is in cycles (1 = one full period) and wraps — keyframe 0→2 for two scrolls. Seek-stable."
+        }
+        (Tab::Lottie, "Lottie") => {
+            "Play-only clip. Drag the timeline Start key to set when the animation begins (one move-only key). Use Transform opacity/scale for ins and outs. Before start shows frame 0; without Loop, freezes on the last frame."
+        }
+        (Tab::Video, _) => {
+            "Play-only clip. Drag the timeline Start key to set when the clip begins (one move-only key). Use Transform opacity/scale for ins and outs. Before start shows frame 0; without Loop, freezes on the last frame."
+        }
+        (Tab::Modifiers, _) => {
+            "Modifiers apply in list order. Enable/disable with the checkbox. Hover the info icon on a modifier name for how that effect works."
+        }
+        _ => return None,
+    })
+}
+
 /// Fields shown only while the BOARD Hook is on (as in FRAME).
 pub fn needs_board_hook(path: &str) -> bool {
     matches!(
