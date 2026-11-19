@@ -125,7 +125,7 @@ impl Ui {
             auto_key: use_signal(|| false),
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),
-            status: use_signal(|| "Open a .frameproject.zip or .framepack.zip".to_string()),
+            status: use_signal(|| "Open a project or a FRAME pack (Open…), or start one (New)".to_string()),
             tab: use_signal(|| Tab::Transform),
             keys: use_signal(Vec::new),
             cue: use_signal(|| None),
