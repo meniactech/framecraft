@@ -1,6 +1,6 @@
 # FrameCraft editor design
 
-Status: draft for review, 2026-11-19. Decisions still open are listed at the end.
+Status: agreed, 2026-11-19. The decisions taken are listed at the end.
 
 FrameCraft's editor is a desktop app for building broadcast and web graphics on a timeline, in the spirit of After Effects: you see the frame, select and move things in it, and animate them with keyframes. Its output is FRAME's export formats (SPX, OGraf, HTML banner), which `framecraft-core` already writes byte-for-byte like FRAME.
 
@@ -169,7 +169,7 @@ User libraries live in the platform's data folder: `~/.local/share/framecraft` o
 
 ## Files
 
-- **Projects:** see open decision 1.
+- **Projects:** a project folder (decision 1): `Show.framecraft/` with `project.json`, `graphics/*.json`, `media/` and `.recovery/`.
 - **FRAME interop:** open `.frameproject.zip` and `.framepack.zip`, and save as both, through `framecraft-core::pack`.
 - **Export dialog:** SPX, OGraf, HTML banner, for one graphic or the whole project, with a list of any missing media before writing.
 - **Built-in assets** (fonts, particle sprites, SVG shapes, stock gradients and palettes, Noto emoji animations) ship with the app once their licenses are confirmed (see `THIRD_PARTY.md`). Until then they load from a FRAME checkout.
@@ -209,9 +209,11 @@ Each platform runs the reference test suite. Rendering differences between web e
 
 After M8, FrameCraft can replace FRAME in daily use, and frame.meniac.tech can be retired as planned.
 
-## Open decisions
+## Decisions
 
-1. **Project file format.** Recommended: a project folder (`Show.framecraft/` with `project.json`, one JSON file per graphic and a `media/` folder) that is easy to diff, back up and put under version control, and handles large videos without rewriting a ZIP on every save. The alternative is a single file (a `.frameproject.zip`-style archive): easier to email, slower with big media. Packs stay the exchange format either way.
-2. **Platform after Linux.** Recommended: Windows, as above.
-3. **Layout.** Recommended: FRAME's layout first, with docking later.
-4. **Keyboard shortcuts.** Keep FRAME's set, or align with After Effects where they differ.
+Taken 2026-11-19:
+
+1. **Project file format: a project folder.** `Show.framecraft/` holds `project.json`, one JSON file per graphic in `graphics/`, the media in `media/` and autosave copies in `.recovery/`. FRAME packs (`.frameproject.zip`, `.framepack.zip`) stay the exchange format.
+2. **Platform after Linux: Windows.**
+3. **Layout: FRAME's layout first,** with dockable panels later.
+4. **Keyboard shortcuts: FRAME's set,** extended as features arrive.
