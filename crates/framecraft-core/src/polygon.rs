@@ -407,7 +407,7 @@ pub fn path_d_to_points(d: &str) -> Option<(Vec<PolygonPoint>, bool)> {
                 last_q = None;
             }
             'M' => {
-                for (k, pair) in args.chunks_exact(2).enumerate() {
+                for (k, pair) in args.as_chunks::<2>().0.iter().enumerate() {
                     let (ox, oy) = if abs { (0.0, 0.0) } else { (cx, cy) };
                     let (x, y) = (pair[0] + ox, pair[1] + oy);
                     pts.push(pt(x, y));
@@ -653,7 +653,12 @@ pub fn svg_to_polygon(svg: &str, width: f64, height: f64) -> Option<(Vec<Polygon
             .split([' ', ',', '\n', '\t'])
             .filter_map(|v| v.trim().parse().ok())
             .collect();
-        let mut pts: Vec<PolygonPoint> = nums.chunks_exact(2).map(|c| pt(c[0], c[1])).collect();
+        let mut pts: Vec<PolygonPoint> = nums
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| pt(c[0], c[1]))
+            .collect();
         if pts.len() >= 4 && near(&pts[0], &pts[pts.len() - 1]) {
             pts.pop();
         }
