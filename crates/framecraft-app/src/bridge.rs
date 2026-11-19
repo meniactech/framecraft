@@ -113,11 +113,13 @@ if (!window.__fc) {
   // Pointer input on the viewport overlay, in scene coordinates. A press
   // first asks the page what is under it; moves arriving meanwhile wait,
   // so Rust always sees down, moves, up in order.
+  // The overlay reaches `data-margin` px past the graphic on every side.
   const scenePoint = (ov, e) => {
     const r = ov.getBoundingClientRect();
-    const w = parseFloat(ov.dataset.w) || r.width;
-    const s = r.width / w || 1;
-    return { x: (e.clientX - r.left) / s, y: (e.clientY - r.top) / s };
+    const m = parseFloat(ov.dataset.margin) || 0;
+    const w = parseFloat(ov.dataset.w) || r.width - 2 * m;
+    const s = (r.width - 2 * m) / w || 1;
+    return { x: (e.clientX - r.left - m) / s, y: (e.clientY - r.top - m) / s };
   };
   const pointerEvent = (kind, ov, e) => Object.assign(
     { type: 'pointer', kind, shift: e.shiftKey, alt: e.altKey, ctrl: e.ctrlKey || e.metaKey },

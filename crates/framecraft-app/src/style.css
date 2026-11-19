@@ -30,7 +30,7 @@ button.active { background: var(--accent); border-color: var(--accent); }
 .viewport { overflow: auto; display: flex; align-items: center; justify-content: center; padding: 16px; }
 .viewport .empty { color: var(--dim); }
 .stage {
-  position: relative; flex: none; overflow: hidden; box-shadow: 0 0 0 1px var(--line);
+  position: relative; flex: none; overflow: visible; box-shadow: 0 0 0 1px var(--line);
   background-color: #2a2d35;
   background-image: linear-gradient(45deg, #33363f 25%, transparent 25%), linear-gradient(-45deg, #33363f 25%, transparent 25%),
     linear-gradient(45deg, transparent 75%, #33363f 75%), linear-gradient(-45deg, transparent 75%, #33363f 75%);
@@ -82,8 +82,11 @@ button:disabled { opacity: .45; cursor: default; }
 /* Viewport overlay: selection and handles, drawn in scene units with
    strokes that stay 1 px on screen. */
 .stage iframe { pointer-events: none; }
-.overlay { position: absolute; inset: 0; z-index: 2; cursor: default; touch-action: none; }
-.overlay svg { display: block; overflow: visible; }
+.overlay { position: absolute; inset: -64px; z-index: 2; cursor: default; touch-action: none; }
+/* The overlay reaches 64 px past the graphic so handles near or beyond its
+   edges stay visible and can be grabbed; the drawing starts at that margin. */
+.overlay svg { position: absolute; left: 64px; top: 64px; display: block; overflow: visible; }
+.viewport { padding: 80px; }
 .overlay * { vector-effect: non-scaling-stroke; }
 .sel-outline { fill: none; stroke: var(--accent); stroke-width: 1.5px; }
 .sel-outline.locked { stroke: #8a90a0; stroke-dasharray: 5 4; }

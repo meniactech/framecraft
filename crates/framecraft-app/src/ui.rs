@@ -34,8 +34,8 @@ pub async fn fit(mut ui: Ui) {
         && s[0] > 0.0
     {
         ui.zoom.set(
-            ((s[0] - 32.0) / sw)
-                .min((s[1] - 32.0) / sh)
+            ((s[0] - 160.0) / sw)
+                .min((s[1] - 160.0) / sh)
                 .clamp(0.05, 2.0),
         );
     }
@@ -171,6 +171,10 @@ pub fn Viewport(ui: Ui) -> Element {
     }
 }
 
+/// How far (screen px) the overlay reaches past the graphic; matches
+/// `.overlay` in style.css.
+const OVERLAY_MARGIN: f64 = 64.0;
+
 /// Selection outline and handles over the preview. It also receives all
 /// pointer input on the stage (the bridge listens on `#fc-overlay`).
 #[component]
@@ -202,11 +206,16 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
     drop(editor);
     let hs = 8.0 / zoom;
     rsx! {
-        div { id: "fc-overlay", class: "overlay", "data-w": "{width}", "data-h": "{height}",
+        div {
+            id: "fc-overlay",
+            class: "overlay",
+            "data-w": "{width}",
+            "data-h": "{height}",
+            "data-margin": "{OVERLAY_MARGIN}",
             svg {
                 view_box: "0 0 {width} {height}",
-                width: "100%",
-                height: "100%",
+                width: "{width * zoom}",
+                height: "{height * zoom}",
                 if let Some((outline, handles, pivot, top, rotate, can_move)) = drawn {
                     polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }
                     if can_move {
