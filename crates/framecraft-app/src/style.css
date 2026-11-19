@@ -75,7 +75,7 @@ button:disabled { opacity: .45; cursor: default; }
 .auto-key.on { border-color: #ff5a5a; background: rgba(255, 90, 90, .15); }
 .auto-key.on .dot { background: #ff5a5a; }
 
-.timeline { display: grid; grid-template-rows: 36px auto 1fr; background: var(--panel); border-top: 1px solid var(--line); min-height: 0; }
+.timeline { display: grid; grid-template-rows: 36px auto 1fr; background: var(--panel); border-top: 1px solid var(--line); min-height: 0; min-width: 0; }
 .transport { display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--line); }
 .time { font-variant-numeric: tabular-nums; color: var(--dim); }
 .tl-body { overflow: auto; }
