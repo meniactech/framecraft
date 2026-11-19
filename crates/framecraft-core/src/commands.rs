@@ -137,18 +137,21 @@ impl Command for SetNumber {
     }
 }
 
-/// Sets a value at the playhead: a keyframe when the lane is animated
-/// (auto-key), otherwise the layer's own value.
+/// Sets a value at the playhead: a keyframe when the lane is animated or
+/// auto-key is on (which starts animating the lane), otherwise the layer's
+/// own value.
 pub struct SetValueAt {
     pub item: String,
     pub lane: String,
     pub time_ms: f64,
     pub value: f64,
+    /// The timeline's Auto-key switch.
+    pub auto_key: bool,
 }
 
 impl Command for SetValueAt {
     fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
-        if lane_keys(doc, &self.item, &self.lane).is_some() {
+        if self.auto_key || lane_keys(doc, &self.item, &self.lane).is_some() {
             SetKeyframe {
                 item: self.item.clone(),
                 lane: self.lane.clone(),
@@ -794,34 +797,32 @@ mod tests {
         assert_eq!(h.undo_label(), None);
     }
 
+    fn set_at(lane: &str, time_ms: f64, value: f64, auto_key: bool) -> SetValueAt {
+        SetValueAt {
+            item: "c".into(),
+            lane: lane.into(),
+            time_ms,
+            value,
+            auto_key,
+        }
+    }
+
     #[test]
-    fn auto_key_writes_a_keyframe_only_on_animated_lanes() {
+    fn edits_key_animated_lanes_or_with_auto_key() {
         let mut d = doc();
         let mut h = History::default();
-        h.execute(
-            &mut d,
-            &SetValueAt {
-                item: "c".into(),
-                lane: "x".into(),
-                time_ms: 500.0,
-                value: 7.0,
-            },
-        )
-        .unwrap();
+        // Animated lane: the edit becomes a keyframe.
+        h.execute(&mut d, &set_at("x", 500.0, 7.0, false)).unwrap();
         assert_eq!(lane_value(&d, "c", "x", 500.0), Some(7.0));
         assert_eq!(lane_keys(&d, "c", "x").unwrap().len(), 3);
-        h.execute(
-            &mut d,
-            &SetValueAt {
-                item: "c".into(),
-                lane: "y".into(),
-                time_ms: 500.0,
-                value: 9.0,
-            },
-        )
-        .unwrap();
+        // Not animated, auto-key off: the layer's own value changes.
+        h.execute(&mut d, &set_at("y", 500.0, 9.0, false)).unwrap();
         assert_eq!(d.items.iter().find(|i| i.id == "c").unwrap().y, 9.0);
         assert!(lane_keys(&d, "c", "y").is_none());
+        // Auto-key on: the first edit starts animating the lane.
+        h.execute(&mut d, &set_at("y", 800.0, 12.0, true)).unwrap();
+        assert_eq!(lane_keys(&d, "c", "y").unwrap().len(), 1);
+        assert_eq!(lane_value(&d, "c", "y", 0.0), Some(12.0));
     }
 
     #[test]

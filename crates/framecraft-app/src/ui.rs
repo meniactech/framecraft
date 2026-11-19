@@ -4,7 +4,7 @@
 use crate::bridge::{self, FRAME_A, FRAME_B};
 use crate::state::{Editor, Ui};
 use dioxus::prelude::*;
-use framecraft_core::commands::{SetText, SetValueAt};
+use framecraft_core::commands::{SetKeyframe, SetText, SetValueAt};
 use framecraft_core::model::{Item, ItemType};
 use framecraft_core::normalize::CLIP_START;
 use framecraft_core::timeline::{base_value, lane_value};
@@ -229,12 +229,38 @@ pub fn Properties(ui: Ui) -> Element {
                                 value: "{value}",
                                 onchange: move |evt| {
                                     if let Ok(v) = evt.value().parse::<f64>() {
-                                        ui.execute(&SetValueAt { item: id.clone(), lane: lane.to_string(), time_ms: (ui.time)(), value: v });
+                                        ui.execute(&SetValueAt {
+                                            item: id.clone(),
+                                            lane: lane.to_string(),
+                                            time_ms: (ui.time)(),
+                                            value: v,
+                                            auto_key: (ui.auto_key)(),
+                                        });
                                     }
                                 },
                             }
-                            if is_animated {
-                                span { class: "badge", title: "Animated: editing sets a keyframe at the playhead.", "◆" }
+                            {
+                                let id = id.clone();
+                                rsx! {
+                                    button {
+                                        class: if is_animated { "key-button animated" } else { "key-button" },
+                                        title: if is_animated {
+                                            "Animated. Click to set a keyframe at the playhead."
+                                        } else {
+                                            "Click to animate: sets the first keyframe at the playhead."
+                                        },
+                                        onclick: move |_| {
+                                            ui.execute(&SetKeyframe {
+                                                item: id.clone(),
+                                                lane: lane.to_string(),
+                                                time_ms: (ui.time)(),
+                                                value,
+                                                easing: None,
+                                            });
+                                        },
+                                        if is_animated { "◆" } else { "◇" }
+                                    }
+                                }
                             }
                         }
                     }
@@ -362,6 +388,16 @@ pub fn Timeline(ui: Ui) -> Element {
             div { class: "transport",
                 button { onclick: move |_| set_time(0.0), "⏮" }
                 button { onclick: toggle, if playing { "⏸ Pause" } else { "▶ Play" } }
+                button {
+                    class: if (ui.auto_key)() { "auto-key on" } else { "auto-key" },
+                    title: "Auto-key: every property edit writes a keyframe at the playhead",
+                    onclick: move |_| {
+                        let mut auto_key = ui.auto_key;
+                        auto_key.set(!auto_key());
+                    },
+                    span { class: "dot" }
+                    "Auto-key"
+                }
                 span { class: "time",
                     span { id: "fc-time", "{time / 1000.0:.2}" }
                     " s / {duration / 1000.0:.2} s"

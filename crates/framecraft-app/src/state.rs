@@ -40,6 +40,8 @@ pub struct Ui {
     pub time: Signal<f64>,
     pub playing: Signal<bool>,
     pub zoom: Signal<f64>,
+    /// Timeline Auto-key: every field edit writes a keyframe at the playhead.
+    pub auto_key: Signal<bool>,
     pub status: Signal<String>,
 }
 
@@ -55,6 +57,7 @@ impl Ui {
             time: use_signal(|| 0.0),
             playing: use_signal(|| false),
             zoom: use_signal(|| 0.5),
+            auto_key: use_signal(|| false),
             status: use_signal(|| "Open a .frameproject.zip or .framepack.zip".to_string()),
         }
     }
