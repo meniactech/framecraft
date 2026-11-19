@@ -41,6 +41,62 @@ pub struct Project {
     pub docs: Vec<Document>,
     /// Problems found while opening (missing files and the like).
     pub warnings: Vec<String>,
+    /// The active palette's colors (chart colors in previews and exports).
+    pub palette_colors: Vec<String>,
+}
+
+/// FrameCraft's data folder (user palettes and libraries):
+/// `~/.local/share/framecraft` on Linux (or `$XDG_DATA_HOME/framecraft`),
+/// `%APPDATA%\FrameCraft` on Windows, `~/Library/Application Support/FrameCraft`
+/// on macOS.
+pub fn data_dir() -> Option<PathBuf> {
+    let env = |k: &str| {
+        std::env::var_os(k)
+            .filter(|v| !v.is_empty())
+            .map(PathBuf::from)
+    };
+    if cfg!(windows) {
+        return env("APPDATA").map(|d| d.join("FrameCraft"));
+    }
+    if cfg!(target_os = "macos") {
+        return env("HOME").map(|h| h.join("Library/Application Support/FrameCraft"));
+    }
+    env("XDG_DATA_HOME")
+        .or_else(|| env("HOME").map(|h| h.join(".local/share")))
+        .map(|d| d.join("framecraft"))
+}
+
+/// Where the user's palettes are saved.
+pub fn palettes_path() -> Option<PathBuf> {
+    data_dir().map(|d| d.join("palettes.json"))
+}
+
+fn builtin_text(rel: &str) -> String {
+    builtin_dir()
+        .and_then(|d| std::fs::read_to_string(d.join(rel)).ok())
+        .unwrap_or_default()
+}
+
+/// FRAME's stock palettes (read once).
+pub fn stock_palettes() -> &'static [framecraft_core::palettes::Palette] {
+    static CACHE: std::sync::OnceLock<Vec<framecraft_core::palettes::Palette>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| {
+        framecraft_core::palettes::parse_stock_palettes(&builtin_text(
+            "palettes/stock-palettes.json",
+        ))
+    })
+}
+
+/// FRAME's stock gradients (read once).
+pub fn stock_gradients() -> &'static [framecraft_core::palettes::StockGradient] {
+    static CACHE: std::sync::OnceLock<Vec<framecraft_core::palettes::StockGradient>> =
+        std::sync::OnceLock::new();
+    CACHE.get_or_init(|| {
+        framecraft_core::palettes::parse_stock_gradients(&builtin_text(
+            "gradients/stock-gradients.json",
+        ))
+    })
 }
 
 /// Where built-in files live. Until FrameCraft ships its own, it uses
@@ -119,6 +175,7 @@ impl Project {
             },
             docs,
             warnings,
+            palette_colors: Vec::new(),
         })
     }
 
@@ -152,7 +209,7 @@ impl Project {
         ExportRequest {
             doc: &self.docs[index],
             graphic_name: self.graphic_name(index),
-            palette_colors: &[],
+            palette_colors: &self.palette_colors,
             user_fonts: &[],
             exported_at,
         }

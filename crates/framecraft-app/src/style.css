@@ -244,3 +244,27 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .point.handles { grid-template-columns: repeat(4, 1fr); padding-left: 30px; }
 .point .smooth { display: flex; align-items: center; gap: 3px; font-size: 11px; color: var(--dim); }
 .points .hint { margin: 0; font-size: 11px; }
+/* Palettes and stock gradients */
+.pick-dialog { width: min(820px, 90vw); max-height: 85vh; display: flex; flex-direction: column; padding: 12px; gap: 8px; -webkit-user-select: none; user-select: none; }
+.pick-list { overflow: auto; display: flex; flex-direction: column; gap: 6px; }
+.pick-row { border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; display: flex; flex-direction: column; gap: 6px; }
+.pick-row.active { border-color: var(--accent); }
+.pick-name { display: flex; align-items: center; gap: 8px; }
+.pick-name > span { flex: 1; font-weight: 600; }
+.pick-name input[type=text] { flex: 1; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
+.swatches, .swatch-row { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+.swatch-row { grid-column: 1 / -1; }
+.swatch-btn { width: 26px; height: 26px; padding: 0; border-radius: 4px; border: 1px solid var(--line);
+  background: linear-gradient(var(--sw), var(--sw)), repeating-conic-gradient(#888 0% 25%, #ccc 0% 50%) 50% / 8px 8px; }
+.swatch-btn.small { width: 16px; height: 16px; border-radius: 3px; }
+.swatch-btn:hover { border-color: #fff; }
+.swatch-stock { padding: 0 6px; font-size: 11px; height: 18px; }
+.swatch-edit { position: relative; display: inline-flex; }
+.swatch-edit input[type=color] { width: 30px; height: 26px; padding: 0; border: 1px solid var(--line); background: var(--bg); }
+.swatch-x { position: absolute; top: -6px; right: -6px; width: 14px; height: 14px; padding: 0; line-height: 12px; font-size: 10px; border-radius: 50%; display: none; }
+.swatch-edit:hover .swatch-x { display: block; }
+.swatch-add { width: 26px; height: 26px; padding: 0; }
+.gradient-grid { overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.gradient-tile { display: flex; flex-direction: column; gap: 4px; padding: 6px; text-align: left; font-size: 11px; }
+.gradient-strip { height: 28px; border-radius: 4px; }
+.ramp-stock { justify-self: start; font-size: 11px; padding: 2px 8px; }

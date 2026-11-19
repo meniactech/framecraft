@@ -66,6 +66,10 @@ pub struct Ui {
     pub copied: Signal<Vec<CopiedKey>>,
     /// The open media library dialog, if any.
     pub media: Signal<Option<MediaPick>>,
+    /// The user's palettes (saved in the data folder).
+    pub palettes: Signal<framecraft_core::palettes::UserPalettes>,
+    /// The Palettes dialog is open.
+    pub palette_dialog: Signal<bool>,
 }
 
 /// An open media library: what it lists and where the pick goes.
@@ -111,6 +115,34 @@ impl Ui {
             tl_zoom: use_signal(|| 0.1),
             copied: use_signal(Vec::new),
             media: use_signal(|| None),
+            palettes: use_signal(|| {
+                crate::project::palettes_path()
+                    .map(|p| framecraft_core::palettes::UserPalettes::load(&p))
+                    .unwrap_or_default()
+            }),
+            palette_dialog: use_signal(|| false),
+        }
+    }
+
+    /// Replaces the user's palettes: saves them, and when the active colors
+    /// change, rebuilds the preview (charts use them).
+    pub fn set_palettes(mut self, next: framecraft_core::palettes::UserPalettes) {
+        let before = self.palettes.peek().active_css();
+        if let Some(path) = crate::project::palettes_path()
+            && let Err(e) = next.save(&path)
+        {
+            self.set_status(format!("Could not save palettes: {e}"));
+        }
+        let colors = next.active_css();
+        self.palettes.set(next);
+        if colors != before {
+            let has = self.editor.peek().is_some();
+            if let Some(e) = self.editor.write().as_mut() {
+                e.project.palette_colors = colors;
+            }
+            if has {
+                self.rebuild();
+            }
         }
     }
 
@@ -127,7 +159,8 @@ impl Ui {
 
     pub fn open(mut self, path: PathBuf) {
         match Project::open(&path) {
-            Ok(project) => {
+            Ok(mut project) => {
+                project.palette_colors = self.palettes.peek().active_css();
                 let warnings = project.warnings.len();
                 self.set_status(format!(
                     "Opened {} ({} graphics){}",

@@ -301,6 +301,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         }
     });
     let text = as_text(&field.value);
+    let mut stock_open = use_signal(|| false);
     let default = if field.modifier.is_some() {
         modifiers::field_default(prop.group, prop.path)
     } else {
@@ -325,6 +326,29 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         Kind::Color => {
             let hex = color::parse(&text).map_or("#000000".to_string(), |c| c.hex());
             let current = text.clone();
+            // The active palette's colors, as FRAME's color picker shows them.
+            let swatches: Vec<(String, String)> = ui
+                .palettes
+                .read()
+                .active()
+                .map(|p| {
+                    p.colors
+                        .iter()
+                        .map(|c| {
+                            let tip = [
+                                c.label.clone().unwrap_or_default(),
+                                p.name.clone(),
+                                c.hex.clone(),
+                            ]
+                            .into_iter()
+                            .filter(|s| !s.is_empty())
+                            .collect::<Vec<_>>()
+                            .join(" · ");
+                            (framecraft_core::palettes::swatch_css(&c.hex, c.alpha), tip)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default();
             rsx! {
                 div { class: "color-field",
                     input {
@@ -340,6 +364,28 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                         r#type: "text",
                         value: "{text}",
                         onchange: move |evt| set(Value::from(evt.value().trim())),
+                    }
+                    div { class: "swatch-row",
+                        for (css , tip) in swatches {
+                            button {
+                                class: "swatch-btn small",
+                                title: "{tip}",
+                                style: "--sw: {css};",
+                                onclick: move |evt| {
+                                    evt.prevent_default();
+                                    set(Value::from(css.clone()));
+                                },
+                            }
+                        }
+                        button {
+                            class: "swatch-stock",
+                            title: "Select from a stock palette",
+                            onclick: move |evt| {
+                                evt.prevent_default();
+                                stock_open.set(true);
+                            },
+                            "Stock…"
+                        }
                     }
                 }
             }
@@ -538,6 +584,23 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
     };
 
+    // Outside the row's <label>: clicks in a dialog must not reach the
+    // label's color input.
+    let dialog = if stock_open() {
+        rsx! {
+            crate::palettes::StockPaletteDialog {
+                on_close: move |_| stock_open.set(false),
+                on_color: move |c: framecraft_core::palettes::PaletteColor| {
+                    stock_open.set(false);
+                    set(Value::from(framecraft_core::palettes::swatch_css(&c.hex, c.alpha)));
+                },
+                on_palette: None,
+            }
+        }
+    } else {
+        rsx! {}
+    };
+
     let wide = matches!(
         prop.kind,
         Kind::Ramp
@@ -551,6 +614,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     if wide {
         // A div, not a label: these hold several inputs and buttons.
         return rsx! {
+            {dialog}
             div { class: "field wide",
                 span { class: "field-label", "{prop.label}" }
                 {input}
@@ -558,6 +622,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         };
     }
     rsx! {
+        {dialog}
         label { class: "field",
             span { class: "field-label", "{prop.label}" }
             {input}
@@ -593,8 +658,24 @@ fn Ramp(value: Value, set: Callback<Value>) -> Element {
         ));
     };
     let count = stops.len();
+    let mut stock = use_signal(|| false);
     rsx! {
+        if stock() {
+            crate::palettes::StockGradientDialog {
+                on_close: move |_| stock.set(false),
+                on_pick: move |stops: Vec<framecraft_core::model::RampColor>| {
+                    stock.set(false);
+                    set(serde_json::to_value(stops).unwrap_or_default());
+                },
+            }
+        }
         div { class: "ramp",
+            button {
+                class: "ramp-stock",
+                title: "Replace the stops with a built-in gradient",
+                onclick: move |_| stock.set(true),
+                "Stock gradient…"
+            }
             for (i , (offset , c)) in stops.iter().cloned().enumerate() {
                 {
                     let (s1, s2, s3) = (stops.clone(), stops.clone(), stops.clone());

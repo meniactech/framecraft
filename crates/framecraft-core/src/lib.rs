@@ -23,6 +23,7 @@ pub mod model;
 pub mod modifiers;
 pub mod normalize;
 pub mod pack;
+pub mod palettes;
 pub mod polygon;
 pub mod preview;
 pub mod profile;

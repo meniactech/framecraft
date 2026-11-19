@@ -13,6 +13,7 @@ mod bridge;
 mod interact;
 mod media;
 mod outliner;
+mod palettes;
 mod preview;
 mod project;
 mod properties;
@@ -92,6 +93,7 @@ fn App() -> Element {
             }
             Timeline { ui }
             media::MediaDialog { ui }
+            palettes::PaletteManager { ui }
         }
     }
 }

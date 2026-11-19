@@ -116,6 +116,14 @@ pub fn Header(ui: Ui) -> Element {
                     "Save copy"
                 }
             }
+            button {
+                title: "Your color palettes (the active one shows under color fields and colors charts)",
+                onclick: move |_| {
+                    let mut open = ui.palette_dialog;
+                    open.set(true);
+                },
+                "Palettes"
+            }
             span { class: "status", "{ui.status}" }
         }
     }
