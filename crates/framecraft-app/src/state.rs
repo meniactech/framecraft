@@ -375,7 +375,8 @@ impl Ui {
             e.project.save_recovery()
         });
         match result {
-            Some(Ok(())) => status.set(format!("Autosaved {}", crate::project::now_iso().get(11..19).unwrap_or(""))),
+            Some(Ok(())) => status
+                .set("Autosaved (unsaved changes kept in the project's .recovery folder)".into()),
             Some(Err(e)) => status.set(format!("Not autosaved: {e}")),
             None => {}
         }
