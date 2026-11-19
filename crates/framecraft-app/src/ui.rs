@@ -273,8 +273,11 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 view_box: "0 0 {width} {height}",
                 width: "{width * zoom}",
                 height: "{height * zoom}",
+                // Other selected layers: a dark halo under a bright dashed
+                // line, readable on light and dark graphics.
                 for outline in others {
-                    polygon { class: "sel-outline other", points: "{outline}" }
+                    polygon { class: "sel-other-halo", points: "{outline}" }
+                    polygon { class: "sel-other", points: "{outline}" }
                 }
                 if let Some((outline, handles, pivot, top, rotate, can_move, marks)) = drawn {
                     polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }

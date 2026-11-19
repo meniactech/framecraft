@@ -451,4 +451,5 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .align-btn img { width: 16px; height: 16px; pointer-events: none; }
 .align-btn:nth-child(3) { margin-right: 6px; }
 .align-btn:disabled { opacity: .35; }
-.sel-outline.other { stroke-dasharray: 6 3; opacity: .85; }
+.sel-other-halo { fill: none; stroke: rgba(0, 0, 0, .65); stroke-width: 4px; }
+.sel-other { fill: rgba(79, 140, 255, .08); stroke: #7fb0ff; stroke-width: 2px; stroke-dasharray: 8 4; }
