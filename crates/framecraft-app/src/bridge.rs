@@ -314,6 +314,43 @@ if (!window.__fc) {
   };
   document.addEventListener('pointerup', endTl(true));
   document.addEventListener('pointercancel', endTl(false));
+  // Ruler scrub, with pointer capture so it follows the mouse anywhere.
+  // The page seeks at once; Rust hears the time once per frame.
+  document.addEventListener('pointerdown', (e) => {
+    const ruler = e.button === 0 && e.target && e.target.closest ? e.target.closest('[data-scrub]') : null;
+    if (!ruler) return;
+    e.preventDefault();
+    ruler.setPointerCapture(e.pointerId);
+    if (fc.playing) fc.stop(false);
+    const s = { el: ruler, pointer: e.pointerId, time: 0, sent: true, raf: null };
+    fc.scrub = s;
+    const at = (x) => {
+      const r = ruler.getBoundingClientRect();
+      const max = r.width / (fc.pxPerMs || 0.1);
+      return Math.min(max, Math.max(0, (x - r.left) / (fc.pxPerMs || 0.1)));
+    };
+    s.move = (x) => {
+      s.time = at(x);
+      fc.seek(s.time);
+      fc.drawPlayhead(s.time);
+      s.sent = false;
+      if (!s.raf) s.raf = requestAnimationFrame(() => { s.raf = null; if (!s.sent) { s.sent = true; tlEmit({ action: 'scrub', time: s.time }); } });
+    };
+    s.move(e.clientX);
+  });
+  document.addEventListener('pointermove', (e) => {
+    const s = fc.scrub;
+    if (s && e.pointerId === s.pointer) s.move(e.clientX);
+  });
+  const endScrub = (e) => {
+    const s = fc.scrub;
+    if (!s || e.pointerId !== s.pointer) return;
+    fc.scrub = null;
+    if (s.raf) cancelAnimationFrame(s.raf);
+    tlEmit({ action: 'scrub', time: s.time });
+  };
+  document.addEventListener('pointerup', endScrub);
+  document.addEventListener('pointercancel', endScrub);
   document.addEventListener('wheel', (e) => {
     if (!(e.ctrlKey || e.metaKey) || !e.target || !e.target.closest || !e.target.closest('.tl-body')) return;
     e.preventDefault();

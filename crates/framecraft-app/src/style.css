@@ -173,3 +173,10 @@ body.row-dragging, body.row-dragging * { cursor: grabbing !important; }
 .tl-cue.selected { box-shadow: 0 0 0 2px #fff; }
 .tl-box { position: absolute; border: 1px solid var(--accent); background: rgba(79, 140, 255, .15); pointer-events: none; z-index: 4; }
 .tl-hint { padding: 10px 12px; position: sticky; left: 0; width: max-content; }
+
+/* Panel chrome is not text: dragging never selects it. Fields still are. */
+.header, .viewport-panel, .side, .timeline { -webkit-user-select: none; user-select: none; }
+input, textarea { -webkit-user-select: text; user-select: text; }
+.ruler .track { cursor: ew-resize; touch-action: none; }
+.inspector { min-height: 34px; }
+.inspector > .dim { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

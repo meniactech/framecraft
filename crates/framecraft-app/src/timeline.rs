@@ -365,12 +365,8 @@ pub fn Timeline(ui: Ui) -> Element {
                         div {
                             class: "track",
                             style: "width:{width}px;",
-                            onmousedown: move |evt| ui.set_time(evt.element_coordinates().x / px),
-                            onmousemove: move |evt| {
-                                if evt.held_buttons().contains(dioxus::html::input_data::MouseButton::Primary) {
-                                    ui.set_time(evt.element_coordinates().x / px);
-                                }
-                            },
+                            // Scrubbed by the bridge (pointer capture), see `scrub`.
+                            "data-scrub": "1",
                             for s in (0..=seconds).step_by(tick_s) {
                                 div { class: "tick", style: "left:{s as f64 * 1000.0 * px}px;", "{s}s" }
                             }
@@ -521,7 +517,9 @@ fn Inspector(ui: Ui) -> Element {
     let cue_id = ui.cue.read().clone();
     let editor = ui.editor.read();
     let Some(doc) = editor.as_ref().map(|e| e.doc()) else {
-        return rsx! {};
+        return rsx! {
+            div { class: "inspector" }
+        };
     };
 
     if let Some(cue) = cue_id
@@ -616,7 +614,12 @@ fn Inspector(ui: Ui) -> Element {
         .collect();
     drop(editor);
     if keys.is_empty() {
-        return rsx! {};
+        // Always there, so the timeline does not jump when keys get selected.
+        return rsx! {
+            div { class: "inspector",
+                span { class: "dim", "Select a key or cue to edit its time, value and easing. Shift+click or drag on empty track space to select more." }
+            }
+        };
     }
     let easing = if keys.iter().all(|k| k.2 == keys[0].2) {
         keys[0].2.clone()
@@ -932,6 +935,12 @@ pub fn on_event(ui: Ui, ev: &Value) {
                 path: "time".into(),
                 value: json!((from + delta).max(0.0)),
             });
+        }
+        // Ruler scrub: the bridge already moved the playhead and the page.
+        Some("scrub") => {
+            if let Some(t) = ev["time"].as_f64() {
+                ui.set_time(t);
+            }
         }
         Some("zoom") => zoom(ui, ev["factor"].as_f64().unwrap_or(1.0)),
         _ => {}
