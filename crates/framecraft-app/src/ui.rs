@@ -47,21 +47,25 @@ pub fn Header(ui: Ui) -> Element {
         None => (Vec::new(), 0, None, None),
     };
     let has_project = !graphics.is_empty();
+    let dirty = (ui.dirty)();
 
     rsx! {
         div { class: "header",
             span { class: "brand", "FrameCraft" }
-            label { class: "button",
+            button { title: "A new project with one empty graphic", onclick: move |_| ui.new_project(), "New" }
+            button {
+                title: "Open a FrameCraft project (its project.json) or a FRAME pack (.frameproject.zip / .framepack.zip)",
+                onclick: move |_| ui.open_dialog(),
                 "Open…"
-                input {
-                    r#type: "file",
-                    accept: ".zip",
-                    onchange: move |evt| {
-                        if let Some(file) = evt.files().first() {
-                            ui.open(file.path());
-                        }
-                    },
+            }
+            if has_project {
+                button {
+                    class: if dirty { "save dirty" } else { "save" },
+                    title: "Save the project folder (Ctrl+S)",
+                    onclick: move |_| ui.save(),
+                    if dirty { "Save •" } else { "Save" }
                 }
+                button { title: "Save as a new FrameCraft project folder", onclick: move |_| ui.save_as(), "Save as…" }
             }
             if has_project {
                 select {
@@ -95,16 +99,9 @@ pub fn Header(ui: Ui) -> Element {
                     "Export…"
                 }
                 button {
-                    onclick: move |_| {
-                        let mut status = ui.status;
-                        let result = ui.editor.read().as_ref().map(|e| e.project.save_copy());
-                        match result {
-                            Some(Ok(path)) => status.set(format!("Saved {}", path.display())),
-                            Some(Err(e)) => status.set(e),
-                            None => {}
-                        }
-                    },
-                    "Save copy"
+                    title: "Write the project as a FRAME project pack (.frameproject.zip), to open in FRAME",
+                    onclick: move |_| ui.export_pack(),
+                    "Export FRAME pack…"
                 }
             }
             button {

@@ -363,6 +363,82 @@ impl Project {
     }
 }
 
+/// FRAME's empty graphic (`createDefaultSceneState`): a 1920 × 1080
+/// "Main Scene" with a transparent background and no layers.
+pub fn new_graphic(profile: &Profile) -> Document {
+    let g: Graphic = serde_json::from_value(serde_json::json!({
+        "scene": {
+            "id": "scene", "name": "Main Scene", "backgroundColor": "rgba(255, 255, 255, 0)",
+            "width": 1920, "height": 1080,
+            "spxDescription": "MENiAC FRAME template", "spxPlayserver": "OVERLAY",
+            "spxPlaychannel": 1, "spxPlaylayer": 2, "spxWebplayout": 2, "spxOut": "manual",
+            "spxDataformat": "json", "spxUicolor": 1, "spxPreventToggle": true,
+            "ionboardHookEnabled": false, "ionboardPanelEnabled": false,
+            "ionboardMagicId": "", "ionboardProjectId": "",
+            "fakeBackgroundEnabled": false, "fakeBackgroundSource": "builtin",
+            "fakeBackgroundBuiltinId": "news-room", "fakeBackgroundMediaUrl": "",
+            "fakeBackgroundOpacity": 100, "fakeBackgroundBlur": 0
+        },
+        "items": []
+    }))
+    .expect("default scene matches the model");
+    normalize(&g, profile)
+}
+
+/// Saves a project held in memory into the folder `dir`: graphics, the
+/// project file and every media file (written when missing or changed).
+/// `dir` must be new, empty or already a FrameCraft project.
+pub fn save_folder(
+    dir: &Path,
+    name: &str,
+    graphics: Vec<ProjectGraphic>,
+    media: &[crate::pack::PackedMedia],
+) -> Result<Project, ProjectError> {
+    if !dir.join(PROJECT_FILE).is_file() {
+        Project::check_empty(dir)?;
+    }
+    let mut entries = Vec::new();
+    for m in media {
+        let rel = m.entry.path.trim_start_matches('/');
+        if rel.is_empty() || rel.split('/').any(|part| part == ".." || part.is_empty()) {
+            continue;
+        }
+        let target = dir.join(rel);
+        let same = std::fs::read(&target).is_ok_and(|b| b == m.bytes);
+        if !same {
+            write_atomic(&target, &m.bytes)?;
+        }
+        entries.push(PackMediaEntry {
+            path: rel.to_string(),
+            ..m.entry.clone()
+        });
+    }
+    let p = Project {
+        dir: dir.to_path_buf(),
+        name: name.to_string(),
+        graphics,
+        media: entries,
+    };
+    p.save()?;
+    Ok(p)
+}
+
+impl Project {
+    /// The project's media files with their bytes (missing files skipped).
+    pub fn media_files(&self) -> Vec<crate::pack::PackedMedia> {
+        self.media
+            .iter()
+            .filter(|e| !e.path.split('/').any(|part| part == ".."))
+            .filter_map(|e| {
+                Some(crate::pack::PackedMedia {
+                    entry: e.clone(),
+                    bytes: std::fs::read(self.dir.join(&e.path)).ok()?,
+                })
+            })
+            .collect()
+    }
+}
+
 impl MediaSource for Project {
     fn read(&self, url: &str) -> Option<Vec<u8>> {
         let wanted = crate::pack::normalize_pack_url(url);
@@ -505,5 +581,42 @@ mod tests {
             Project::open(&tmp.0, &Profile::framecraft()),
             Err(ProjectError::NewerVersion(99))
         ));
+    }
+
+    #[test]
+    fn save_folder_writes_media_and_reopens() {
+        let tmp = TempDir::new("savefolder");
+        let dir = tmp.0.join("Show.framecraft");
+        let doc = new_graphic(&Profile::framecraft());
+        assert_eq!(
+            (doc.scene.width, doc.scene.name.as_str()),
+            (1920.0, "Main Scene")
+        );
+        let media = vec![crate::pack::PackedMedia {
+            entry: PackMediaEntry {
+                url: "/media/images/a.png".into(),
+                path: "media/images/a.png".into(),
+                category: "images".into(),
+                original_name: Some("a.png".into()),
+                font_family: None,
+            },
+            bytes: vec![1, 2, 3],
+        }];
+        let g = vec![ProjectGraphic {
+            id: "gfx_1".into(),
+            name: "Main".into(),
+            doc,
+        }];
+        save_folder(&dir, "Show", g.clone(), &media).unwrap();
+        // Saving again over the same project is fine.
+        save_folder(&dir, "Show", g, &media).unwrap();
+        let back = Project::open(&dir, &Profile::framecraft()).unwrap();
+        assert_eq!(back.name, "Show");
+        assert_eq!(back.media_files()[0].bytes, vec![1, 2, 3]);
+        // A folder with other things in it is refused.
+        let other = tmp.0.join("other");
+        std::fs::create_dir_all(&other).unwrap();
+        std::fs::write(other.join("x.txt"), "x").unwrap();
+        assert!(save_folder(&other, "X", Vec::new(), &[]).is_err());
     }
 }

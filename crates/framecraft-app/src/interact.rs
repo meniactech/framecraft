@@ -535,6 +535,8 @@ fn key(ui: Ui, key: &str, shift: bool) {
         "Escape" => ui.select_layer(None),
         "Delete" | "Backspace" => ui.delete_selected(),
         "duplicate" => ui.duplicate_selected(),
+        "save" => ui.save(),
+        "save-as" => ui.save_as(),
         "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" => {
             let step = if shift { 10.0 } else { 1.0 };
             let (dx, dy) = match key {

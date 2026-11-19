@@ -86,6 +86,30 @@ fn App() -> Element {
         bridge::events(move |ev| interact::on_event(ui, ev)).await;
     });
 
+    // Autosave: unsaved changes go to the project folder's `.recovery/`
+    // every 30 seconds.
+    use_future(move || async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(30)).await;
+            ui.autosave();
+        }
+    });
+
+    // Window title: project name, and • for unsaved changes.
+    use_effect(move || {
+        let name = ui
+            .editor
+            .read()
+            .as_ref()
+            .map(|e| e.project.name().to_string());
+        let mark = if (ui.dirty)() { "• " } else { "" };
+        let title = match name {
+            Some(n) => format!("{mark}{n} — FrameCraft"),
+            None => "FrameCraft".to_string(),
+        };
+        dioxus::desktop::window().set_title(&title);
+    });
+
     rsx! {
         div { class: "app",
             Header { ui }
@@ -102,7 +126,44 @@ fn App() -> Element {
             motions::MotionDialog { ui }
             components::ComponentNameDialog { ui }
             components::ComponentLibraryDialog { ui }
+            RecoveryPrompt { ui }
             script_editor::ScriptEditor { ui }
+        }
+    }
+}
+
+/// Asks whether to restore the autosave copy found when opening a project.
+#[component]
+fn RecoveryPrompt(ui: Ui) -> Element {
+    let Some(dir) = (ui.recovery)() else {
+        return rsx! {};
+    };
+    rsx! {
+        div { class: "modal-backdrop",
+            div { class: "modal motion-dialog small",
+                div { class: "modal-head",
+                    div {
+                        span { class: "panel-title", "Unsaved changes found" }
+                        p { class: "dim",
+                            "FrameCraft autosaved changes to this project that were never saved (the app closed or crashed): {dir.display()}"
+                        }
+                    }
+                }
+                div { class: "motion-foot",
+                    span {}
+                    button {
+                        title: "Delete the autosave and keep the saved project",
+                        onclick: move |_| ui.resolve_recovery(false),
+                        "Discard"
+                    }
+                    button {
+                        class: "active",
+                        title: "Open the autosaved version (save to keep it)",
+                        onclick: move |_| ui.resolve_recovery(true),
+                        "Restore"
+                    }
+                }
+            }
         }
     }
 }

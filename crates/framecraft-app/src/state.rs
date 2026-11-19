@@ -74,6 +74,10 @@ pub struct Ui {
     pub motion_dialog: Signal<Option<&'static str>>,
     /// The user's saved motions (data folder).
     pub user_motions: Signal<framecraft_core::motion::UserMotions>,
+    /// Edits not saved yet.
+    pub dirty: Signal<bool>,
+    /// A project folder whose autosave copy waits for Restore / Discard.
+    pub recovery: Signal<Option<PathBuf>>,
     /// The user's components (data folder).
     pub user_components: Signal<framecraft_core::components::UserComponents>,
     /// Make Component waiting for its name.
@@ -140,6 +144,8 @@ impl Ui {
                     .unwrap_or_default()
             }),
             pending_component: use_signal(|| None),
+            dirty: use_signal(|| false),
+            recovery: use_signal(|| None),
             component_library: use_signal(|| false),
             script_editor: use_signal(|| false),
             user_motions: use_signal(|| {
@@ -193,50 +199,227 @@ impl Ui {
             .map_or(10_000.0, |e| e.doc().timeline.duration.max(1.0))
     }
 
+    /// Opens a FRAME pack or a FrameCraft project folder (or its
+    /// `project.json`). A folder with an autosave copy asks to restore it.
     pub fn open(mut self, path: PathBuf) {
-        match Project::open(&path) {
-            Ok(mut project) => {
-                project.palette_colors = self.palettes.peek().active_css();
-                let warnings = project.warnings.len();
-                self.set_status(format!(
-                    "Opened {} ({} graphics){}",
-                    project.name(),
-                    project.docs.len(),
-                    if warnings > 0 {
-                        format!(", {warnings} warnings")
-                    } else {
-                        String::new()
-                    }
-                ));
-                let histories = project.docs.iter().map(|_| History::default()).collect();
-                let files = project.media_files();
-                STORE.with(|s| {
-                    s.borrow_mut()
-                        .set_library(files, crate::project::builtin_dir())
-                });
-                self.editor.set(Some(Editor {
-                    project,
-                    graphic: 0,
-                    selected: None,
-                    histories,
-                    preview: None,
-                }));
-                self.time.set(0.0);
-                self.playing.set(false);
-                self.rebuild();
-                spawn(async move {
-                    tokio::time::sleep(Duration::from_millis(150)).await;
-                    crate::ui::fit(self).await;
-                });
-                if debug() {
-                    spawn(async {
-                        tokio::time::sleep(Duration::from_millis(3000)).await;
-                        eprintln!("[bridge] {:?}", bridge::stats().await);
-                    });
+        match Project::open_any(&path) {
+            Ok(project) => {
+                let recovery = project.has_recovery().then(|| project.path.clone());
+                self.install(project, "Opened");
+                if let Some(dir) = recovery {
+                    self.recovery.set(Some(dir));
                 }
             }
             Err(e) => self.set_status(e),
         }
+    }
+
+    /// A new, unsaved project with one empty graphic.
+    pub fn new_project(self) {
+        self.install(Project::new_empty("Untitled"), "New project");
+        let mut dirty = self.dirty;
+        dirty.set(true);
+    }
+
+    /// Restores (`true`) or discards the autosave copy found when opening.
+    pub fn resolve_recovery(mut self, restore: bool) {
+        let Some(dir) = self.recovery.peek().clone() else {
+            return;
+        };
+        self.recovery.set(None);
+        if restore {
+            match Project::open_folder(&dir, true) {
+                Ok(project) => {
+                    self.install(project, "Restored unsaved changes of");
+                    let mut dirty = self.dirty;
+                    dirty.set(true);
+                }
+                Err(e) => self.set_status(format!("Could not restore: {e}")),
+            }
+        } else if let Err(e) = framecraft_core::project::Project::discard_recovery(&dir) {
+            self.set_status(format!("Could not discard the autosave: {e}"));
+        }
+    }
+
+    fn install(mut self, mut project: Project, verb: &str) {
+        project.palette_colors = self.palettes.peek().active_css();
+        let warnings = project.warnings.len();
+        self.set_status(format!(
+            "{verb} {} ({} graphics){}",
+            project.name(),
+            project.docs.len(),
+            if warnings > 0 {
+                format!(", {warnings} warnings")
+            } else {
+                String::new()
+            }
+        ));
+        let histories = project.docs.iter().map(|_| History::default()).collect();
+        let files = project.media_files();
+        STORE.with(|s| {
+            s.borrow_mut()
+                .set_library(files, crate::project::builtin_dir())
+        });
+        self.editor.set(Some(Editor {
+            project,
+            graphic: 0,
+            selected: None,
+            histories,
+            preview: None,
+        }));
+        self.dirty.set(false);
+        self.time.set(0.0);
+        self.playing.set(false);
+        self.rebuild();
+        spawn(async move {
+            tokio::time::sleep(Duration::from_millis(150)).await;
+            crate::ui::fit(self).await;
+        });
+        if debug() {
+            spawn(async {
+                tokio::time::sleep(Duration::from_millis(3000)).await;
+                eprintln!("[bridge] {:?}", bridge::stats().await);
+            });
+        }
+    }
+
+    /// Saves to the project folder; a project without one (opened from a
+    /// FRAME pack, or new) asks where first.
+    pub fn save(self) {
+        let folder = self
+            .editor
+            .peek()
+            .as_ref()
+            .and_then(|e| e.project.folder.clone());
+        match folder {
+            Some(dir) => self.save_into(dir),
+            None => self.save_as(),
+        }
+    }
+
+    /// Asks for a project folder (`Name.framecraft`) and saves there.
+    pub fn save_as(self) {
+        let Some((name, start)) = self
+            .editor
+            .peek()
+            .as_ref()
+            .map(|e| (e.project.name().to_string(), e.project.folder()))
+        else {
+            return;
+        };
+        spawn(async move {
+            let file = format!(
+                "{}.framecraft",
+                framecraft_core::export::names::file_base_name(&name, "Project")
+            );
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Save FrameCraft project")
+                .set_directory(&start)
+                .set_file_name(&file)
+                .save_file()
+                .await;
+            if let Some(h) = picked {
+                let mut dir = h.path().to_path_buf();
+                if dir.extension().is_none() {
+                    dir.set_extension("framecraft");
+                }
+                self.save_into(dir);
+            }
+        });
+    }
+
+    fn save_into(mut self, dir: PathBuf) {
+        // Some file-chooser portals create an empty file at the chosen
+        // path; the project is a folder there.
+        if dir.is_file() && std::fs::metadata(&dir).is_ok_and(|m| m.len() == 0) {
+            let _ = std::fs::remove_file(&dir);
+        }
+        let result = self
+            .editor
+            .write()
+            .as_mut()
+            .map(|e| e.project.save_to(&dir));
+        match result {
+            Some(Ok(())) => {
+                self.dirty.set(false);
+                self.set_status(format!("Saved {}", dir.display()));
+            }
+            Some(Err(e)) => self.set_status(format!("Could not save: {e}")),
+            None => {}
+        }
+    }
+
+    /// Writes the autosave copy when there are unsaved changes.
+    pub fn autosave(self) {
+        if !*self.dirty.peek() {
+            return;
+        }
+        if let Some(Err(e)) = self
+            .editor
+            .peek()
+            .as_ref()
+            .map(|e| e.project.save_recovery())
+        {
+            let mut status = self.status;
+            status.set(format!("Autosave failed: {e}"));
+        }
+    }
+
+    /// Asks where to write a FRAME project pack (`.frameproject.zip`).
+    pub fn export_pack(self) {
+        let Some((name, start, bytes)) = self.editor.peek().as_ref().map(|e| {
+            (
+                e.project.name().to_string(),
+                e.project.folder(),
+                e.project.export_pack(),
+            )
+        }) else {
+            return;
+        };
+        let mut status = self.status;
+        let bytes = match bytes {
+            Ok(b) => b,
+            Err(e) => {
+                status.set(format!("Could not build the pack: {e}"));
+                return;
+            }
+        };
+        spawn(async move {
+            let file = format!(
+                "{}.frameproject.zip",
+                framecraft_core::export::names::file_base_name(&name, "project")
+            );
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Export FRAME project pack")
+                .set_directory(&start)
+                .set_file_name(&file)
+                .add_filter("FRAME project pack", &["zip"])
+                .save_file()
+                .await;
+            if let Some(h) = picked {
+                let path = h.path().to_path_buf();
+                match std::fs::write(&path, &bytes) {
+                    Ok(()) => status.set(format!("Exported {}", path.display())),
+                    Err(e) => status.set(format!("Could not write {}: {e}", path.display())),
+                }
+            }
+        });
+    }
+
+    /// The open dialog: a FrameCraft project (its project.json) or a FRAME pack.
+    pub fn open_dialog(self) {
+        spawn(async move {
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("Open project")
+                .add_filter("FrameCraft project or FRAME pack", &["json", "zip"])
+                .add_filter("FrameCraft project (project.json)", &["json"])
+                .add_filter("FRAME pack", &["zip"])
+                .pick_file()
+                .await;
+            if let Some(h) = picked {
+                self.open(h.path().to_path_buf());
+            }
+        });
     }
 
     pub fn select_graphic(mut self, index: usize) {
@@ -325,6 +508,9 @@ impl Ui {
 
     /// Brings the preview in line after a change.
     fn show(mut self, change: Change) {
+        if !*self.dirty.peek() {
+            self.dirty.set(true);
+        }
         let update = self.editor.write().as_mut().and_then(|e| {
             let prev = e.preview.as_ref()?;
             let (update, state) = e.project.preview_update(e.graphic, prev, &change);
@@ -413,9 +599,12 @@ impl Ui {
                 }
             }
         }
+        if added > 0 {
+            self.dirty.set(true);
+        }
         if problems.is_empty() {
             self.set_status(format!(
-                "Imported {added} file{}. Saving keeps the files that layers use.",
+                "Imported {added} file{}. Saving keeps them in the project folder.",
                 if added == 1 { "" } else { "s" }
             ));
         } else {

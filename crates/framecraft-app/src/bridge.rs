@@ -360,6 +360,13 @@ if (!window.__fc) {
   // Editor keys, outside text fields.
   document.addEventListener('keydown', (e) => {
     const t = e.target;
+    // Ctrl+S saves from anywhere; a field being edited commits first (blur).
+    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') {
+      e.preventDefault();
+      if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
+      setTimeout(() => fc.emit({ type: 'key', key: e.shiftKey ? 'save-as' : 'save', shift: e.shiftKey }), 0);
+      return;
+    }
     if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.tagName === 'SELECT' || t.isContentEditable)) return;
     const k = e.key;
     const mod = e.ctrlKey || e.metaKey;

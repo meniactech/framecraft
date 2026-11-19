@@ -35,7 +35,10 @@ impl MediaSource for ProjectMedia {
 }
 
 pub struct Project {
+    /// Where it was opened from: a FRAME pack or a project folder.
     pub path: PathBuf,
+    /// The FrameCraft project folder it saves to (`None` until saved as one).
+    pub folder: Option<PathBuf>,
     pub media: ProjectMedia,
     /// One per graphic in the pack, in pack order.
     pub docs: Vec<Document>,
@@ -205,6 +208,7 @@ impl Project {
             .collect();
         Ok(Self {
             path: path.to_path_buf(),
+            folder: None,
             media: ProjectMedia {
                 pack,
                 builtin_dir: builtin_dir(),
@@ -213,6 +217,131 @@ impl Project {
             warnings,
             palette_colors: Vec::new(),
         })
+    }
+
+    /// Opens a pack, a project folder, or a folder's `project.json`.
+    pub fn open_any(path: &Path) -> Result<Self, String> {
+        match project_dir(path) {
+            Some(dir) => Self::open_folder(&dir, false),
+            None => Self::open(path),
+        }
+    }
+
+    /// Opens a FrameCraft project folder (or its autosave copy).
+    pub fn open_folder(dir: &Path, recovery: bool) -> Result<Self, String> {
+        use framecraft_core::project::Project as Folder;
+        let profile = Profile::framecraft();
+        let p = if recovery {
+            Folder::open_recovery(dir, &profile)
+        } else {
+            Folder::open(dir, &profile)
+        }
+        .map_err(|e| e.to_string())?;
+        // Media always come from the saved folder (the autosave has none).
+        let media = Folder::open(dir, &profile)
+            .map(|saved| saved.media_files())
+            .unwrap_or_else(|_| p.media_files());
+        let pack = ProjectPack {
+            name: p.name.clone(),
+            exported_at: String::new(),
+            graphics: p
+                .graphics
+                .iter()
+                .map(|g| framecraft_core::pack::PackedGraphic {
+                    id: g.id.clone(),
+                    name: g.name.clone(),
+                    graphic: g.doc.to_graphic(),
+                    thumbnail: None,
+                })
+                .collect(),
+            media,
+            thumbnail: None,
+        };
+        Ok(Self {
+            path: dir.to_path_buf(),
+            folder: Some(dir.to_path_buf()),
+            media: ProjectMedia {
+                pack,
+                builtin_dir: builtin_dir(),
+            },
+            docs: p.graphics.into_iter().map(|g| g.doc).collect(),
+            warnings: Vec::new(),
+            palette_colors: Vec::new(),
+        })
+    }
+
+    /// A new project (not saved yet) with one empty graphic, as FRAME's
+    /// "Empty" template.
+    pub fn new_empty(name: &str) -> Self {
+        let doc = framecraft_core::project::new_graphic(&Profile::framecraft());
+        let pack = ProjectPack {
+            name: name.to_string(),
+            exported_at: String::new(),
+            graphics: vec![framecraft_core::pack::PackedGraphic {
+                id: framecraft_core::project::new_graphic_id(),
+                name: "Main".into(),
+                graphic: doc.to_graphic(),
+                thumbnail: None,
+            }],
+            media: Vec::new(),
+            thumbnail: None,
+        };
+        let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
+        Self {
+            path: home.join(format!("{name}.framecraft")),
+            folder: None,
+            media: ProjectMedia {
+                pack,
+                builtin_dir: builtin_dir(),
+            },
+            docs: vec![doc],
+            warnings: Vec::new(),
+            palette_colors: Vec::new(),
+        }
+    }
+
+    fn folder_graphics(&self) -> Vec<framecraft_core::project::ProjectGraphic> {
+        self.media
+            .pack
+            .graphics
+            .iter()
+            .zip(&self.docs)
+            .map(|(g, doc)| framecraft_core::project::ProjectGraphic {
+                id: g.id.clone(),
+                name: g.name.clone(),
+                doc: doc.clone(),
+            })
+            .collect()
+    }
+
+    /// Saves as a FrameCraft project folder (`dir`), which becomes where
+    /// this project saves. Clears the autosave copy.
+    pub fn save_to(&mut self, dir: &Path) -> Result<(), String> {
+        framecraft_core::project::save_folder(
+            dir,
+            self.name(),
+            self.folder_graphics(),
+            &self.media.pack.media,
+        )
+        .map_err(|e| e.to_string())?;
+        self.folder = Some(dir.to_path_buf());
+        self.path = dir.to_path_buf();
+        Ok(())
+    }
+
+    /// Writes the autosave copy (`.recovery/` in the project folder).
+    pub fn save_recovery(&self) -> Result<(), String> {
+        let Some(dir) = &self.folder else {
+            return Ok(());
+        };
+        framecraft_core::project::Project {
+            dir: dir.clone(),
+            name: self.name().to_string(),
+            graphics: self.folder_graphics(),
+            media: Vec::new(),
+        }
+        .save_recovery()
+        .map_err(|e| e.to_string())
     }
 
     pub fn name(&self) -> &str {
@@ -322,8 +451,15 @@ impl Project {
             .map_or_else(|| PathBuf::from("."), Path::to_path_buf)
     }
 
-    /// Saves the project, with edits, as a new pack next to the original.
-    pub fn save_copy(&self) -> Result<PathBuf, String> {
+    /// Whether the project folder has an autosave copy.
+    pub fn has_recovery(&self) -> bool {
+        self.folder
+            .as_deref()
+            .is_some_and(framecraft_core::project::Project::has_recovery)
+    }
+
+    /// The project as a FRAME project pack (`.frameproject.zip` bytes).
+    pub fn export_pack(&self) -> Result<Vec<u8>, String> {
         let sources: Vec<PackSource> = self
             .media
             .pack
@@ -338,26 +474,19 @@ impl Project {
             })
             .collect();
         let pkg = write_project_pack(self.name(), &sources, &self.media, &[], None, &now_iso());
-        let stem = self
-            .path
-            .file_name()
-            .and_then(|n| n.to_str())
-            .unwrap_or("project");
-        let stem = stem
-            .trim_end_matches(".zip")
-            .trim_end_matches(".frameproject")
-            .trim_end_matches(".framepack");
-        self.write_next_to_project(&format!("{stem}-edited.frameproject.zip"), &pkg)
+        pkg.to_zip().map_err(|e| e.to_string())
     }
+}
 
-    fn write_next_to_project(&self, file: &str, pkg: &Package) -> Result<PathBuf, String> {
-        let dir = self.path.parent().unwrap_or(Path::new("."));
-        let target = dir.join(file.replace(['/', '\\'], "_"));
-        let bytes = pkg.to_zip().map_err(|e| e.to_string())?;
-        std::fs::write(&target, bytes)
-            .map_err(|e| format!("Could not write {}: {e}", target.display()))?;
-        Ok(target)
+/// The project folder `path` points at: the folder itself or its
+/// `project.json`; `None` for anything else (a pack).
+pub fn project_dir(path: &Path) -> Option<PathBuf> {
+    if path.is_dir() {
+        return Some(path.to_path_buf());
     }
+    (path.file_name()? == framecraft_core::project::PROJECT_FILE)
+        .then(|| path.parent().map(Path::to_path_buf))
+        .flatten()
 }
 
 /// Current UTC time as `2026-01-01T12:00:00.000Z`.

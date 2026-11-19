@@ -389,3 +389,4 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .tab.active { background: var(--panel-2); border-color: var(--line); }
 .tab-icon { width: 20px; height: 20px; object-fit: contain; opacity: .7; pointer-events: none; }
 .tab.active .tab-icon { opacity: 1; }
+.save.dirty { border-color: var(--key); color: var(--key); }
