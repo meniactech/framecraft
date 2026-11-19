@@ -10,6 +10,7 @@
 //! files this crate writes stay compatible with SPX, OGraf hosts,
 //! MENiAC Air and BOARD.
 
+pub mod commands;
 pub mod easing;
 pub mod export;
 pub mod js;
