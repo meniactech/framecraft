@@ -331,6 +331,11 @@ pub fn ograf_manifest(
         webplayout = "2".into();
     }
 
+    let pauses = pause_times_ms(t);
+    let total = duration_ms(t);
+    let in_duration = pauses.first().copied().unwrap_or(total);
+    let out_duration = pauses.last().map_or(0.0, |last| total - last);
+
     let mut m = Map::new();
     m.insert("$schema".into(), OGRAF_SCHEMA_URL.into());
     m.insert(
@@ -372,6 +377,10 @@ pub fn ograf_manifest(
             "out": d.out,
             "uicolor": d.uicolor,
             "preventToggle": prevent_toggle,
+            // SPX's OGraf check: supportsNonRealTime needs these. The runtime
+            // plays 0 → first pause on Play and last pause → end on Stop.
+            "inDuration": in_duration,
+            "outDuration": out_duration,
         }),
     );
     m.insert(
