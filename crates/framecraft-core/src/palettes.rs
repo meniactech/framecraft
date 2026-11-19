@@ -214,8 +214,8 @@ mod tests {
             r#"{"version":1,"gradients":[{"id":"g","name":"G","stops":[{"offset":1,"color":"red"},{"offset":0,"color":"blue"}]}]}"#,
         );
         assert_eq!(g[0].stops[0].color, "blue");
-        // FRAME's real files, when the checkout is there.
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../FRAME/static");
+        // The real files shipped in assets/.
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets");
         if let Ok(t) = std::fs::read_to_string(dir.join("palettes/stock-palettes.json")) {
             assert!(parse_stock_palettes(&t).len() >= 20);
         }

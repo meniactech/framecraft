@@ -28,8 +28,9 @@ pub struct PreviewFiles {
     /// The project's media by URL, for thumbnails in the media library
     /// (`framecraft://preview/library/<url>`).
     library: std::collections::HashMap<String, Rc<Vec<u8>>>,
-    /// Built-in files (stock Lottie and the like), read from disk on request.
-    builtin: Option<std::path::PathBuf>,
+    /// Built-in files (stock Lottie and the like), read from disk on
+    /// request from the first of these folders that has them.
+    builtin: Vec<std::path::PathBuf>,
 }
 
 /// The address the editor's own page loads a media URL from (thumbnails).
@@ -79,7 +80,7 @@ impl PreviewFiles {
     pub fn set_library(
         &mut self,
         media: impl IntoIterator<Item = (String, Vec<u8>)>,
-        builtin: Option<std::path::PathBuf>,
+        builtin: Vec<std::path::PathBuf>,
     ) {
         self.library = media
             .into_iter()
@@ -101,7 +102,10 @@ impl PreviewFiles {
         if rel.split('/').any(|p| p == ".." || p.is_empty()) {
             return None;
         }
-        let bytes = std::fs::read(self.builtin.as_ref()?.join(&rel)).ok()?;
+        let bytes = self
+            .builtin
+            .iter()
+            .find_map(|d| std::fs::read(d.join(&rel)).ok())?;
         Some((bytes, mime_type(&rel)))
     }
 
@@ -197,7 +201,7 @@ mod tests {
     #[test]
     fn serves_library_media() {
         let mut files = PreviewFiles::default();
-        files.set_library([("/media/images/a b.png".to_string(), vec![7])], None);
+        files.set_library([("/media/images/a b.png".to_string(), vec![7])], Vec::new());
         let url = library_url("/media/images/a b.png?v=1");
         assert_eq!(url, "framecraft://preview/library/media/images/a%20b.png");
         let path = url.trim_start_matches("framecraft://preview");

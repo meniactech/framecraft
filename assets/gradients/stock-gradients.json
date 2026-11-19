@@ -1,0 +1,491 @@
+{
+  "version": 9,
+  "gradients": [
+    {
+      "id": "white-fade",
+      "name": "White Fade",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 255, 255, 1)" },
+        { "offset": 1, "color": "rgba(255, 255, 255, 0)" }
+      ]
+    },
+    {
+      "id": "black-fade",
+      "name": "Black Fade",
+      "stops": [
+        { "offset": 0, "color": "rgba(0, 0, 0, 1)" },
+        { "offset": 1, "color": "rgba(0, 0, 0, 0)" }
+      ]
+    },
+    {
+      "id": "ink-to-paper",
+      "name": "Ink to Paper",
+      "stops": [
+        { "offset": 0, "color": "rgba(15, 23, 42, 1)" },
+        { "offset": 1, "color": "rgba(248, 250, 252, 1)" }
+      ]
+    },
+    {
+      "id": "broadcast-blue",
+      "name": "Broadcast Blue",
+      "stops": [
+        { "offset": 0, "color": "rgba(29, 78, 216, 1)" },
+        { "offset": 0.55, "color": "rgba(59, 130, 246, 1)" },
+        { "offset": 1, "color": "rgba(2, 6, 23, 1)" }
+      ]
+    },
+    {
+      "id": "news-sky",
+      "name": "News Sky",
+      "stops": [
+        { "offset": 0, "color": "rgba(14, 165, 233, 1)" },
+        { "offset": 1, "color": "rgba(3, 105, 161, 1)" }
+      ]
+    },
+    {
+      "id": "breaking-red",
+      "name": "Breaking Red",
+      "stops": [
+        { "offset": 0, "color": "rgba(220, 38, 38, 1)" },
+        { "offset": 0.5, "color": "rgba(239, 68, 68, 1)" },
+        { "offset": 1, "color": "rgba(28, 25, 23, 1)" }
+      ]
+    },
+    {
+      "id": "sunset",
+      "name": "Sunset",
+      "stops": [
+        { "offset": 0, "color": "rgba(159, 18, 57, 1)" },
+        { "offset": 0.4, "color": "rgba(234, 88, 12, 1)" },
+        { "offset": 0.75, "color": "rgba(251, 191, 36, 1)" },
+        { "offset": 1, "color": "rgba(49, 46, 129, 1)" }
+      ]
+    },
+    {
+      "id": "ocean-depth",
+      "name": "Ocean Depth",
+      "stops": [
+        { "offset": 0, "color": "rgba(8, 47, 73, 1)" },
+        { "offset": 0.45, "color": "rgba(3, 105, 161, 1)" },
+        { "offset": 1, "color": "rgba(125, 211, 252, 1)" }
+      ]
+    },
+    {
+      "id": "forest",
+      "name": "Forest",
+      "stops": [
+        { "offset": 0, "color": "rgba(54, 83, 20, 1)" },
+        { "offset": 0.5, "color": "rgba(77, 124, 15, 1)" },
+        { "offset": 1, "color": "rgba(254, 252, 232, 1)" }
+      ]
+    },
+    {
+      "id": "desert",
+      "name": "Desert",
+      "stops": [
+        { "offset": 0, "color": "rgba(194, 65, 12, 1)" },
+        { "offset": 0.5, "color": "rgba(217, 119, 6, 1)" },
+        { "offset": 1, "color": "rgba(245, 245, 244, 1)" }
+      ]
+    },
+    {
+      "id": "neon-violet",
+      "name": "Neon Violet",
+      "stops": [
+        { "offset": 0, "color": "rgba(168, 85, 247, 1)" },
+        { "offset": 0.5, "color": "rgba(34, 211, 238, 1)" },
+        { "offset": 1, "color": "rgba(2, 6, 23, 1)" }
+      ]
+    },
+    {
+      "id": "neon-pink",
+      "name": "Neon Pink",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 0, 170, 1)" },
+        { "offset": 0.55, "color": "rgba(124, 58, 237, 1)" },
+        { "offset": 1, "color": "rgba(11, 16, 38, 1)" }
+      ]
+    },
+    {
+      "id": "pastel-mist",
+      "name": "Pastel Mist",
+      "stops": [
+        { "offset": 0, "color": "rgba(253, 164, 175, 1)" },
+        { "offset": 0.5, "color": "rgba(165, 180, 252, 1)" },
+        { "offset": 1, "color": "rgba(110, 231, 183, 1)" }
+      ]
+    },
+    {
+      "id": "gold-bar",
+      "name": "Gold Bar",
+      "stops": [
+        { "offset": 0, "color": "rgba(28, 25, 23, 1)" },
+        { "offset": 0.45, "color": "rgba(212, 175, 55, 1)" },
+        { "offset": 1, "color": "rgba(245, 245, 244, 1)" }
+      ]
+    },
+    {
+      "id": "chrome",
+      "name": "Chrome",
+      "stops": [
+        { "offset": 0, "color": "rgba(148, 163, 184, 1)" },
+        { "offset": 0.35, "color": "rgba(248, 250, 252, 1)" },
+        { "offset": 0.65, "color": "rgba(100, 116, 139, 1)" },
+        { "offset": 1, "color": "rgba(15, 23, 42, 1)" }
+      ]
+    },
+    {
+      "id": "fire",
+      "name": "Fire",
+      "stops": [
+        { "offset": 0, "color": "rgba(239, 68, 68, 1)" },
+        { "offset": 0.4, "color": "rgba(249, 115, 22, 1)" },
+        { "offset": 0.75, "color": "rgba(250, 204, 21, 1)" },
+        { "offset": 1, "color": "rgba(255, 255, 255, 0)" }
+      ]
+    },
+    {
+      "id": "ice",
+      "name": "Ice",
+      "stops": [
+        { "offset": 0, "color": "rgba(224, 242, 254, 1)" },
+        { "offset": 0.5, "color": "rgba(56, 189, 248, 1)" },
+        { "offset": 1, "color": "rgba(30, 58, 138, 1)" }
+      ]
+    },
+    {
+      "id": "storm",
+      "name": "Storm",
+      "stops": [
+        { "offset": 0, "color": "rgba(30, 41, 59, 1)" },
+        { "offset": 0.5, "color": "rgba(71, 85, 105, 1)" },
+        { "offset": 0.85, "color": "rgba(167, 139, 250, 1)" },
+        { "offset": 1, "color": "rgba(248, 250, 252, 1)" }
+      ]
+    },
+    {
+      "id": "sports-turf",
+      "name": "Sports Turf",
+      "stops": [
+        { "offset": 0, "color": "rgba(22, 101, 52, 1)" },
+        { "offset": 0.5, "color": "rgba(34, 197, 94, 1)" },
+        { "offset": 1, "color": "rgba(15, 23, 42, 1)" }
+      ]
+    },
+    {
+      "id": "finance",
+      "name": "Finance",
+      "stops": [
+        { "offset": 0, "color": "rgba(4, 120, 87, 1)" },
+        { "offset": 1, "color": "rgba(220, 38, 38, 1)" }
+      ]
+    },
+    {
+      "id": "ui-dark",
+      "name": "UI Dark",
+      "stops": [
+        { "offset": 0, "color": "rgba(2, 6, 23, 1)" },
+        { "offset": 0.5, "color": "rgba(30, 41, 59, 1)" },
+        { "offset": 1, "color": "rgba(139, 92, 246, 1)" }
+      ]
+    },
+    {
+      "id": "rainbow",
+      "name": "Rainbow",
+      "stops": [
+        { "offset": 0, "color": "rgba(239, 68, 68, 1)" },
+        { "offset": 0.2, "color": "rgba(249, 115, 22, 1)" },
+        { "offset": 0.4, "color": "rgba(234, 179, 8, 1)" },
+        { "offset": 0.55, "color": "rgba(34, 197, 94, 1)" },
+        { "offset": 0.7, "color": "rgba(59, 130, 246, 1)" },
+        { "offset": 1, "color": "rgba(168, 85, 247, 1)" }
+      ]
+    },
+    {
+      "id": "soft-glow",
+      "name": "Soft Glow",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 255, 255, 0)" },
+        { "offset": 0.4, "color": "rgba(255, 255, 255, 0.85)" },
+        { "offset": 1, "color": "rgba(255, 255, 255, 0)" }
+      ]
+    },
+    {
+      "id": "vignette",
+      "name": "Vignette",
+      "stops": [
+        { "offset": 0, "color": "rgba(0, 0, 0, 0)" },
+        { "offset": 0.55, "color": "rgba(0, 0, 0, 0.15)" },
+        { "offset": 1, "color": "rgba(0, 0, 0, 0.85)" }
+      ]
+    },
+    {
+      "id": "vibrant-sunset",
+      "name": "Vibrant Sunset",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 120, 50, 1)" },
+        { "offset": 0.5, "color": "rgba(240, 50, 100, 1)" },
+        { "offset": 1, "color": "rgba(180, 20, 150, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-electric",
+      "name": "Vibrant Electric",
+      "stops": [
+        { "offset": 0, "color": "rgba(50, 180, 255, 1)" },
+        { "offset": 0.5, "color": "rgba(30, 80, 220, 1)" },
+        { "offset": 1, "color": "rgba(120, 30, 200, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-lime",
+      "name": "Vibrant Lime Citrus",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 230, 50, 1)" },
+        { "offset": 0.5, "color": "rgba(100, 220, 100, 1)" },
+        { "offset": 1, "color": "rgba(30, 150, 120, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-magenta",
+      "name": "Vibrant Magenta Pop",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 80, 180, 1)" },
+        { "offset": 0.5, "color": "rgba(200, 30, 140, 1)" },
+        { "offset": 1, "color": "rgba(100, 10, 100, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-cyan",
+      "name": "Vibrant Cyan Breeze",
+      "stops": [
+        { "offset": 0, "color": "rgba(50, 220, 200, 1)" },
+        { "offset": 0.5, "color": "rgba(40, 140, 220, 1)" },
+        { "offset": 1, "color": "rgba(80, 50, 200, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-peach",
+      "name": "Vibrant Peach Glow",
+      "stops": [
+        { "offset": 0, "color": "rgba(255, 150, 100, 1)" },
+        { "offset": 0.5, "color": "rgba(240, 90, 120, 1)" },
+        { "offset": 1, "color": "rgba(150, 40, 120, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-neon-blue",
+      "name": "Vibrant Neon Blue",
+      "stops": [
+        { "offset": 0, "color": "rgba(100, 220, 255, 1)" },
+        { "offset": 0.5, "color": "rgba(40, 120, 240, 1)" },
+        { "offset": 1, "color": "rgba(20, 40, 160, 1)" }
+      ]
+    },
+    {
+      "id": "vibrant-emerald",
+      "name": "Vibrant Emerald",
+      "stops": [
+        { "offset": 0, "color": "rgba(80, 240, 180, 1)" },
+        { "offset": 0.5, "color": "rgba(30, 160, 140, 1)" },
+        { "offset": 1, "color": "rgba(20, 80, 120, 1)" }
+      ]
+    },
+    {
+      "id": "metal-gold",
+      "name": "Luxury Gold",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(163, 141, 81, 1)" },
+        { "offset": 0.28, "color": "rgba(240, 219, 112, 1)" },
+        { "offset": 0.63, "color": "rgba(146, 125, 72, 1)" },
+        { "offset": 0.79, "color": "rgba(171, 143, 78, 1)" },
+        { "offset": 1.0, "color": "rgba(144, 118, 68, 1)" }
+      ]
+    },
+    {
+      "id": "metal-silver",
+      "name": "Brushed Silver",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(75, 76, 76, 1)" },
+        { "offset": 0.28, "color": "rgba(193, 194, 196, 1)" },
+        { "offset": 0.53, "color": "rgba(118, 114, 110, 1)" },
+        { "offset": 0.79, "color": "rgba(147, 143, 141, 1)" },
+        { "offset": 1.0, "color": "rgba(68, 68, 68, 1)" }
+      ]
+    },
+    {
+      "id": "metal-copper",
+      "name": "Copper Shine",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(136, 110, 87, 1)" },
+        { "offset": 0.18, "color": "rgba(230, 198, 149, 1)" },
+        { "offset": 0.51, "color": "rgba(126, 90, 65, 1)" },
+        { "offset": 0.79, "color": "rgba(142, 109, 77, 1)" },
+        { "offset": 1.0, "color": "rgba(118, 81, 55, 1)" }
+      ]
+    },
+    {
+      "id": "metal-bronze",
+      "name": "Ancient Bronze",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(69, 45, 33, 1)" },
+        { "offset": 0.32, "color": "rgba(180, 149, 87, 1)" },
+        { "offset": 0.56, "color": "rgba(68, 51, 35, 1)" },
+        { "offset": 0.79, "color": "rgba(109, 83, 50, 1)" },
+        { "offset": 1.0, "color": "rgba(70, 48, 35, 1)" }
+      ]
+    },
+    {
+      "id": "metal-rose-gold",
+      "name": "Rose Gold",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(132, 119, 111, 1)" },
+        { "offset": 0.55, "color": "rgba(131, 116, 109, 1)" },
+        { "offset": 0.84, "color": "rgba(168, 152, 137, 1)" },
+        { "offset": 1.0, "color": "rgba(143, 133, 124, 1)" }
+      ]
+    },
+    {
+      "id": "metal-platinum",
+      "name": "Platinum Steel",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(129, 121, 122, 1)" },
+        { "offset": 0.29, "color": "rgba(226, 223, 222, 1)" },
+        { "offset": 0.55, "color": "rgba(149, 146, 145, 1)" },
+        { "offset": 0.84, "color": "rgba(171, 164, 162, 1)" },
+        { "offset": 1.0, "color": "rgba(151, 145, 144, 1)" }
+      ]
+    },
+    {
+      "id": "metal-titanium",
+      "name": "Dark Titanium",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(182, 147, 83, 1)" },
+        { "offset": 0.19, "color": "rgba(248, 206, 120, 1)" },
+        { "offset": 0.49, "color": "rgba(158, 122, 74, 1)" },
+        { "offset": 0.84, "color": "rgba(190, 152, 90, 1)" },
+        { "offset": 1.0, "color": "rgba(159, 125, 79, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-lime",
+      "name": "Glossy Lime",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(154, 208, 62, 1)" },
+        { "offset": 0.49, "color": "rgba(205, 248, 132, 1)" },
+        { "offset": 0.5, "color": "rgba(125, 192, 16, 1)" },
+        { "offset": 1.0, "color": "rgba(119, 187, 16, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-sky",
+      "name": "Glossy Sky Blue",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(64, 146, 206, 1)" },
+        { "offset": 0.49, "color": "rgba(119, 199, 252, 1)" },
+        { "offset": 0.5, "color": "rgba(64, 149, 214, 1)" },
+        { "offset": 1.0, "color": "rgba(63, 150, 219, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-silver",
+      "name": "Glossy Silver",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(252, 252, 252, 1)" },
+        { "offset": 0.49, "color": "rgba(244, 244, 244, 1)" },
+        { "offset": 0.5, "color": "rgba(190, 190, 190, 1)" },
+        { "offset": 1.0, "color": "rgba(193, 193, 193, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-dark",
+      "name": "Glossy Dark",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(6, 6, 6, 1)" },
+        { "offset": 0.49, "color": "rgba(107, 107, 107, 1)" },
+        { "offset": 0.5, "color": "rgba(0, 0, 0, 1)" },
+        { "offset": 1.0, "color": "rgba(4, 4, 4, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-orange",
+      "name": "Glossy Orange",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(254, 152, 0, 1)" },
+        { "offset": 0.49, "color": "rgba(253, 184, 89, 1)" },
+        { "offset": 0.5, "color": "rgba(255, 151, 7, 1)" },
+        { "offset": 1.0, "color": "rgba(255, 151, 0, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-purple",
+      "name": "Glossy Purple",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(104, 5, 246, 1)" },
+        { "offset": 0.49, "color": "rgba(175, 117, 255, 1)" },
+        { "offset": 0.5, "color": "rgba(112, 1, 253, 1)" },
+        { "offset": 1.0, "color": "rgba(93, 15, 204, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-red",
+      "name": "Glossy Red",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(186, 1, 0, 1)" },
+        { "offset": 0.49, "color": "rgba(253, 110, 108, 1)" },
+        { "offset": 0.5, "color": "rgba(180, 0, 1, 1)" },
+        { "offset": 1.0, "color": "rgba(183, 1, 3, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-magenta",
+      "name": "Glossy Magenta",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(163, 0, 187, 1)" },
+        { "offset": 0.49, "color": "rgba(236, 105, 254, 1)" },
+        { "offset": 0.5, "color": "rgba(162, 4, 185, 1)" },
+        { "offset": 1.0, "color": "rgba(159, 2, 184, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-yellow-lime",
+      "name": "Glossy Yellow Lime",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(203, 255, 0, 1)" },
+        { "offset": 0.49, "color": "rgba(224, 255, 126, 1)" },
+        { "offset": 0.5, "color": "rgba(192, 255, 1, 1)" },
+        { "offset": 1.0, "color": "rgba(202, 255, 1, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-blue",
+      "name": "Glossy Blue",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(9, 65, 229, 1)" },
+        { "offset": 0.49, "color": "rgba(100, 140, 254, 1)" },
+        { "offset": 0.5, "color": "rgba(10, 72, 253, 1)" },
+        { "offset": 1.0, "color": "rgba(6, 65, 237, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-yellow",
+      "name": "Glossy Yellow",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(255, 241, 2, 1)" },
+        { "offset": 0.49, "color": "rgba(252, 237, 108, 1)" },
+        { "offset": 0.5, "color": "rgba(255, 225, 3, 1)" },
+        { "offset": 1.0, "color": "rgba(255, 243, 0, 1)" }
+      ]
+    },
+    {
+      "id": "glossy-teal",
+      "name": "Glossy Teal",
+      "stops": [
+        { "offset": 0.0, "color": "rgba(2, 137, 141, 1)" },
+        { "offset": 0.49, "color": "rgba(80, 192, 196, 1)" },
+        { "offset": 0.5, "color": "rgba(2, 129, 135, 1)" },
+        { "offset": 1.0, "color": "rgba(2, 130, 139, 1)" }
+      ]
+    }
+  ]
+}

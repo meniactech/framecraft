@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+<svg width="100%" height="100%" viewBox="0 0 512 512" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" xml:space="preserve" xmlns:serif="http://www.serif.com/" style="fill-rule:evenodd;clip-rule:evenodd;stroke-linecap:round;stroke-linejoin:round;stroke-miterlimit:1.5;">
+    <g transform="matrix(0.900921,0,0,0.900921,25.36422,25.36422)">
+        <circle cx="256" cy="256" r="234.252" style="fill:none;"/>
+        <clipPath id="_clip1">
+            <circle cx="256" cy="256" r="234.252"/>
+        </clipPath>
+        <g clip-path="url(#_clip1)">
+            <g transform="matrix(1.109975,0,0,1.109975,-28.153656,-28.153656)">
+                <path d="M467,44L467,256C382.759,294.3 310.842,316.383 256,316L256,44L467,44Z" style="fill:white;"/>
+            </g>
+            <g transform="matrix(1.109975,0,0,1.109975,-28.153656,-28.153656)">
+                <path d="M256,316L256,468L45,468L45,256C112.838,291.593 181.963,319.145 256,316Z" style="fill:white;"/>
+            </g>
+        </g>
+        <circle cx="256" cy="256" r="234.252" style="fill:none;stroke:white;stroke-width:18.72px;"/>
+    </g>
+</svg>

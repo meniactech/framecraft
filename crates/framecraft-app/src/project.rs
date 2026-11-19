@@ -18,7 +18,6 @@ use std::path::{Path, PathBuf};
 /// particle sprites, stock animations).
 pub struct ProjectMedia {
     pub pack: ProjectPack,
-    pub builtin_dir: Option<PathBuf>,
 }
 
 impl MediaSource for ProjectMedia {
@@ -27,10 +26,7 @@ impl MediaSource for ProjectMedia {
             return Some(bytes);
         }
         let rel = url.split(['?', '#']).next()?.strip_prefix('/')?;
-        if rel.split('/').any(|p| p == ".." || p.is_empty()) {
-            return None;
-        }
-        std::fs::read(self.builtin_dir.as_ref()?.join(rel)).ok()
+        builtin_read(rel)
     }
 }
 
@@ -75,15 +71,18 @@ pub fn palettes_path() -> Option<PathBuf> {
 }
 
 fn builtin_text(rel: &str) -> String {
-    builtin_dir()
-        .and_then(|d| std::fs::read_to_string(d.join(rel)).ok())
+    builtin_read(rel)
+        .and_then(|b| String::from_utf8(b).ok())
         .unwrap_or_default()
 }
 
 /// FRAME's built-in particle sprites (`particles/Particle-{64|128}-NN.png`):
 /// `(url, label)`, 64 px first.
 pub fn builtin_sprites() -> Vec<(String, String)> {
-    let Some(dir) = builtin_dir() else {
+    let Some(dir) = builtin_dirs()
+        .into_iter()
+        .find(|d| d.join("particles").is_dir())
+    else {
         return Vec::new();
     };
     let mut files: Vec<String> = std::fs::read_dir(dir.join("particles"))
@@ -138,14 +137,38 @@ pub fn stock_gradients() -> &'static [framecraft_core::palettes::StockGradient] 
     })
 }
 
-/// Where built-in files live. Until FrameCraft ships its own, it uses
-/// `FRAMECRAFT_BUILTIN_DIR` or a FRAME checkout next to this repository.
-pub fn builtin_dir() -> Option<PathBuf> {
-    if let Some(dir) = std::env::var_os("FRAMECRAFT_BUILTIN_DIR") {
-        return Some(PathBuf::from(dir));
+/// Folders with built-in files, searched in order: FrameCraft's own
+/// `assets/` (next to the program when installed, or in the repository),
+/// then `FRAMECRAFT_BUILTIN_DIR`, then a FRAME checkout next to this
+/// repository (particle sprites, plates and Noto emoji until FrameCraft
+/// ships them).
+pub fn builtin_dirs() -> Vec<PathBuf> {
+    let mut dirs = Vec::new();
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|e| e.parent().map(Path::to_path_buf))
+    {
+        dirs.push(exe_dir.join("assets"));
+        dirs.push(exe_dir.join("../share/framecraft/assets"));
     }
-    let dev = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../FRAME/static");
-    dev.is_dir().then_some(dev)
+    dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
+    if let Some(dir) = std::env::var_os("FRAMECRAFT_BUILTIN_DIR") {
+        dirs.push(PathBuf::from(dir));
+    }
+    dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../FRAME/static"));
+    dirs.retain(|d| d.is_dir());
+    dirs
+}
+
+/// A built-in file by its path (`fonts/Inter-….ttf`), from the first
+/// folder that has it.
+pub fn builtin_read(rel: &str) -> Option<Vec<u8>> {
+    if rel.split('/').any(|p| p == ".." || p.is_empty()) {
+        return None;
+    }
+    builtin_dirs()
+        .iter()
+        .find_map(|d| std::fs::read(d.join(rel)).ok())
 }
 
 /// A built-in Lottie animation (Google Noto Animated Emoji).
@@ -159,10 +182,9 @@ pub struct StockLottie {
 /// The stock Lottie list (`lottie/noto-emoji/index.json` in the built-in
 /// files), as FRAME's Lottie library shows it.
 pub fn stock_lottie() -> Vec<StockLottie> {
-    let Some(dir) = builtin_dir() else {
-        return Vec::new();
-    };
-    let Ok(text) = std::fs::read_to_string(dir.join("lottie/noto-emoji/index.json")) else {
+    let Some(text) =
+        builtin_read("lottie/noto-emoji/index.json").and_then(|b| String::from_utf8(b).ok())
+    else {
         return Vec::new();
     };
     let rows: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
@@ -209,10 +231,7 @@ impl Project {
         Ok(Self {
             path: path.to_path_buf(),
             folder: None,
-            media: ProjectMedia {
-                pack,
-                builtin_dir: builtin_dir(),
-            },
+            media: ProjectMedia { pack },
             docs,
             warnings,
             palette_colors: Vec::new(),
@@ -264,10 +283,7 @@ impl Project {
         Ok(Self {
             path: dir.to_path_buf(),
             folder: Some(dir.to_path_buf()),
-            media: ProjectMedia {
-                pack,
-                builtin_dir: builtin_dir(),
-            },
+            media: ProjectMedia { pack },
             docs: p.graphics.into_iter().map(|g| g.doc).collect(),
             warnings: Vec::new(),
             palette_colors: Vec::new(),
@@ -294,10 +310,7 @@ impl Project {
         Self {
             path: home.join(format!("{name}.framecraft")),
             folder: None,
-            media: ProjectMedia {
-                pack,
-                builtin_dir: builtin_dir(),
-            },
+            media: ProjectMedia { pack },
             docs: vec![doc],
             warnings: Vec::new(),
             palette_colors: Vec::new(),

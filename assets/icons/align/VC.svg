@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<!-- Created with Inkscape (http://www.inkscape.org/) -->
+
+<svg
+   width="23.999996mm"
+   height="24.000002mm"
+   viewBox="0 0 23.999996 24.000002"
+   version="1.1"
+   id="svg1"
+   xmlns="http://www.w3.org/2000/svg"
+   xmlns:svg="http://www.w3.org/2000/svg">
+  <defs
+     id="defs1" />
+  <g
+     id="layer1"
+     transform="translate(-96.000002)">
+    <g
+       id="g44"
+       transform="rotate(90,108,11.999998)">
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.264583"
+         id="rect31"
+         width="2"
+         height="22"
+         x="107"
+         y="0.99999911" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.178382"
+         id="rect32"
+         width="3.9999993"
+         height="5.0000005"
+         x="102"
+         y="2.9999988" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.281102"
+         id="rect33"
+         width="9"
+         height="5.5184283"
+         x="97"
+         y="9.4815712" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.178382"
+         id="rect34"
+         width="3.9999993"
+         height="4.9999995"
+         x="102"
+         y="15.999999" />
+      <rect
+         style="fill:none;stroke:none;stroke-width:0.264583"
+         id="rect35"
+         width="24"
+         height="23.999998"
+         x="96"
+         y="-6.89979e-07" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.281102"
+         id="rect41"
+         width="9.000001"
+         height="5.5184283"
+         x="110"
+         y="9.4815712" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.178382"
+         id="rect42"
+         width="3.9999993"
+         height="4.9999995"
+         x="110"
+         y="16.5" />
+      <rect
+         style="fill:#ffffff;stroke:none;stroke-width:0.178382"
+         id="rect43"
+         width="3.9999993"
+         height="5.0000005"
+         x="110"
+         y="2.9999988" />
+    </g>
+  </g>
+</svg>

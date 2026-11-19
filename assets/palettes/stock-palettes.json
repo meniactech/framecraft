@@ -1,0 +1,364 @@
+{
+  "version": 2,
+  "palettes": [
+    {
+      "id": "news-cool",
+      "name": "News Cool",
+      "colors": [
+        { "hex": "#0EA5E9", "label": "Sky" },
+        { "hex": "#0369A1", "label": "Deep sky" },
+        { "hex": "#0F172A", "label": "Ink" },
+        { "hex": "#F8FAFC", "label": "Paper" },
+        { "hex": "#64748B", "label": "Slate" },
+        { "hex": "#F97316", "label": "Alert" }
+      ]
+    },
+    {
+      "id": "news-warm",
+      "name": "News Warm",
+      "colors": [
+        { "hex": "#DC2626", "label": "Breaking" },
+        { "hex": "#F59E0B", "label": "Amber" },
+        { "hex": "#1C1917", "label": "Charcoal" },
+        { "hex": "#FAFAF9", "label": "Cream" },
+        { "hex": "#78716C", "label": "Stone" },
+        { "hex": "#EA580C", "label": "Orange" }
+      ]
+    },
+    {
+      "id": "broadcast-blue",
+      "name": "Broadcast Blue",
+      "colors": [
+        { "hex": "#1D4ED8", "label": "Primary" },
+        { "hex": "#3B82F6", "label": "Accent" },
+        { "hex": "#020617", "label": "Black" },
+        { "hex": "#FFFFFF", "label": "White" },
+        { "hex": "#94A3B8", "label": "Mute" },
+        { "hex": "#EF4444", "label": "Live" }
+      ]
+    },
+    {
+      "id": "sports-fire",
+      "name": "Sports Fire",
+      "colors": [
+        { "hex": "#EF4444", "label": "Home" },
+        { "hex": "#F97316", "label": "Flame" },
+        { "hex": "#FACC15", "label": "Highlight" },
+        { "hex": "#111827", "label": "Pitch" },
+        { "hex": "#F9FAFB", "label": "Kit" },
+        { "hex": "#22C55E", "label": "Away" }
+      ]
+    },
+    {
+      "id": "sports-field",
+      "name": "Sports Field",
+      "colors": [
+        { "hex": "#166534", "label": "Turf" },
+        { "hex": "#22C55E", "label": "Grass" },
+        { "hex": "#FFFFFF", "label": "Line" },
+        { "hex": "#0F172A", "label": "Night" },
+        { "hex": "#EAB308", "label": "Whistle" },
+        { "hex": "#38BDF8", "label": "Sky cam" }
+      ]
+    },
+    {
+      "id": "esports-neon",
+      "name": "Esports Neon",
+      "colors": [
+        { "hex": "#A855F7", "label": "Violet" },
+        { "hex": "#22D3EE", "label": "Cyan" },
+        { "hex": "#F43F5E", "label": "Pink" },
+        { "hex": "#020617", "label": "Void" },
+        { "hex": "#E2E8F0", "label": "HUD" },
+        { "hex": "#84CC16", "label": "Kill" }
+      ]
+    },
+    {
+      "id": "neon-nights",
+      "name": "Neon Nights",
+      "colors": [
+        { "hex": "#FF00AA", "label": "Magenta" },
+        { "hex": "#00F0FF", "label": "Electric" },
+        { "hex": "#7C3AED", "label": "Purple" },
+        { "hex": "#0B1026", "label": "Night" },
+        { "hex": "#F5F3FF", "label": "Glow" },
+        { "hex": "#FBBF24", "label": "Gold neon" }
+      ]
+    },
+    {
+      "id": "neon-cyberpunk",
+      "name": "Neon Cyberpunk",
+      "colors": [
+        { "hex": "#00FFCC", "label": "Teal" },
+        { "hex": "#9900FF", "label": "Purple" },
+        { "hex": "#FF0033", "label": "Red" },
+        { "hex": "#FF0099", "label": "Pink" },
+        { "hex": "#33FF00", "label": "Green" },
+        { "hex": "#00FFFF", "label": "Ice Blue" },
+        { "hex": "#0033FF", "label": "Blue" },
+        { "hex": "#FF5500", "label": "Orange" },
+        { "hex": "#FFAA00", "label": "Golden" },
+        { "hex": "#FFEE00", "label": "Yellow" },
+        { "hex": "#FFFFFF", "label": "White" },
+        { "hex": "#FFCC33", "label": "Warm" }
+      ]
+    },
+    {
+      "id": "pastel-studio",
+      "name": "Pastel Studio",
+      "colors": [
+        { "hex": "#FDA4AF", "label": "Rose" },
+        { "hex": "#A5B4FC", "label": "Periwinkle" },
+        { "hex": "#6EE7B7", "label": "Mint" },
+        { "hex": "#FDE68A", "label": "Butter" },
+        { "hex": "#E0E7FF", "label": "Lilac mist" },
+        { "hex": "#334155", "label": "Ink soft" }
+      ]
+    },
+    {
+      "id": "pastel-candy",
+      "name": "Pastel Candy",
+      "colors": [
+        { "hex": "#F9A8D4", "label": "Pink" },
+        { "hex": "#C4B5FD", "label": "Lavender" },
+        { "hex": "#99F6E4", "label": "Aqua" },
+        { "hex": "#FECACA", "label": "Peach" },
+        { "hex": "#FEF3C7", "label": "Vanilla" },
+        { "hex": "#475569", "label": "Text" }
+      ]
+    },
+    {
+      "id": "earth-forest",
+      "name": "Earth Forest",
+      "colors": [
+        { "hex": "#365314", "label": "Moss" },
+        { "hex": "#4D7C0F", "label": "Leaf" },
+        { "hex": "#A16207", "label": "Bark" },
+        { "hex": "#FEFCE8", "label": "Sunbeam" },
+        { "hex": "#78716C", "label": "Stone" },
+        { "hex": "#1C1917", "label": "Soil" }
+      ]
+    },
+    {
+      "id": "earth-desert",
+      "name": "Earth Desert",
+      "colors": [
+        { "hex": "#C2410C", "label": "Clay" },
+        { "hex": "#D97706", "label": "Sand" },
+        { "hex": "#F5F5F4", "label": "Bone" },
+        { "hex": "#44403C", "label": "Shadow" },
+        { "hex": "#92400E", "label": "Rust" },
+        { "hex": "#67E8F9", "label": "Oasis" }
+      ]
+    },
+    {
+      "id": "mono-slate",
+      "name": "Mono Slate",
+      "colors": [
+        { "hex": "#F8FAFC", "label": "50" },
+        { "hex": "#E2E8F0", "label": "200" },
+        { "hex": "#94A3B8", "label": "400" },
+        { "hex": "#64748B", "label": "500" },
+        { "hex": "#334155", "label": "700" },
+        { "hex": "#0F172A", "label": "900" },
+        { "hex": "#38BDF8", "label": "Accent" }
+      ]
+    },
+    {
+      "id": "mono-ink",
+      "name": "Mono Ink",
+      "colors": [
+        { "hex": "#FFFFFF", "label": "White" },
+        { "hex": "#E5E5E5", "label": "Light" },
+        { "hex": "#A3A3A3", "label": "Mid" },
+        { "hex": "#525252", "label": "Dark" },
+        { "hex": "#171717", "label": "Black" },
+        { "hex": "#EF4444", "label": "Mark" }
+      ]
+    },
+    {
+      "id": "corporate-steel",
+      "name": "Corporate Steel",
+      "colors": [
+        { "hex": "#1E40AF", "label": "Brand" },
+        { "hex": "#3B82F6", "label": "Link" },
+        { "hex": "#0F172A", "label": "Headline" },
+        { "hex": "#F1F5F9", "label": "Surface" },
+        { "hex": "#64748B", "label": "Body" },
+        { "hex": "#059669", "label": "Positive" }
+      ]
+    },
+    {
+      "id": "finance-green",
+      "name": "Finance Green",
+      "colors": [
+        { "hex": "#047857", "label": "Up" },
+        { "hex": "#10B981", "label": "Gain" },
+        { "hex": "#DC2626", "label": "Down" },
+        { "hex": "#111827", "label": "Chart bg" },
+        { "hex": "#F9FAFB", "label": "Panel" },
+        { "hex": "#6B7280", "label": "Axis" }
+      ]
+    },
+    {
+      "id": "weather-clear",
+      "name": "Weather Clear",
+      "colors": [
+        { "hex": "#38BDF8", "label": "Sky" },
+        { "hex": "#FBBF24", "label": "Sun" },
+        { "hex": "#FFFFFF", "label": "Cloud" },
+        { "hex": "#1E3A8A", "label": "Deep" },
+        { "hex": "#86EFAC", "label": "Mild" },
+        { "hex": "#F87171", "label": "Alert" }
+      ]
+    },
+    {
+      "id": "weather-storm",
+      "name": "Weather Storm",
+      "colors": [
+        { "hex": "#1E293B", "label": "Cloud" },
+        { "hex": "#475569", "label": "Rain" },
+        { "hex": "#A78BFA", "label": "Lightning" },
+        { "hex": "#F8FAFC", "label": "Flash" },
+        { "hex": "#0EA5E9", "label": "Radar" },
+        { "hex": "#F59E0B", "label": "Warning" }
+      ]
+    },
+    {
+      "id": "election-map",
+      "name": "Election Map",
+      "colors": [
+        { "hex": "#2563EB", "label": "Blue" },
+        { "hex": "#DC2626", "label": "Red" },
+        { "hex": "#F8FAFC", "label": "Undecided" },
+        { "hex": "#0F172A", "label": "Outline" },
+        { "hex": "#94A3B8", "label": "Neutral" },
+        { "hex": "#CA8A04", "label": "Toss-up" }
+      ]
+    },
+    {
+      "id": "lower-third-classic",
+      "name": "Lower Third Classic",
+      "colors": [
+        { "hex": "#0F172A", "label": "Bar" },
+        { "hex": "#FFFFFF", "label": "Name" },
+        { "hex": "#38BDF8", "label": "Accent bar" },
+        { "hex": "#94A3B8", "label": "Title" },
+        { "hex": "#EF4444", "label": "Bug" },
+        { "hex": "#1E293B", "label": "Shade" }
+      ]
+    },
+    {
+      "id": "lower-third-gold",
+      "name": "Lower Third Gold",
+      "colors": [
+        { "hex": "#1C1917", "label": "Bar" },
+        { "hex": "#F5F5F4", "label": "Name" },
+        { "hex": "#D4AF37", "label": "Gold" },
+        { "hex": "#A8A29E", "label": "Title" },
+        { "hex": "#78716C", "label": "Rule" },
+        { "hex": "#44403C", "label": "Inset" }
+      ]
+    },
+    {
+      "id": "sunset-grade",
+      "name": "Sunset Grade",
+      "colors": [
+        { "hex": "#9F1239", "label": "Rose" },
+        { "hex": "#EA580C", "label": "Orange" },
+        { "hex": "#FBBF24", "label": "Gold" },
+        { "hex": "#312E81", "label": "Dusk" },
+        { "hex": "#FDF2F8", "label": "Afterglow" },
+        { "hex": "#1E1B4B", "label": "Night" }
+      ]
+    },
+    {
+      "id": "ocean-depth",
+      "name": "Ocean Depth",
+      "colors": [
+        { "hex": "#082F49", "label": "Abyss" },
+        { "hex": "#0369A1", "label": "Deep" },
+        { "hex": "#0EA5E9", "label": "Mid" },
+        { "hex": "#7DD3FC", "label": "Shallow" },
+        { "hex": "#ECFEFF", "label": "Foam" },
+        { "hex": "#F97316", "label": "Buoy" }
+      ]
+    },
+    {
+      "id": "retro-crt",
+      "name": "Retro CRT",
+      "colors": [
+        { "hex": "#22C55E", "label": "Phosphor" },
+        { "hex": "#14532D", "label": "Screen" },
+        { "hex": "#052E16", "label": "Bezel" },
+        { "hex": "#A3E635", "label": "Bright" },
+        { "hex": "#F8FAFC", "label": "Scan" },
+        { "hex": "#EF4444", "label": "Error" }
+      ]
+    },
+    {
+      "id": "pride-bright",
+      "name": "Pride Bright",
+      "colors": [
+        { "hex": "#EF4444", "label": "Red" },
+        { "hex": "#F97316", "label": "Orange" },
+        { "hex": "#EAB308", "label": "Yellow" },
+        { "hex": "#22C55E", "label": "Green" },
+        { "hex": "#3B82F6", "label": "Blue" },
+        { "hex": "#A855F7", "label": "Violet" }
+      ]
+    },
+    {
+      "id": "high-contrast",
+      "name": "High Contrast",
+      "colors": [
+        { "hex": "#000000", "label": "Black" },
+        { "hex": "#FFFFFF", "label": "White" },
+        { "hex": "#FFFF00", "label": "Yellow" },
+        { "hex": "#00FFFF", "label": "Cyan" },
+        { "hex": "#FF00FF", "label": "Magenta" },
+        { "hex": "#FF0000", "label": "Red" }
+      ]
+    },
+    {
+      "id": "chart-default",
+      "name": "Chart Default",
+      "colors": [
+        { "hex": "#3B82F6", "label": "Series A" },
+        { "hex": "#22C55E", "label": "Series B" },
+        { "hex": "#F59E0B", "label": "Series C" },
+        { "hex": "#EF4444", "label": "Series D" },
+        { "hex": "#A855F7", "label": "Series E" },
+        { "hex": "#14B8A6", "label": "Series F" },
+        { "hex": "#F97316", "label": "Series G" },
+        { "hex": "#64748B", "label": "Series H" }
+      ]
+    },
+    {
+      "id": "skin-tones",
+      "name": "Skin Tones",
+      "colors": [
+        { "hex": "#FFE4C9", "label": "Fair" },
+        { "hex": "#F1C27D", "label": "Light" },
+        { "hex": "#C68642", "label": "Medium" },
+        { "hex": "#8D5524", "label": "Deep" },
+        { "hex": "#5C3317", "label": "Dark" },
+        { "hex": "#F8FAFC", "label": "Highlight" },
+        { "hex": "#1E293B", "label": "Shadow" }
+      ]
+    },
+    {
+      "id": "ui-dark",
+      "name": "UI Dark",
+      "colors": [
+        { "hex": "#020617", "label": "Bg" },
+        { "hex": "#0F172A", "label": "Panel" },
+        { "hex": "#1E293B", "label": "Elevated" },
+        { "hex": "#334155", "label": "Border" },
+        { "hex": "#94A3B8", "label": "Muted" },
+        { "hex": "#F1F5F9", "label": "Text" },
+        { "hex": "#8B5CF6", "label": "Accent" }
+      ]
+    }
+  ]
+}

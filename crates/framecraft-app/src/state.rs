@@ -266,7 +266,7 @@ impl Ui {
         let files = project.media_files();
         STORE.with(|s| {
             s.borrow_mut()
-                .set_library(files, crate::project::builtin_dir())
+                .set_library(files, crate::project::builtin_dirs())
         });
         self.editor.set(Some(Editor {
             project,
@@ -596,7 +596,7 @@ impl Ui {
                         .unwrap_or_default();
                     STORE.with(|s| {
                         s.borrow_mut()
-                            .set_library(files, crate::project::builtin_dir())
+                            .set_library(files, crate::project::builtin_dirs())
                     });
                     ui.dirty.set(true);
                     ui.select_graphic(i);

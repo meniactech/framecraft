@@ -727,10 +727,9 @@ mod tests {
 
     #[test]
     fn every_stock_shape_converts() {
-        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../FRAME/static/svg/basic");
+        let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets/svg/basic");
         let Ok(entries) = std::fs::read_dir(&dir) else {
-            return; // No FRAME checkout next to this repository.
+            return; // No assets folder.
         };
         let mut n = 0;
         for e in entries.flatten() {

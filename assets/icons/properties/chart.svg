@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" fill="none">
+  <!-- Simple bar + pie mark, white like other properties icons -->
+  <path
+    fill="white"
+    d="M72 400V232h72v168H72zm112 0V120h72v280h-72zm112 0V280h72v120h-72z"
+  />
+  <path
+    fill="white"
+    d="M368 96c64.5 0 116.7 52.2 116.7 116.7 0 40.3-20.4 75.8-51.5 96.7L368 212.7V96z"
+  />
+  <path
+    fill="white"
+    fill-opacity="0.85"
+    d="M352 128.8v99.9l85.2 85.2c-18.9 20.3-46.1 33-76.5 33-58.1 0-105.2-47.1-105.2-105.2 0-47.3 31.2-87.4 74.5-100.9z"
+  />
+</svg>
