@@ -472,3 +472,9 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .guide-btn.on.snap { background: var(--accent); border-color: var(--accent); color: #fff; }
 .overlay .guides, .overlay .guides * { vector-effect: none; pointer-events: none; }
 .point.ruler { grid-template-columns: 18px 1fr 14px 22px; }
+/* Ruler boxes (FRAME's), beside the scene */
+.ruler-handles { position: absolute; inset: 0; pointer-events: none; z-index: 5; }
+.ruler-handle { position: absolute; pointer-events: auto; background: rgba(82, 82, 91, .8); border: 1px solid rgba(212, 212, 216, .6); }
+.ruler-handle:hover { background: rgba(113, 113, 122, .95); }
+.ruler-handle.v { top: -18px; width: 24px; height: 16px; transform: translateX(-50%); border-radius: 0 0 4px 4px; cursor: ew-resize; }
+.ruler-handle.h { left: -18px; width: 16px; height: 24px; transform: translateY(-50%); border-radius: 0 4px 4px 0; cursor: ns-resize; }

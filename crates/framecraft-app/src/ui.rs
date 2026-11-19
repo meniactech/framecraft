@@ -6,6 +6,7 @@ use crate::bridge::{FRAME_A, FRAME_B};
 use crate::interact::{Geom, ROTATE_OFFSET};
 use crate::state::Ui;
 use dioxus::prelude::*;
+use framecraft_core::js::number_to_string;
 use framecraft_core::manipulate::Handle;
 use framecraft_core::selection::movable;
 use framecraft_core::timeline::pose_at;
@@ -194,6 +195,7 @@ pub fn Viewport(ui: Ui) -> Element {
                     iframe { id: FRAME_A, style: "{frame_style}" }
                     iframe { id: FRAME_B, style: "{frame_style}" }
                     Overlay { ui, width: w, height: h }
+                    RulerHandles { ui }
                 }
                 if !open {
                     div { class: "empty", "No graphic open" }
@@ -524,6 +526,72 @@ fn Guides(ui: Ui, width: f64, height: f64) -> Element {
                 }
                 for p in rh {
                     line { x1: "0", y1: "{h * p / 100.0}", x2: "{w}", y2: "{h * p / 100.0}", stroke: "{cr}" }
+                }
+            }
+        }
+    }
+}
+
+/// FRAME's ruler boxes: one above the scene for each vertical ruler and
+/// left of it for each horizontal one; drag to move the ruler (the bridge
+/// does the drag, with FRAME's snapping when Snap is on).
+#[component]
+fn RulerHandles(ui: Ui) -> Element {
+    let g = (ui.guides)();
+    let Some((sw, sh, rv, rh)) = ui.editor.read().as_ref().map(|e| {
+        let s = &e.doc().scene;
+        (
+            s.width,
+            s.height,
+            s.custom_rulers_v.clone().unwrap_or_default(),
+            s.custom_rulers_h.clone().unwrap_or_default(),
+        )
+    }) else {
+        return rsx! {};
+    };
+    if !g.rulers {
+        return rsx! {};
+    }
+    // What a dragged ruler snaps to (percent), besides the other rulers.
+    let mut targets_v: Vec<f64> = Vec::new();
+    if g.center {
+        targets_v.push(50.0);
+    }
+    if g.thirds {
+        targets_v.extend([33.3333, 66.6667]);
+    }
+    if g.safe10 {
+        targets_v.extend([10.0, 90.0]);
+    }
+    if g.safe20 {
+        targets_v.extend([20.0, 80.0]);
+    }
+    let targets = serde_json::to_string(&targets_v).unwrap_or_default();
+    rsx! {
+        div {
+            class: "ruler-handles",
+            "data-w": "{sw}",
+            "data-h": "{sh}",
+            "data-snap": if g.snap { "1" } else { "0" },
+            "data-guides": "{targets}",
+            "data-rulers-v": "{serde_json::to_string(&rv).unwrap_or_default()}",
+            "data-rulers-h": "{serde_json::to_string(&rh).unwrap_or_default()}",
+            for (i , p) in rv.iter().copied().enumerate() {
+                div {
+                    class: "ruler-handle v",
+                    "data-axis": "v",
+                    "data-index": "{i}",
+                    style: "left:{p}%;",
+                    title: "Drag to move this ruler ({number_to_string(p)} %)",
+                }
+            }
+            for (i , p) in rh.iter().copied().enumerate() {
+                div {
+                    class: "ruler-handle h",
+                    "data-axis": "h",
+                    "data-index": "{i}",
+                    style: "top:{p}%;",
+                    title: "Drag to move this ruler ({number_to_string(p)} %)",
                 }
             }
         }

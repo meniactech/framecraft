@@ -550,6 +550,57 @@ if (!window.__fc) {
     fc.emit({ type: 'layout', split: sp.dataset.split, px: null });
   });
 
+  // Ruler boxes (.ruler-handle): drag a custom ruler. With Snap on (FRAME)
+  // it moves in 10 scene px steps and snaps to the other rulers and shown
+  // guides within 10 px. Rust gets start / move / end (one undo step).
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const hd = e.target.closest('.ruler-handle');
+    if (!hd) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const box = hd.parentElement;
+    const stage = box.parentElement;
+    const axis = hd.dataset.axis;
+    const index = parseInt(hd.dataset.index, 10);
+    const span = parseFloat(axis === 'v' ? box.dataset.w : box.dataset.h) || 1;
+    const snap = box.dataset.snap === '1';
+    const others = JSON.parse((axis === 'v' ? box.dataset.rulersV : box.dataset.rulersH) || '[]').filter((_, i) => i !== index);
+    const targets = JSON.parse(box.dataset.guides || '[]').concat(others);
+    const step = 10 / span * 100;
+    const pct = (ev) => {
+      const r = stage.getBoundingClientRect();
+      let p = axis === 'v' ? (ev.clientX - r.left) / r.width * 100 : (ev.clientY - r.top) / r.height * 100;
+      p = Math.min(100, Math.max(0, p));
+      if (snap) {
+        p = Math.min(100, Math.max(0, Math.round(p / step) * step));
+        let best = null;
+        for (const t of targets) { const d = Math.abs(t - p); if (d <= step && (best === null || d < best.d)) best = { t, d }; }
+        if (best) p = best.t;
+      }
+      return Math.round(p * 100) / 100;
+    };
+    hd.setPointerCapture(e.pointerId);
+    fc.emit({ type: 'ruler', action: 'start', axis, index });
+    let last = null;
+    const move = (ev) => {
+      const p = pct(ev);
+      if (p === last) return;
+      last = p;
+      if (axis === 'v') hd.style.left = p + '%'; else hd.style.top = p + '%';
+      fc.emit({ type: 'ruler', action: 'move', axis, index, value: p });
+    };
+    const up = () => {
+      hd.removeEventListener('pointermove', move);
+      hd.removeEventListener('pointerup', up);
+      hd.removeEventListener('pointercancel', up);
+      fc.emit({ type: 'ruler', action: 'end', axis, index });
+    };
+    hd.addEventListener('pointermove', move);
+    hd.addEventListener('pointerup', up);
+    hd.addEventListener('pointercancel', up);
+  }, true);
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {

@@ -217,6 +217,25 @@ pub fn on_event(ui: Ui, ev: Value) {
         Some("tl") => crate::timeline::on_event(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
         Some("layout") => crate::layout::on_event(&ev),
+        Some("ruler") => {
+            let field = if ev["axis"].as_str() == Some("h") {
+                "customRulersH"
+            } else {
+                "customRulersV"
+            };
+            let index = ev["index"].as_u64().unwrap_or(0);
+            match ev["action"].as_str() {
+                Some("start") => ui.begin_gesture("Move ruler".into()),
+                Some("move") => ui.execute(&framecraft_core::commands::SetField {
+                    target: framecraft_core::commands::FieldTarget::Scene,
+                    path: format!("{field}.{index}"),
+                    value: ev["value"].clone(),
+                    update: framecraft_core::commands::Update::None,
+                }),
+                Some("end") => ui.end_gesture(),
+                _ => {}
+            }
+        }
         Some("ramp") => {
             let mut ramp = ui.ramp_event;
             ramp.set(Some(ev.clone()));
