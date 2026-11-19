@@ -42,16 +42,26 @@ pub enum NewLayer {
     Ellipse,
     Circle,
     Stadium,
+    ImageSlot,
+    BarChart,
+    PieChart,
+    LineChart,
+    Qr,
 }
 
 impl NewLayer {
-    pub const ALL: [NewLayer; 6] = [
+    pub const ALL: [NewLayer; 11] = [
         NewLayer::Empty,
         NewLayer::Text,
         NewLayer::Box,
         NewLayer::Ellipse,
         NewLayer::Circle,
         NewLayer::Stadium,
+        NewLayer::ImageSlot,
+        NewLayer::BarChart,
+        NewLayer::PieChart,
+        NewLayer::LineChart,
+        NewLayer::Qr,
     ];
 
     pub fn label(self) -> &'static str {
@@ -62,8 +72,28 @@ impl NewLayer {
             NewLayer::Ellipse => "Ellipse",
             NewLayer::Circle => "Circle",
             NewLayer::Stadium => "Stadium",
+            NewLayer::ImageSlot => "Image Slot",
+            NewLayer::BarChart => "Bar Chart",
+            NewLayer::PieChart => "Pie Chart",
+            NewLayer::LineChart => "Line Chart",
+            NewLayer::Qr => "QR Code",
         }
     }
+}
+
+/// A chart data point id, like FRAME's (`cp_` and 8 characters).
+pub fn new_chart_point_id() -> String {
+    format!("cp_{}", &new_id().replace('-', "")[..8])
+}
+
+/// FRAME's chart series colors, used for points without their own.
+pub const DEFAULT_CHART_COLORS: [&str; 8] = [
+    "#3b82f6", "#22c55e", "#f59e0b", "#ef4444", "#a855f7", "#06b6d4", "#f97316", "#84cc16",
+];
+
+fn default_chart_points() -> Value {
+    let p = |label: &str, value: f64| json!({ "id": new_chart_point_id(), "label": label, "value": value });
+    json!([p("A", 40.0), p("B", 25.0), p("C", 55.0), p("D", 30.0)])
 }
 
 /// FRAME's base fields for a new layer.
@@ -128,6 +158,34 @@ pub fn new_layer(kind: NewLayer, parent: Option<&str>) -> Item {
             &mut v,
             json!({ "itemType": "shape", "shapeType": "stadium", "name": "New Stadium", "width": 180, "height": 120,
                 "borderRadius": [9999, 9999, 9999, 9999] }),
+        ),
+        NewLayer::ImageSlot => set(
+            &mut v,
+            json!({ "itemType": "imageSlot", "name": "Image Slot", "imageVariableId": "f_image",
+                "imageAssetFolder": "./images/", "imageExtension": "png", "imageDefaultValue": "",
+                "imageFit": "cover", "width": 320, "height": 180, "bg_color": "#00000000",
+                "borderWidth": 0, "borderWidths": [0, 0, 0, 0] }),
+        ),
+        NewLayer::BarChart | NewLayer::PieChart | NewLayer::LineChart => {
+            let (kind, name) = match kind {
+                NewLayer::PieChart => ("pie", "Pie Chart"),
+                NewLayer::LineChart => ("line", "Line Chart"),
+                _ => ("bar", "Bar Chart"),
+            };
+            set(
+                &mut v,
+                json!({ "itemType": "chart", "chartKind": kind, "name": name, "chartPoints": default_chart_points(),
+                    "width": 480, "height": 320, "bg_color": "#00000000", "borderWidth": 0,
+                    "borderWidths": [0, 0, 0, 0], "borderRadius": [8, 8, 8, 8],
+                    "fontFamily": "Mouse Memoirs", "fontSize": 14, "textColor": "#e2e8f0" }),
+            );
+        }
+        NewLayer::Qr => set(
+            &mut v,
+            json!({ "itemType": "qr", "name": "QR Code", "qrContent": "https://meniac.tech", "qrVariableId": "",
+                "qrFgColor": "#000000", "qrBgColor": "#ffffff", "qrErrorCorrection": "M", "qrMargin": 2,
+                "width": 240, "height": 240, "bg_color": "#00000000", "borderWidth": 0,
+                "borderWidths": [0, 0, 0, 0] }),
         ),
     }
     v["id"] = new_id().into();

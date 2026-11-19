@@ -44,6 +44,7 @@ fn icon(item: &Item) -> &'static str {
         Some(ItemType::Empty) => "◌",
         Some(ItemType::ImageSlot) => "▣",
         Some(ItemType::Chart) => "▤",
+        Some(ItemType::Qr) => "▦",
         Some(ItemType::Shape) | None => "▭",
         _ => "•",
     }

@@ -219,6 +219,25 @@ mod tests {
     }
 
     #[test]
+    fn every_new_layer_exports() {
+        use crate::layers::{NewLayer, new_layer};
+        let mut d = doc();
+        d.items.clear();
+        for kind in NewLayer::ALL {
+            d.items.push(new_layer(kind, None));
+        }
+        let (pkg, _) = build(&req(&d), &no_media, &Profile::framecraft());
+        let html = String::from_utf8(pkg.get("G.html").unwrap().to_vec()).unwrap();
+        for item in &d.items {
+            assert!(
+                html.contains(&item.id),
+                "{} missing from the page",
+                item.name
+            );
+        }
+    }
+
+    #[test]
     fn preview_carries_the_editor_script() {
         let (pkg, _) = build(&req(&doc()), &no_media, &Profile::framecraft());
         let html = String::from_utf8(pkg.get("G.html").unwrap().to_vec()).unwrap();

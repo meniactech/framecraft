@@ -180,3 +180,11 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .ruler .track { cursor: ew-resize; touch-action: none; }
 .inspector { min-height: 34px; }
 .inspector > .dim { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.points { display: flex; flex-direction: column; gap: 4px; }
+.point { display: grid; grid-template-columns: 1fr 70px 34px 22px; gap: 4px; align-items: center; }
+.point.live { grid-template-columns: 1fr 60px 34px 1fr 22px; }
+.point input { width: 100%; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 5px; font: inherit; }
+.point input[type=color] { padding: 0; height: 24px; }
+.points > button { justify-self: start; }
+.menu { max-height: 60vh; overflow: auto; }

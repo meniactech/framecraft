@@ -22,6 +22,13 @@ fn number_default(path: &str) -> Option<f64> {
         "pivotX" | "pivotY" => Some(50.0),
         p if p.starts_with("shadow.") || p.starts_with("borderRadius.") => Some(0.0),
         "borderWidth" | "gradientAngle" => Some(0.0),
+        "chartReveal" => Some(1.0),
+        "chartCutout" => Some(0.0),
+        "chartBarThickness" => Some(80.0),
+        "chartLineWidth" => Some(2.0),
+        "chartPointRadius" => Some(4.0),
+        "chartLineTension" => Some(0.2),
+        "qrMargin" => Some(2.0),
         _ => None,
     }
 }
@@ -219,7 +226,11 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             }
         }
         Kind::Toggle => {
-            let on = field.value.as_bool().unwrap_or(false);
+            // Unset chart toggles are on in FRAME.
+            let on = field
+                .value
+                .as_bool()
+                .unwrap_or(matches!(prop.path, "chartShowLegend" | "chartShowValues"));
             rsx! {
                 input {
                     r#type: "checkbox",
@@ -244,6 +255,9 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
         Kind::Ramp => rsx! {
             Ramp { value: field.value.clone(), set }
+        },
+        Kind::ChartPoints => rsx! {
+            ChartPoints { ui, value: field.value.clone(), set }
         },
     };
 
@@ -281,9 +295,18 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
     };
 
-    let wide = matches!(prop.kind, Kind::Ramp | Kind::TextArea);
+    let wide = matches!(prop.kind, Kind::Ramp | Kind::TextArea | Kind::ChartPoints);
+    if wide {
+        // A div, not a label: these hold several inputs and buttons.
+        return rsx! {
+            div { class: "field wide",
+                span { class: "field-label", "{prop.label}" }
+                {input}
+            }
+        };
+    }
     rsx! {
-        label { class: if wide { "field wide" } else { "field" },
+        label { class: "field",
             span { class: "field-label", "{prop.label}" }
             {input}
             {key_button}
@@ -377,6 +400,112 @@ fn Ramp(value: Value, set: Callback<Value>) -> Element {
                             write(s);
                         },
                         "+ Stop"
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// Chart data points: label, value and color per point (and its BOARD
+/// variable when the scene takes live data).
+#[component]
+fn ChartPoints(ui: Ui, value: Value, set: Callback<Value>) -> Element {
+    use framecraft_core::layers::{DEFAULT_CHART_COLORS, new_chart_point_id};
+    let points: Vec<Value> = value.as_array().cloned().unwrap_or_default();
+    let board = ui
+        .editor
+        .read()
+        .as_ref()
+        .is_some_and(|e| e.doc().scene.ionboard_hook_enabled == Some(true));
+    let count = points.len();
+    rsx! {
+        div { class: "points",
+            for (i , p) in points.iter().cloned().enumerate() {
+                {
+                    let (a, b, c, d, e) = (points.clone(), points.clone(), points.clone(), points.clone(), points.clone());
+                    let fallback = DEFAULT_CHART_COLORS[i % DEFAULT_CHART_COLORS.len()];
+                    let color = p["color"].as_str().unwrap_or(fallback).to_string();
+                    let hex = color::parse(&color).map_or("#000000".to_string(), |c| c.hex());
+                    let label = p["label"].as_str().unwrap_or("").to_string();
+                    let val = as_text(&p["value"]);
+                    let live = p["liveVariableId"].as_str().unwrap_or("").to_string();
+                    let edit = move |mut list: Vec<Value>, key: &str, v: Value| {
+                        if v.is_null() || v.as_str() == Some("") {
+                            if let Some(o) = list[i].as_object_mut() {
+                                o.remove(key);
+                            }
+                        } else {
+                            list[i][key] = v;
+                        }
+                        set(Value::Array(list));
+                    };
+                    rsx! {
+                        div { class: if board { "point live" } else { "point" },
+                            input {
+                                r#type: "text",
+                                value: "{label}",
+                                title: "Label",
+                                onchange: move |evt| edit(a.clone(), "label", Value::from(evt.value())),
+                            }
+                            input {
+                                r#type: "number",
+                                step: "any",
+                                value: "{val}",
+                                title: "Value",
+                                onchange: move |evt| {
+                                    if let Ok(v) = evt.value().trim().parse::<f64>() {
+                                        edit(b.clone(), "value", Value::from(v));
+                                    }
+                                },
+                            }
+                            input {
+                                r#type: "color",
+                                value: "{hex}",
+                                title: "Color",
+                                onchange: move |evt| {
+                                    let current = c[i]["color"].as_str().unwrap_or(fallback).to_string();
+                                    if let Some(v) = color::with_rgb(&current, &evt.value()) {
+                                        edit(c.clone(), "color", Value::from(v));
+                                    }
+                                },
+                            }
+                            if board {
+                                input {
+                                    r#type: "text",
+                                    value: "{live}",
+                                    placeholder: "BOARD variable",
+                                    title: "BOARD variable that sets this value live",
+                                    onchange: move |evt| edit(d.clone(), "liveVariableId", Value::from(evt.value().trim())),
+                                }
+                            }
+                            button {
+                                class: "key-button",
+                                disabled: count <= 1,
+                                title: "Remove point",
+                                onclick: move |_| {
+                                    let mut list = e.clone();
+                                    list.remove(i);
+                                    set(Value::Array(list));
+                                },
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+            {
+                let list = points.clone();
+                rsx! {
+                    button {
+                        onclick: move |_| {
+                            let mut list = list.clone();
+                            let n = list.len();
+                            let label = char::from(b'A' + (n % 26) as u8).to_string();
+                            list.push(json!({ "id": new_chart_point_id(), "label": label, "value": 0 }));
+                            set(Value::Array(list));
+                        },
+                        "+ Point"
                     }
                 }
             }

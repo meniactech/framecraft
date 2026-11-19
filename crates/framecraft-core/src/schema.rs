@@ -15,6 +15,8 @@ pub enum Tab {
     Transform,
     Look,
     Text,
+    Chart,
+    Qr,
 }
 
 impl Tab {
@@ -24,6 +26,8 @@ impl Tab {
             Tab::Transform => "Transform",
             Tab::Look => "Look",
             Tab::Text => "Text",
+            Tab::Chart => "Chart",
+            Tab::Qr => "QR",
         }
     }
 
@@ -34,6 +38,7 @@ impl Tab {
             Tab::Transform => "transform",
             Tab::Look => "look",
             Tab::Text => "text",
+            Tab::Chart | Tab::Qr => "chart",
         }
     }
 
@@ -43,8 +48,11 @@ impl Tab {
         if is_filled(item) {
             tabs.push(Tab::Look);
         }
-        if is_text(item) {
-            tabs.push(Tab::Text);
+        match item.item_type {
+            Some(ItemType::Text) => tabs.push(Tab::Text),
+            Some(ItemType::Chart) => tabs.push(Tab::Chart),
+            Some(ItemType::Qr) => tabs.push(Tab::Qr),
+            _ => {}
         }
         tabs
     }
@@ -70,6 +78,8 @@ pub enum Kind {
     Font,
     /// Gradient stops: `[{offset, color}, …]`.
     Ramp,
+    /// Chart data: `[{id, label, value, color?, liveVariableId?}, …]`.
+    ChartPoints,
 }
 
 /// Where a property's value lives.
@@ -756,18 +766,291 @@ pub const PROPERTIES: &[Property] = &[
         None,
         Layer
     ),
+    // Look: image slot (SPX picks the file by Variable ID).
+    p!(
+        Look,
+        "Image slot",
+        "imageVariableId",
+        "Variable ID",
+        Kind::Text,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Image slot",
+        "imageAssetFolder",
+        "Folder",
+        Kind::Choice(&[
+            ("./images/", "./images/ (in the package)"),
+            ("/media/images/", "/media/images/ (SPX)")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Image slot",
+        "imageExtension",
+        "Extension",
+        Kind::Text,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Image slot",
+        "imageDefaultValue",
+        "Default file",
+        Kind::Text,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Image slot",
+        "imageFit",
+        "Fit",
+        Kind::Choice(&[("cover", "Cover"), ("contain", "Contain")]),
+        Item,
+        None,
+        Layer
+    ),
+    // Chart
+    p!(
+        Chart,
+        "Chart",
+        "chartKind",
+        "Type",
+        Kind::Choice(&[("bar", "Bar"), ("pie", "Pie"), ("line", "Line")]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Chart",
+        "chartValueSort",
+        "Sort by value",
+        Kind::Choice(&[
+            ("none", "List order"),
+            ("asc", "Rising"),
+            ("desc", "Falling")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Chart",
+        "chartReveal",
+        "Reveal",
+        num(0.0, 1.0, 0.01),
+        Item,
+        Some("chartReveal"),
+        Pose
+    ),
+    p!(
+        Chart,
+        "Style",
+        "fontFamily",
+        "Font",
+        Kind::Font,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "fontSize",
+        "Font size",
+        num(6.0, 200.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "textColor",
+        "Text color",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartShowLegend",
+        "Show legend",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartCutout",
+        "Hole %",
+        num(0.0, 80.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartBarThickness",
+        "Bar thickness %",
+        num(10.0, 100.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartShowValues",
+        "Show values",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartLineWidth",
+        "Line width",
+        num(1.0, 16.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartPointRadius",
+        "Point size",
+        num(0.0, 20.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Style",
+        "chartLineTension",
+        "Curve",
+        num(0.0, 1.0, 0.05),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Chart,
+        "Data points",
+        "chartPoints",
+        "Points",
+        Kind::ChartPoints,
+        Item,
+        None,
+        Layer
+    ),
+    // QR code
+    p!(
+        Qr,
+        "QR code",
+        "qrContent",
+        "Content",
+        Kind::TextArea,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Qr,
+        "QR code",
+        "qrVariableId",
+        "Variable ID",
+        Kind::Text,
+        Item,
+        None,
+        Rebuild
+    ),
+    p!(
+        Qr,
+        "QR code",
+        "qrFgColor",
+        "Color",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Qr,
+        "QR code",
+        "qrBgColor",
+        "Background",
+        Kind::Color,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Qr,
+        "QR code",
+        "qrErrorCorrection",
+        "Error correction",
+        Kind::Choice(&[
+            ("L", "L (7 %)"),
+            ("M", "M (15 %)"),
+            ("Q", "Q (25 %)"),
+            ("H", "H (30 %)")
+        ]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Qr,
+        "QR code",
+        "qrMargin",
+        "Margin",
+        num(0.0, 8.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
 ];
 
 fn is_text(item: &Item) -> bool {
     item.item_type == Some(ItemType::Text)
 }
 
-/// Layers with a fill and border: shapes, image slots and charts.
+/// Layers with FRAME's Look tab (fill, border, corners): all but Lottie,
+/// video, empty groups and patterns.
 fn is_filled(item: &Item) -> bool {
-    match item.item_type {
-        Some(ItemType::Shape) | None => !is_text(item),
-        Some(ItemType::ImageSlot | ItemType::Chart) => true,
-        _ => false,
+    !matches!(
+        item.item_type,
+        Some(ItemType::Lottie | ItemType::Video | ItemType::Empty | ItemType::Pattern)
+    )
+}
+
+fn chart_kind(item: &Item) -> &str {
+    match item.chart_kind.as_deref() {
+        Some("pie") => "pie",
+        Some("line") => "line",
+        _ => "bar",
     }
 }
 
@@ -816,9 +1099,17 @@ impl Property {
             p if p.starts_with("shadow") => {
                 is_filled(item) && !matches!(shape, Some(ShapeType::Polygon | ShapeType::Path))
             }
+            p if p.starts_with("image") => item.item_type == Some(ItemType::ImageSlot),
+            "chartShowLegend" | "chartCutout" => chart_kind(item) == "pie",
+            "chartBarThickness" | "chartShowValues" => chart_kind(item) == "bar",
+            "chartLineWidth" | "chartPointRadius" | "chartLineTension" => {
+                chart_kind(item) == "line"
+            }
             _ => match self.tab {
                 Tab::Look => is_filled(item),
                 Tab::Text => is_text(item),
+                Tab::Chart => item.item_type == Some(ItemType::Chart),
+                Tab::Qr => item.item_type == Some(ItemType::Qr),
                 _ => true,
             },
         }
@@ -933,6 +1224,9 @@ mod tests {
                     (Kind::Number { min, .. }, _) => Value::from(min.max(0.0)),
                     (Kind::Color, _) => Value::from("#123456"),
                     (Kind::Toggle, _) => Value::from(true),
+                    (Kind::ChartPoints, _) => {
+                        serde_json::json!([{ "id": "p", "label": "A", "value": 1 }])
+                    }
                     (Kind::Ramp, _) => {
                         serde_json::json!([{ "offset": 0, "color": "#000" }, { "offset": 1, "color": "#fff" }])
                     }
@@ -950,16 +1244,31 @@ mod tests {
 
     #[test]
     fn tabs_per_layer_type() {
-        let d = doc_with(&[NewLayer::Text, NewLayer::Box, NewLayer::Empty]);
+        let d = doc_with(&[
+            NewLayer::Text,
+            NewLayer::Box,
+            NewLayer::Empty,
+            NewLayer::PieChart,
+            NewLayer::Qr,
+        ]);
         let tabs: Vec<Vec<Tab>> = d.items.iter().map(Tab::for_item).collect();
         assert_eq!(
             tabs,
             vec![
-                vec![Tab::Transform, Tab::Text],
+                vec![Tab::Transform, Tab::Look, Tab::Text],
                 vec![Tab::Transform, Tab::Look],
-                vec![Tab::Transform]
+                vec![Tab::Transform],
+                vec![Tab::Transform, Tab::Look, Tab::Chart],
+                vec![Tab::Transform, Tab::Look, Tab::Qr],
             ]
         );
+        // Chart style fields follow the chart type.
+        let pie = &d.items[3];
+        let shown: Vec<&str> = Property::of(Tab::Chart)
+            .filter(|p| p.applies(Some(pie)))
+            .map(|p| p.path)
+            .collect();
+        assert!(shown.contains(&"chartCutout") && !shown.contains(&"chartBarThickness"));
     }
 
     #[test]
