@@ -15,6 +15,7 @@ pub mod export;
 pub mod js;
 pub mod model;
 pub mod normalize;
+pub mod pack;
 pub mod profile;
 pub mod ramp;
 pub mod script;

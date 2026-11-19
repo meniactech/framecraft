@@ -9,43 +9,16 @@
 mod common;
 
 use framecraft_core::export::package::{
-    ExportRequest, MediaSource, Package, banner_package, ograf_package, spx_package,
+    ExportRequest, Package, SuiteGraphic, SuiteRequest, banner_package, ograf_package, spx_package,
+    suite_package,
 };
-use framecraft_core::model::Graphic;
-use framecraft_core::normalize::normalize;
+use framecraft_core::normalize::{Document, normalize};
+use framecraft_core::pack::{Pack, read_pack, sanitize_pack_file_name};
 use framecraft_core::profile::Profile;
 use sha2::{Digest, Sha256};
-use std::collections::BTreeMap;
-use std::io::Read;
 use std::path::{Path, PathBuf};
 
 const EXPORTED_AT: &str = "2026-01-01T12:00:00.000Z";
-
-/// Media from a project pack, then FRAME's static folder.
-struct PackMedia {
-    pack: BTreeMap<String, Vec<u8>>,
-    static_dir: PathBuf,
-}
-
-impl MediaSource for PackMedia {
-    fn read(&self, url: &str) -> Option<Vec<u8>> {
-        let clean = url.split(['?', '#']).next().unwrap_or("");
-        if let Some(bytes) = self.pack.get(clean) {
-            return Some(bytes.clone());
-        }
-        let rel = clean.strip_prefix('/')?;
-        if rel.split('/').any(|part| part == "..") {
-            return None;
-        }
-        std::fs::read(self.static_dir.join(rel)).ok()
-    }
-}
-
-fn read_entry(zip: &mut zip::ZipArchive<std::fs::File>, name: &str) -> Vec<u8> {
-    let mut out = Vec::new();
-    zip.by_name(name).unwrap().read_to_end(&mut out).unwrap();
-    out
-}
 
 fn sha256(bytes: &[u8]) -> String {
     Sha256::digest(bytes)
@@ -111,38 +84,40 @@ fn packages_match_frame() {
             .unwrap()
             .to_string_lossy()
             .replace(".frameproject.zip", "");
-        let mut zip = zip::ZipArchive::new(std::fs::File::open(&pack_path).unwrap()).unwrap();
-        let manifest: serde_json::Value =
-            serde_json::from_slice(&read_entry(&mut zip, "manifest.json")).unwrap();
-        let mut media = PackMedia {
-            pack: BTreeMap::new(),
+        let (pack, warnings) = read_pack(&std::fs::read(&pack_path).unwrap()).unwrap();
+        assert!(warnings.is_empty(), "{pack_name}: {warnings:?}");
+        let Pack::Project(pack) = pack else {
+            panic!("{pack_name} is not a project pack")
+        };
+        let docs: Vec<Document> = pack
+            .graphics
+            .iter()
+            .map(|g| normalize(&g.graphic, &p))
+            .collect();
+        let keys: Vec<String> = (1..=pack.graphics.len())
+            .zip(&pack.graphics)
+            .map(|(i, g)| {
+                format!(
+                    "{i:02}-{}",
+                    sanitize_pack_file_name(&g.name, &format!("graphic-{i}"))
+                )
+            })
+            .collect();
+        let project_name = pack.name.clone();
+        let media = common::PackMedia {
+            pack,
             static_dir: static_dir.clone(),
         };
-        for m in manifest["media"].as_array().into_iter().flatten() {
-            let bytes = read_entry(&mut zip, m["path"].as_str().unwrap());
-            media
-                .pack
-                .insert(m["url"].as_str().unwrap().to_string(), bytes);
-        }
 
-        for g in manifest["graphics"].as_array().unwrap() {
-            let path = g["path"].as_str().unwrap();
-            let key = Path::new(path)
-                .file_stem()
-                .unwrap()
-                .to_string_lossy()
-                .to_string();
-            let name = g["name"].as_str().unwrap();
-            let text = String::from_utf8(read_entry(&mut zip, path)).unwrap();
-            let doc = normalize(&Graphic::from_json(&text).unwrap(), &p);
+        for ((g, doc), key) in media.pack.graphics.iter().zip(&docs).zip(&keys) {
             let req = ExportRequest {
-                doc: &doc,
-                graphic_name: name,
+                doc,
+                graphic_name: &g.name,
                 palette_colors: &[],
                 user_fonts: &[],
                 exported_at: EXPORTED_AT,
             };
-            let dir = expected.join(&pack_name).join(&key);
+            let dir = expected.join(&pack_name).join(key);
             for (format, pkg) in [
                 ("spx", spx_package(&req, &media, &p)),
                 ("ograf", ograf_package(&req, &media, &p)),
@@ -156,14 +131,40 @@ fn packages_match_frame() {
                         diffs.join("\n  ")
                     ));
                 }
-                // The ZIP itself must be readable and hold the same files.
-                let bytes = pkg.to_zip().unwrap();
-                let z = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
+                let z = zip::ZipArchive::new(std::io::Cursor::new(pkg.to_zip().unwrap())).unwrap();
                 assert_eq!(
                     z.len(),
                     pkg.files.len(),
                     "{pack_name}/{key}/{format}: ZIP entry count"
                 );
+            }
+        }
+
+        // Whole-project suites.
+        let suite: Vec<SuiteGraphic> = media
+            .pack
+            .graphics
+            .iter()
+            .zip(&docs)
+            .map(|(g, doc)| SuiteGraphic {
+                id: &g.id,
+                name: &g.name,
+                doc,
+            })
+            .collect();
+        let req = SuiteRequest {
+            project_name: &project_name,
+            graphics: &suite,
+            palette_colors: &[],
+            user_fonts: &[],
+            exported_at: EXPORTED_AT,
+        };
+        for (dir_name, ograf) in [("_suite-spx", false), ("_suite-ograf", true)] {
+            let pkg = suite_package(&req, ograf, &media, &p);
+            compared += pkg.files.len();
+            let diffs = compare(&pkg, &expected.join(&pack_name).join(dir_name));
+            if !diffs.is_empty() {
+                failures.push(format!("{pack_name}/{dir_name}:\n  {}", diffs.join("\n  ")));
             }
         }
     }

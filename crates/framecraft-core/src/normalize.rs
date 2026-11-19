@@ -22,6 +22,22 @@ pub struct Document {
     pub template_globals: Vec<TemplateGlobal>,
 }
 
+impl Document {
+    /// The graphic as FRAME stores it after loading: scene, items, timeline
+    /// and the three script fields, all filled in.
+    pub fn to_graphic(&self) -> Graphic {
+        Graphic {
+            scene: self.scene.clone(),
+            items: self.items.clone(),
+            timeline: Some(self.timeline.clone()),
+            template_js: Some(self.template_js.clone()),
+            template_functions: Some(self.template_functions.clone()),
+            template_globals: Some(self.template_globals.clone()),
+            extra: Default::default(),
+        }
+    }
+}
+
 /// Lane holding the start time of a Lottie or video clip.
 pub const CLIP_START: &str = "clipStart";
 

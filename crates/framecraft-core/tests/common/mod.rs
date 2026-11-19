@@ -7,6 +7,8 @@
 //! repository is used. Without it the tests are skipped.
 #![allow(dead_code)]
 
+use framecraft_core::export::package::MediaSource;
+use framecraft_core::pack::ProjectPack;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
@@ -143,4 +145,24 @@ pub fn html_diffs(want: &str, got: &str) -> Vec<String> {
         }
     }
     out
+}
+
+/// Media from a project pack (read by FrameCraft), then FRAME's static folder.
+pub struct PackMedia {
+    pub pack: ProjectPack,
+    pub static_dir: PathBuf,
+}
+
+impl MediaSource for PackMedia {
+    fn read(&self, url: &str) -> Option<Vec<u8>> {
+        if let Some(bytes) = self.pack.read(url) {
+            return Some(bytes);
+        }
+        let clean = url.split(['?', '#']).next().unwrap_or("");
+        let rel = clean.strip_prefix('/')?;
+        if rel.split('/').any(|part| part == "..") {
+            return None;
+        }
+        std::fs::read(self.static_dir.join(rel)).ok()
+    }
 }

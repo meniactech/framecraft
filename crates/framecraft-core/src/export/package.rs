@@ -108,7 +108,9 @@ impl Package {
     }
 }
 
-fn template_js_file(t: &TemplateExport, pkg: &mut Package) -> Option<&'static str> {
+/// Writes the graphic's script to `path` (trimmed, ending in a newline) and
+/// returns the path, or `None` when there is no script.
+fn template_js_file(t: &TemplateExport, pkg: &mut Package, path: &str) -> Option<String> {
     let src = t.template_js.as_deref()?.trim();
     if src.is_empty() {
         return None;
@@ -118,8 +120,33 @@ fn template_js_file(t: &TemplateExport, pkg: &mut Package) -> Option<&'static st
     } else {
         format!("{src}\n")
     };
-    pkg.add(TEMPLATE_JS_PATH, text);
-    Some(TEMPLATE_JS_PATH)
+    pkg.add(path, text);
+    Some(path.to_string())
+}
+
+/// `js/template-<id>.js` for one graphic of a suite.
+pub fn suite_template_js_path(graphic_id: &str) -> String {
+    let id = if graphic_id.is_empty() {
+        "graphic"
+    } else {
+        graphic_id
+    };
+    let safe: String = id
+        .chars()
+        .flat_map(|c| {
+            let keep = c.is_ascii_alphanumeric() || c == '_' || c == '-';
+            // JavaScript replaces per UTF-16 unit.
+            std::iter::repeat_n(
+                if keep { c } else { '_' },
+                if keep { 1 } else { c.len_utf16() },
+            )
+        })
+        .take(64)
+        .collect();
+    format!(
+        "js/template-{}.js",
+        if safe.is_empty() { "graphic" } else { &safe }
+    )
 }
 
 fn export_for(req: &ExportRequest, fallback_id: &str, p: &Profile) -> TemplateExport {
@@ -156,8 +183,11 @@ fn spx_core(
     let (fonts, font_copies) =
         font_faces(&t, req.user_fonts, false, &|src| media.read(src).is_some());
     pkg.copy(&font_copies, media);
-    let js = template_js_file(&t, pkg);
-    pkg.add(&html, page_html(&t, &fonts, PageKind::Spx, js, p));
+    let js = template_js_file(&t, pkg, TEMPLATE_JS_PATH);
+    pkg.add(
+        &html,
+        page_html(&t, &fonts, PageKind::Spx, js.as_deref(), p),
+    );
     (t, html)
 }
 
@@ -260,8 +290,11 @@ pub fn banner_package(req: &ExportRequest, media: &dyn MediaSource, p: &Profile)
         font_faces(&t, req.user_fonts, true, &|src| media.read(src).is_some());
     pkg.copy(&font_copies, media);
     shared_runtime(&mut pkg, false);
-    let js = template_js_file(&t, &mut pkg);
-    pkg.add(&html, page_html(&t, &fonts, PageKind::Banner, js, p));
+    let js = template_js_file(&t, &mut pkg, TEMPLATE_JS_PATH);
+    pkg.add(
+        &html,
+        page_html(&t, &fonts, PageKind::Banner, js.as_deref(), p),
+    );
     pkg.add(
         "meta/export-info.json",
         stringify_pretty(&export_info(
@@ -291,6 +324,144 @@ pub fn banner_package(req: &ExportRequest, media: &dyn MediaSource, p: &Profile)
     pkg
 }
 
+/// One graphic of a whole-project export.
+pub struct SuiteGraphic<'a> {
+    pub id: &'a str,
+    pub name: &'a str,
+    pub doc: &'a Document,
+}
+
+/// What to export as one suite package.
+pub struct SuiteRequest<'a> {
+    pub project_name: &'a str,
+    pub graphics: &'a [SuiteGraphic<'a>],
+    pub palette_colors: &'a [String],
+    pub user_fonts: &'a [UserFont],
+    pub exported_at: &'a str,
+}
+
+/// `name`, then `name_2`, `name_3`, … (case-insensitive).
+fn unique_name(base: &str, used: &mut Vec<String>, ext: &str) -> String {
+    let mut candidate = format!("{base}{ext}");
+    let mut i = 2;
+    while used.contains(&candidate.to_lowercase()) {
+        candidate = format!("{base}_{i}{ext}");
+        i += 1;
+    }
+    used.push(candidate.to_lowercase());
+    candidate
+}
+
+/// All graphics of a project in one SPX ZIP (`ograf: false`) or one OGraf
+/// ZIP (`ograf: true`), sharing `js/`, `assets/` and `fonts/`.
+pub fn suite_package(
+    req: &SuiteRequest,
+    ograf: bool,
+    media: &dyn MediaSource,
+    p: &Profile,
+) -> Package {
+    let mut pkg = Package::default();
+    shared_runtime(&mut pkg, true);
+    let mut assets = AssetMap::spx();
+    let mut used = Vec::new();
+    let mut entries = Vec::new();
+    let mut exports = Vec::new();
+
+    for g in req.graphics {
+        let single = ExportRequest {
+            doc: g.doc,
+            graphic_name: g.name,
+            palette_colors: req.palette_colors,
+            user_fonts: req.user_fonts,
+            exported_at: req.exported_at,
+        };
+        let base = file_base_name(g.name, "template");
+        let (html, base) = if ograf {
+            let b = unique_name(&base, &mut used, "");
+            (format!("{b}.html"), b)
+        } else {
+            (unique_name(&base, &mut used, ".html"), base)
+        };
+        let before = assets.copies().len();
+        let mut t = assets.remap(&export_for(&single, "ionframe_template", p));
+        pkg.copy(&assets.copies()[before..], media);
+        if ograf {
+            let fallback = if t.template_id.is_empty() {
+                "template".to_string()
+            } else {
+                t.template_id.clone()
+            };
+            t.template_id = template_slug(&base, &fallback);
+        }
+        let (fonts, font_copies) =
+            font_faces(&t, req.user_fonts, false, &|src| media.read(src).is_some());
+        pkg.copy(&font_copies, media);
+        let js = template_js_file(&t, &mut pkg, &suite_template_js_path(g.id));
+        pkg.add(
+            &html,
+            page_html(&t, &fonts, PageKind::Spx, js.as_deref(), p),
+        );
+
+        let mut entry = serde_json::Map::new();
+        entry.insert("graphicId".into(), g.id.into());
+        entry.insert("graphicName".into(), g.name.into());
+        entry.insert("htmlFileName".into(), html.clone().into());
+        let mut main = None;
+        if ograf {
+            let (m, manifest) = (format!("{base}.mjs"), format!("{base}.ograf.json"));
+            pkg.add(&m, ograf_component_source(&html, ograf_step_count(&t)));
+            pkg.add(
+                &manifest,
+                stringify_pretty(&ograf_manifest(&t, &m, &html, Some(g.name), p)),
+            );
+            entry.insert("ografManifest".into(), manifest.into());
+            entry.insert("ografMain".into(), m.clone().into());
+            main = Some(m);
+        }
+        entry.insert("templateId".into(), t.template_id.clone().into());
+        entry.insert("width".into(), t.scene.width.into());
+        entry.insert("height".into(), t.scene.height.into());
+        entries.push(serde_json::Value::Object(entry));
+        exports.push((t, html, main, g.name));
+    }
+
+    let info = serde_json::json!({
+        "generator": p.generator,
+        "profile": if ograf { "ograf-suite-v1" } else { "spx-draft-suite-esm" },
+        "projectName": req.project_name,
+        "templateCount": entries.len(),
+        "exportedAt": req.exported_at,
+        "templates": entries,
+        "airRenderManifest": AIR_MANIFEST_PATH,
+    });
+    pkg.add("meta/export-info.json", stringify_pretty(&info));
+    let air: Vec<AirTemplate> = exports
+        .iter()
+        .map(|(t, html, main, name)| AirTemplate {
+            payload: t,
+            entry_html: html,
+            name: Some(name),
+            ograf_main: main.as_deref(),
+        })
+        .collect();
+    let format = if ograf {
+        PackageFormat::OgrafSuite
+    } else {
+        PackageFormat::SpxDraftSuite
+    };
+    pkg.add(
+        AIR_MANIFEST_PATH,
+        stringify_pretty(&air_render_manifest(
+            format,
+            &air,
+            Some(req.project_name),
+            req.exported_at,
+            p,
+        )),
+    );
+    pkg
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -307,6 +478,25 @@ mod tests {
                 ("a".to_string(), b"3".to_vec()),
                 ("b".to_string(), b"2".to_vec())
             ]
+        );
+    }
+
+    #[test]
+    fn suite_names() {
+        assert_eq!(
+            suite_template_js_path("gfx_1.2 x"),
+            "js/template-gfx_1_2_x.js"
+        );
+        assert_eq!(suite_template_js_path(""), "js/template-graphic.js");
+        let mut used = Vec::new();
+        assert_eq!(unique_name("Untitled", &mut used, ".html"), "Untitled.html");
+        assert_eq!(
+            unique_name("untitled", &mut used, ".html"),
+            "untitled_2.html"
+        );
+        assert_eq!(
+            unique_name("Untitled", &mut used, ".html"),
+            "Untitled_3.html"
         );
     }
 
