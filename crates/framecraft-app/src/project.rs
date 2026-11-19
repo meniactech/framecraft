@@ -7,7 +7,9 @@ use framecraft_core::export::package::{
     ExportRequest, MediaSource, Package, banner_package, ograf_package, spx_package,
 };
 use framecraft_core::normalize::{Document, normalize};
-use framecraft_core::pack::{Pack, PackSource, ProjectPack, read_pack, write_project_pack};
+use framecraft_core::pack::{
+    Pack, PackMediaEntry, PackSource, ProjectPack, read_pack, write_project_pack,
+};
 use framecraft_core::preview::{self, PreviewState, PreviewUpdate};
 use framecraft_core::profile::Profile;
 use std::path::{Path, PathBuf};
@@ -51,6 +53,43 @@ pub fn builtin_dir() -> Option<PathBuf> {
     dev.is_dir().then_some(dev)
 }
 
+/// A built-in Lottie animation (Google Noto Animated Emoji).
+#[derive(Debug, Clone, PartialEq)]
+pub struct StockLottie {
+    pub name: String,
+    pub url: String,
+    pub thumb: Option<String>,
+}
+
+/// The stock Lottie list (`lottie/noto-emoji/index.json` in the built-in
+/// files), as FRAME's Lottie library shows it.
+pub fn stock_lottie() -> Vec<StockLottie> {
+    let Some(dir) = builtin_dir() else {
+        return Vec::new();
+    };
+    let Ok(text) = std::fs::read_to_string(dir.join("lottie/noto-emoji/index.json")) else {
+        return Vec::new();
+    };
+    let rows: Vec<serde_json::Value> = serde_json::from_str(&text).unwrap_or_default();
+    rows.iter()
+        .filter_map(|r| {
+            let file = r["file"].as_str()?.trim();
+            let thumb = r["thumb"].as_str().map(str::trim).filter(|t| !t.is_empty());
+            Some(StockLottie {
+                name: r["name"].as_str().unwrap_or(file).to_string(),
+                url: format!("/lottie/noto-emoji/{file}"),
+                thumb: thumb.map(|t| {
+                    if t.starts_with('/') {
+                        t.to_string()
+                    } else {
+                        format!("/lottie/noto-emoji/{t}")
+                    }
+                }),
+            })
+        })
+        .collect()
+}
+
 impl Project {
     pub fn open(path: &Path) -> Result<Self, String> {
         let bytes =
@@ -85,6 +124,24 @@ impl Project {
 
     pub fn name(&self) -> &str {
         &self.media.pack.name
+    }
+
+    /// Copies a file from disk into the project's media.
+    pub fn import_media(&mut self, path: &Path) -> Result<PackMediaEntry, String> {
+        let bytes =
+            std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
+        let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+        framecraft_core::media::import(&mut self.media.pack, name, bytes)
+    }
+
+    /// Every media file of the project, by URL (for the library's thumbnails).
+    pub fn media_files(&self) -> Vec<(String, Vec<u8>)> {
+        self.media
+            .pack
+            .media
+            .iter()
+            .map(|m| (m.entry.url.clone(), m.bytes.clone()))
+            .collect()
     }
 
     pub fn graphic_name(&self, index: usize) -> &str {

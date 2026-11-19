@@ -451,7 +451,13 @@ pub const FIELDS: &[Property] = &[
         None
     ),
     f!("mask", "textContent", "Mask text", Kind::Text, None),
-    f!("mask", "imageUrl", "Mask image URL", Kind::Text, None),
+    f!(
+        "mask",
+        "imageUrl",
+        "Mask image",
+        Kind::Media("images"),
+        None
+    ),
     f!(
         "mask",
         "polygonPoints",

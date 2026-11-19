@@ -25,6 +25,24 @@ pub const HOST: &str = "preview";
 pub struct PreviewFiles {
     revision: u64,
     packages: Vec<(u64, Package)>,
+    /// The project's media by URL, for thumbnails in the media library
+    /// (`framecraft://preview/library/<url>`).
+    library: std::collections::HashMap<String, Rc<Vec<u8>>>,
+    /// Built-in files (stock Lottie and the like), read from disk on request.
+    builtin: Option<std::path::PathBuf>,
+}
+
+/// The address the editor's own page loads a media URL from (thumbnails).
+/// Absolute and `data:` URLs stay as they are.
+pub fn library_url(url: &str) -> String {
+    if url.starts_with("http://") || url.starts_with("https://") || url.starts_with("data:") {
+        return url.to_string();
+    }
+    let path = url.split(['?', '#']).next().unwrap_or("");
+    format!(
+        "{SCHEME}://{HOST}/library/{}",
+        percent_encode_path(path.trim_start_matches('/'))
+    )
 }
 
 pub type SharedPreview = Rc<RefCell<PreviewFiles>>;
@@ -57,6 +75,36 @@ impl PreviewFiles {
         )
     }
 
+    /// Replaces the media the library serves.
+    pub fn set_library(
+        &mut self,
+        media: impl IntoIterator<Item = (String, Vec<u8>)>,
+        builtin: Option<std::path::PathBuf>,
+    ) {
+        self.library = media
+            .into_iter()
+            .map(|(url, bytes)| (library_key(&url), Rc::new(bytes)))
+            .collect();
+        self.builtin = builtin;
+    }
+
+    /// Adds one file to the media the library serves.
+    pub fn add_to_library(&mut self, url: &str, bytes: Vec<u8>) {
+        self.library.insert(library_key(url), Rc::new(bytes));
+    }
+
+    fn library_file(&self, rel: &str) -> Option<(Vec<u8>, &'static str)> {
+        let rel = percent_decode(rel);
+        if let Some(bytes) = self.library.get(&library_key(&rel)) {
+            return Some((bytes.to_vec(), mime_type(&rel)));
+        }
+        if rel.split('/').any(|p| p == ".." || p.is_empty()) {
+            return None;
+        }
+        let bytes = std::fs::read(self.builtin.as_ref()?.join(&rel)).ok()?;
+        Some((bytes, mime_type(&rel)))
+    }
+
     #[cfg(test)]
     pub fn revision(&self) -> u64 {
         self.revision
@@ -65,6 +113,9 @@ impl PreviewFiles {
     /// The file for a request path (`/<revision>/<file>`), if that revision
     /// is still kept.
     pub fn lookup(&self, request_path: &str) -> Option<(Vec<u8>, &'static str)> {
+        if let Some(rel) = request_path.strip_prefix("/library/") {
+            return self.library_file(rel);
+        }
         let (rev, file) = request_path.trim_start_matches('/').split_once('/')?;
         let rev = rev.parse::<u64>().ok()?;
         let (_, package) = self.packages.iter().find(|(r, _)| *r == rev)?;
@@ -95,6 +146,15 @@ pub fn mime_type(path: &str) -> &'static str {
         "mov" => "video/quicktime",
         _ => "application/octet-stream",
     }
+}
+
+/// URLs compare without the leading `/` and query.
+fn library_key(url: &str) -> String {
+    url.split(['?', '#'])
+        .next()
+        .unwrap_or("")
+        .trim_start_matches('/')
+        .to_string()
 }
 
 fn percent_encode_path(s: &str) -> String {
@@ -133,6 +193,17 @@ pub fn percent_decode(s: &str) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn serves_library_media() {
+        let mut files = PreviewFiles::default();
+        files.set_library([("/media/images/a b.png".to_string(), vec![7])], None);
+        let url = library_url("/media/images/a b.png?v=1");
+        assert_eq!(url, "framecraft://preview/library/media/images/a%20b.png");
+        let path = url.trim_start_matches("framecraft://preview");
+        assert_eq!(files.lookup(path), Some((vec![7], "image/png")));
+        assert_eq!(files.lookup("/library/../etc/passwd"), None);
+    }
 
     #[test]
     fn serves_the_latest_two_revisions() {

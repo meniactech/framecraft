@@ -4,7 +4,7 @@
 //! switch visibility and locking, and dragging a row moves the layer
 //! (above, below, or into another layer).
 
-use crate::state::Ui;
+use crate::state::{PickTarget, Ui};
 use dioxus::prelude::*;
 use framecraft_core::commands::{
     FieldTarget, MoveItem, Rename, SetField, SetLocked, SetVisible, Update,
@@ -163,12 +163,29 @@ pub fn Outliner(ui: Ui) -> Element {
                         if menu() {
                             div { class: "menu", onmouseleave: move |_| menu.set(false),
                                 for kind in NewLayer::ALL {
+                                    if kind == NewLayer::ImageSlot {
+                                        button {
+                                            title: "An image from the project's media",
+                                            onclick: move |_| {
+                                                menu.set(false);
+                                                ui.open_media("images", PickTarget::NewLayer);
+                                            },
+                                            "Image…"
+                                        }
+                                    }
                                     button {
                                         onclick: move |_| {
                                             menu.set(false);
-                                            ui.add_layer(kind);
+                                            match kind {
+                                                NewLayer::Lottie => ui.open_media("lottie", PickTarget::NewLayer),
+                                                NewLayer::Video => ui.open_media("videos", PickTarget::NewLayer),
+                                                _ => ui.add_layer(kind),
+                                            }
                                         },
-                                        "{kind.label()}"
+                                        match kind {
+                                            NewLayer::Lottie | NewLayer::Video => format!("{}…", kind.label()),
+                                            _ => kind.label().to_string(),
+                                        }
                                     }
                                 }
                             }

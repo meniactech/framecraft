@@ -264,9 +264,69 @@ pub fn new_layer(kind: NewLayer, parent: Option<&str>) -> Item {
     serde_json::from_value(v).expect("layer defaults match the model")
 }
 
+/// A layer showing a media file (FRAME's Add → Image, Lottie and Video
+/// from the library): an image at its pixel size, or a Lottie / video clip
+/// named after the file.
+pub fn new_media_layer(
+    category: &str,
+    url: &str,
+    name: &str,
+    size: Option<(f64, f64)>,
+    parent: Option<&str>,
+) -> Item {
+    let kind = match category {
+        "lottie" => NewLayer::Lottie,
+        "videos" => NewLayer::Video,
+        _ => {
+            let mut v = base();
+            let (w, h) = size.unwrap_or((256.0, 256.0));
+            for (k, val) in json!({ "itemType": "image", "mediaUrl": url,
+                "name": if name.is_empty() { "Image Item" } else { name },
+                "width": w, "height": h, "bg_color": "#00000000" })
+            .as_object()
+            .expect("object")
+            {
+                v[k] = val.clone();
+            }
+            v["id"] = new_id().into();
+            v["parentId"] = parent.map_or(Value::Null, Value::from);
+            return serde_json::from_value(v).expect("layer defaults match the model");
+        }
+    };
+    let mut item = new_layer(kind, parent);
+    item.media_url = Some(url.to_string());
+    if !name.is_empty() {
+        item.name = if kind == NewLayer::Video {
+            format!("{name} (experimental)")
+        } else {
+            name.to_string()
+        };
+    }
+    item
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn media_layers() {
+        let img = new_media_layer(
+            "images",
+            "/media/images/a.png",
+            "a.png",
+            Some((640.0, 360.0)),
+            None,
+        );
+        assert_eq!(img.item_type, Some(crate::model::ItemType::Image));
+        assert_eq!((img.width, img.height), (640.0, 360.0));
+        let mut unknown = Vec::new();
+        img.collect_unknown("", &mut unknown);
+        assert!(unknown.is_empty(), "{unknown:?}");
+        let clip = new_media_layer("videos", "/media/videos/b.mp4", "b.mp4", None, None);
+        assert_eq!(clip.name, "b.mp4 (experimental)");
+        assert_eq!(clip.media_url.as_deref(), Some("/media/videos/b.mp4"));
+    }
 
     #[test]
     fn ids_look_like_uuids_and_differ() {

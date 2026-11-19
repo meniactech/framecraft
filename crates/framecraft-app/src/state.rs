@@ -64,6 +64,28 @@ pub struct Ui {
     pub tl_zoom: Signal<f64>,
     /// Keyframes copied with Ctrl+C.
     pub copied: Signal<Vec<CopiedKey>>,
+    /// The open media library dialog, if any.
+    pub media: Signal<Option<MediaPick>>,
+}
+
+/// An open media library: what it lists and where the pick goes.
+#[derive(Clone, PartialEq)]
+pub struct MediaPick {
+    /// `images`, `videos` or `lottie`.
+    pub category: &'static str,
+    pub target: PickTarget,
+}
+
+#[derive(Clone, PartialEq)]
+pub enum PickTarget {
+    /// A new layer showing the file (Add → Image, Lottie, Video).
+    NewLayer,
+    /// A media field of a layer (or of one of its modifiers).
+    Field {
+        prop: &'static framecraft_core::schema::Property,
+        item: String,
+        modifier: Option<String>,
+    },
 }
 
 /// `FRAMECRAFT_DEBUG=1` logs preview requests and bridge activity.
@@ -88,6 +110,7 @@ impl Ui {
             tl_view: use_signal(|| TlView::Keys),
             tl_zoom: use_signal(|| 0.1),
             copied: use_signal(Vec::new),
+            media: use_signal(|| None),
         }
     }
 
@@ -117,6 +140,11 @@ impl Ui {
                     }
                 ));
                 let histories = project.docs.iter().map(|_| History::default()).collect();
+                let files = project.media_files();
+                STORE.with(|s| {
+                    s.borrow_mut()
+                        .set_library(files, crate::project::builtin_dir())
+                });
                 self.editor.set(Some(Editor {
                     project,
                     graphic: 0,
@@ -286,6 +314,95 @@ impl Ui {
     }
 
     /// Adds a layer on top and selects it.
+    /// Opens the media library for a pick.
+    pub fn open_media(mut self, category: &'static str, target: PickTarget) {
+        if self.editor.peek().is_some() {
+            self.media.set(Some(MediaPick { category, target }));
+        }
+    }
+
+    /// Copies files from disk into the project's media. Returns how many
+    /// were added; problems go to the status line.
+    pub fn import_media(mut self, paths: Vec<PathBuf>) -> usize {
+        let mut added = 0;
+        let mut problems = Vec::new();
+        if let Some(e) = self.editor.write().as_mut() {
+            for path in paths {
+                match e.project.import_media(&path) {
+                    Ok(entry) => {
+                        let bytes = e
+                            .project
+                            .media_files()
+                            .into_iter()
+                            .find(|(u, _)| *u == entry.url)
+                            .map(|(_, b)| b)
+                            .unwrap_or_default();
+                        STORE.with(|s| s.borrow_mut().add_to_library(&entry.url, bytes));
+                        added += 1;
+                    }
+                    Err(err) => problems.push(err),
+                }
+            }
+        }
+        if problems.is_empty() {
+            self.set_status(format!(
+                "Imported {added} file{}. Saving keeps the files that layers use.",
+                if added == 1 { "" } else { "s" }
+            ));
+        } else {
+            self.set_status(problems.join("; "));
+        }
+        added
+    }
+
+    /// Uses a picked media file (`url`, shown name `name`) for the open
+    /// library's target, and closes the library.
+    pub fn pick_media(mut self, url: String, name: String) {
+        let Some(pick) = self.media.peek().clone() else {
+            return;
+        };
+        self.media.set(None);
+        match pick.target {
+            PickTarget::NewLayer => {
+                let size = (pick.category == "images")
+                    .then(|| {
+                        use framecraft_core::export::package::MediaSource;
+                        self.editor
+                            .peek()
+                            .as_ref()
+                            .and_then(|e| e.project.media.read(&url))
+                            .and_then(|b| framecraft_core::media::image_size(&b))
+                    })
+                    .flatten();
+                let item = framecraft_core::layers::new_media_layer(
+                    pick.category,
+                    &url,
+                    &name,
+                    size,
+                    None,
+                );
+                let id = item.id.clone();
+                self.execute(&AddItem { item });
+                self.select_layer(Some(id));
+            }
+            PickTarget::Field {
+                prop,
+                item,
+                modifier,
+            } => {
+                let value = serde_json::Value::from(url);
+                let (time, auto_key) = (*self.time.peek(), *self.auto_key.peek());
+                let cmd = match &modifier {
+                    Some(m) => prop.modifier_command(&item, m, value, time, auto_key),
+                    None => prop.command(Some(&item), value, time, auto_key),
+                };
+                if let Some(cmd) = cmd {
+                    self.execute(cmd.as_ref());
+                }
+            }
+        }
+    }
+
     pub fn add_layer(self, kind: NewLayer) {
         if self.editor.peek().is_none() {
             return;

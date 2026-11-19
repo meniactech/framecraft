@@ -18,6 +18,7 @@ pub mod js;
 pub mod keys;
 pub mod layers;
 pub mod manipulate;
+pub mod media;
 pub mod model;
 pub mod modifiers;
 pub mod normalize;

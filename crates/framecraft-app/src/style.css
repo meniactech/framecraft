@@ -213,3 +213,27 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .mod-help { color: var(--dim); font-size: 11px; margin: 4px 0; }
 .point.xy { grid-template-columns: 26px 1fr 1fr 22px; }
 .row-buttons { display: flex; gap: 4px; }
+/* Media library dialog and media fields */
+.modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.55); display: flex; align-items: center; justify-content: center; z-index: 50; }
+.modal { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 12px 40px rgba(0,0,0,0.5); }
+.media-dialog { width: min(1000px, 90vw); height: min(720px, 85vh); display: flex; flex-direction: column; padding: 12px; gap: 8px; -webkit-user-select: none; user-select: none; }
+.modal-head { display: flex; align-items: center; gap: 8px; }
+.modal-head .panel-title { margin-right: auto; font-weight: 600; }
+.modal-head input[type=search] { width: 220px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 4px 6px; font: inherit; }
+.seg { display: flex; }
+.seg button { border-radius: 0; }
+.seg button:first-child { border-radius: 4px 0 0 4px; }
+.seg button:last-child { border-radius: 0 4px 4px 0; }
+.seg button.active { background: var(--accent); border-color: var(--accent); }
+.count { margin: 0; }
+.media-grid { flex: 1; overflow: auto; display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: 8px; align-content: start; }
+.media-tile { display: flex; flex-direction: column; gap: 4px; padding: 6px; text-align: left; }
+.media-thumb { height: 90px; display: flex; align-items: center; justify-content: center; border-radius: 4px; overflow: hidden;
+  background: repeating-conic-gradient(#2a2e38 0% 25%, #22252d 0% 50%) 50% / 16px 16px; }
+.media-thumb img { max-width: 100%; max-height: 100%; object-fit: contain; }
+.media-kind { color: var(--dim); font-size: 22px; }
+.media-name { font-size: 11px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.media-field { display: flex; gap: 4px; align-items: center; min-width: 0; }
+.media-field input { flex: 1; min-width: 0; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 4px; padding: 3px 6px; font: inherit; }
+.media-field button { padding: 3px 8px; }
+.media-mini { width: 24px; height: 24px; object-fit: contain; border-radius: 3px; background: var(--bg); }

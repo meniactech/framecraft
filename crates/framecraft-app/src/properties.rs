@@ -429,6 +429,44 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 }
             }
         }
+        Kind::Media(category) => {
+            let target = crate::state::PickTarget::Field {
+                prop,
+                item: item.clone().unwrap_or_default(),
+                modifier: field.modifier.clone(),
+            };
+            let thumb = (category == "images" && !text.is_empty())
+                .then(|| crate::preview::library_url(&text));
+            let has = !text.is_empty();
+            rsx! {
+                div { class: "media-field",
+                    if let Some(src) = thumb {
+                        img { class: "media-mini", src: "{src}", draggable: "false" }
+                    }
+                    input {
+                        r#type: "text",
+                        value: "{text}",
+                        placeholder: "None",
+                        title: "{text}",
+                        onchange: move |evt| set(Value::from(evt.value().trim())),
+                    }
+                    button {
+                        title: "Pick from the project's media, or import a file",
+                        disabled: item.is_none(),
+                        onclick: move |_| ui.open_media(category, target.clone()),
+                        "Choose…"
+                    }
+                    if has {
+                        button {
+                            class: "key-button",
+                            title: "Clear",
+                            onclick: move |_| set(Value::from("")),
+                            "×"
+                        }
+                    }
+                }
+            }
+        }
         Kind::MaskPoints => rsx! {
             MaskPoints { value: field.value.clone(), area: field.context["transform"].clone(), set }
         },

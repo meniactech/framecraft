@@ -115,6 +115,9 @@ pub enum Kind {
     PathSource,
     /// A mask's polygon: `[{x, y}, …]` in the layer's own box.
     MaskPoints,
+    /// A media URL, picked from the project's media of this category
+    /// (`images`, `videos`, `lottie`) or typed.
+    Media(&'static str),
 }
 
 /// Where a property's value lives.
@@ -567,8 +570,8 @@ pub const PROPERTIES: &[Property] = &[
         Look,
         "Fill",
         "bgImageUrl",
-        "Image URL",
-        Kind::Text,
+        "Image",
+        Kind::Media("images"),
         Item,
         None,
         Layer
@@ -1349,8 +1352,8 @@ pub const PROPERTIES: &[Property] = &[
         Particles,
         "Look",
         "particleSpriteUrl",
-        "Sprite URL",
-        Kind::Text,
+        "Sprite",
+        Kind::Media("images"),
         Item,
         None,
         Rebuild
@@ -1617,8 +1620,8 @@ pub const PROPERTIES: &[Property] = &[
         Lottie,
         "Lottie",
         "mediaUrl",
-        "Source URL",
-        Kind::Text,
+        "Source",
+        Kind::Media("lottie"),
         Item,
         None,
         Rebuild
@@ -1647,8 +1650,8 @@ pub const PROPERTIES: &[Property] = &[
         Video,
         "Video (experimental)",
         "mediaUrl",
-        "Source URL",
-        Kind::Text,
+        "Source",
+        Kind::Media("videos"),
         Item,
         None,
         Rebuild
