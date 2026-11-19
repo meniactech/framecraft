@@ -531,10 +531,39 @@ impl Command for DeleteItems {
 
 /// Moves a layer under a new parent (or to the top level with `None`) and
 /// to a position among its new siblings (`index`, 0 = drawn first).
+///
+/// With `keep_place` (a time), a layer that changes parent stays where it
+/// is on screen at that time, as in FRAME: its position and rotation are
+/// recomputed for the new parent, and their keyframes shift by the same
+/// amount.
 pub struct MoveItem {
     pub item: String,
     pub parent: Option<String>,
     pub index: usize,
+    pub keep_place: Option<f64>,
+}
+
+/// Adds `delta` to a lane: every keyframe and the layer's own value.
+fn shift_lane(doc: &mut Document, item: &str, lane: &str, delta: f64) -> Result<(), CommandError> {
+    if delta == 0.0 {
+        return Ok(());
+    }
+    if let Some(keys) = doc
+        .timeline
+        .item_tracks
+        .iter_mut()
+        .find(|t| t.item_id == item)
+        .and_then(|t| t.properties.get_mut(lane))
+    {
+        for k in keys.iter_mut() {
+            k.value += delta;
+        }
+    }
+    let it = item_mut(doc, item)?;
+    if let Some(base) = base_value(it, lane) {
+        set_number(it, lane, base + delta)?;
+    }
+    Ok(())
 }
 
 impl Command for MoveItem {
@@ -552,7 +581,23 @@ impl Command for MoveItem {
                 return Err(CommandError::WouldCreateCycle(self.item.clone()));
             }
         }
+        // Where the layer's pivot is on screen, and its parent's rotation.
+        let place = self.keep_place.map(|t| {
+            use crate::manipulate::{box_to_parent, parent_frame};
+            let item = &doc.items[from];
+            let pose = crate::timeline::pose_at(doc, item, t);
+            let frame = parent_frame(doc, &self.item, t);
+            let c = (
+                pose.width * pose.pivot_x / 100.0,
+                pose.height * pose.pivot_y / 100.0,
+            );
+            (
+                frame.to_scene(box_to_parent(&pose, c)),
+                frame.ux.1.atan2(frame.ux.0).to_degrees(),
+            )
+        });
         let mut item = doc.items.remove(from);
+        let old_parent = item.parent_id.clone().flatten();
         item.parent_id = Some(self.parent.clone());
         // Insert before the `index`-th sibling under the new parent.
         let siblings: Vec<usize> = doc
@@ -566,7 +611,29 @@ impl Command for MoveItem {
             Some(&pos) => pos,
             None => siblings.last().map_or(doc.items.len(), |&p| p + 1),
         };
+        let reparented = item.parent_id.clone().flatten() != old_parent;
         doc.items.insert(at.min(doc.items.len()), item);
+        if let (Some(t), true, Some((pivot, angle))) = (self.keep_place, reparented, place) {
+            use crate::manipulate::{box_to_parent, parent_frame};
+            let item = doc
+                .items
+                .iter()
+                .find(|i| i.id == self.item)
+                .expect("just inserted");
+            let pose = crate::timeline::pose_at(doc, item, t);
+            let frame = parent_frame(doc, &self.item, t);
+            let local = frame.to_local(pivot);
+            let c = (
+                pose.width * pose.pivot_x / 100.0,
+                pose.height * pose.pivot_y / 100.0,
+            );
+            let at_pivot = box_to_parent(&pose, c);
+            let (dx, dy) = (local.0 - at_pivot.0, local.1 - at_pivot.1);
+            let dr = angle - frame.ux.1.atan2(frame.ux.0).to_degrees();
+            shift_lane(doc, &self.item, "x", dx)?;
+            shift_lane(doc, &self.item, "y", dy)?;
+            shift_lane(doc, &self.item, "rotation", dr)?;
+        }
         Ok(Change::Rebuild)
     }
     fn label(&self, doc: &Document) -> String {
@@ -1066,6 +1133,7 @@ mod tests {
             h.execute(
                 &mut d,
                 &MoveItem {
+                    keep_place: None,
                     item: "a".into(),
                     parent: Some("d".into()),
                     index: 0
@@ -1232,6 +1300,7 @@ mod tests {
         h.execute(
             &mut d,
             &MoveItem {
+                keep_place: None,
                 item: "c".into(),
                 parent: None,
                 index: 0,
@@ -1242,6 +1311,7 @@ mod tests {
         h.execute(
             &mut d,
             &MoveItem {
+                keep_place: None,
                 item: "c".into(),
                 parent: Some("a".into()),
                 index: 5,
@@ -1253,6 +1323,42 @@ mod tests {
             Some(Some("a".into()))
         );
         assert_eq!(ids(&d), vec!["a", "b", "c", "d"]);
+    }
+
+    #[test]
+    fn reparent_keeps_place_on_screen() {
+        use crate::manipulate::{corners, parent_frame};
+        use crate::timeline::pose_at;
+        let mut d = doc();
+        let mut h = History::default();
+        {
+            let a = d.items.iter_mut().find(|i| i.id == "a").unwrap();
+            (a.x, a.y, a.rotation) = (300.0, 200.0, 90.0);
+        }
+        let seen = |d: &Document, t: f64| {
+            let c = d.items.iter().find(|i| i.id == "c").unwrap();
+            corners(&pose_at(d, c, t), &parent_frame(d, "c", t))
+        };
+        // c is animated; the place is kept at 500 ms.
+        let before = seen(&d, 500.0);
+        for parent in [Some("a"), None] {
+            h.execute(
+                &mut d,
+                &MoveItem {
+                    item: "c".into(),
+                    parent: parent.map(Into::into),
+                    index: 0,
+                    keep_place: Some(500.0),
+                },
+            )
+            .unwrap();
+            for (b, a) in before.iter().zip(seen(&d, 500.0).iter()) {
+                assert!(
+                    (b.0 - a.0).abs() < 1e-6 && (b.1 - a.1).abs() < 1e-6,
+                    "{parent:?}: {b:?} vs {a:?}"
+                );
+            }
+        }
     }
 
     #[test]

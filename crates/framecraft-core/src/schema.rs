@@ -771,6 +771,19 @@ fn is_filled(item: &Item) -> bool {
     }
 }
 
+/// The value at a dotted JSON path (`shadow.x`, `borderRadius.0`), or
+/// `null`.
+pub fn lookup(root: &Value, path: &str) -> Value {
+    path.split('.')
+        .try_fold(root, |v, part| match v {
+            Value::Object(m) => m.get(part),
+            Value::Array(a) => part.parse::<usize>().ok().and_then(|i| a.get(i)),
+            _ => None,
+        })
+        .cloned()
+        .unwrap_or(Value::Null)
+}
+
 impl Property {
     /// Properties of a tab, in order.
     pub fn of(tab: Tab) -> impl Iterator<Item = &'static Property> {
@@ -820,15 +833,7 @@ impl Property {
             (Scope::Item, None) => return Value::Null,
         }
         .unwrap_or(Value::Null);
-        self.path
-            .split('.')
-            .try_fold(&root, |v, part| match v {
-                Value::Object(m) => m.get(part),
-                Value::Array(a) => part.parse::<usize>().ok().and_then(|i| a.get(i)),
-                _ => None,
-            })
-            .cloned()
-            .unwrap_or(Value::Null)
+        lookup(&root, self.path)
     }
 
     /// The command that sets this property. Animatable numbers go through

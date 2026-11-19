@@ -6,7 +6,7 @@
 
 use crate::state::Ui;
 use dioxus::prelude::*;
-use framecraft_core::commands::{Command, DeleteItems, SetNumber, SetValueAt};
+use framecraft_core::commands::{Command, SetNumber, SetValueAt};
 use framecraft_core::manipulate::{
     Frame, Handle, Vec2, inside, move_by, move_pivot, parent_frame, resize, rotate,
 };
@@ -297,13 +297,8 @@ fn key(ui: Ui, key: &str, shift: bool) {
         "undo" => ui.undo(),
         "redo" => ui.redo(),
         "Escape" => ui.select_layer(None),
-        "Delete" | "Backspace" => {
-            let selected = ui.editor.peek().as_ref().and_then(|e| e.selected.clone());
-            if let Some(id) = selected {
-                ui.select_layer(None);
-                ui.execute(&DeleteItems { items: vec![id] });
-            }
-        }
+        "Delete" | "Backspace" => ui.delete_selected(),
+        "duplicate" => ui.duplicate_selected(),
         "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" => {
             let step = if shift { 10.0 } else { 1.0 };
             let (dx, dy) = match key {

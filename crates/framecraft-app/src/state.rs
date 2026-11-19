@@ -7,9 +7,11 @@ use crate::interact::{Drag, Geom};
 use crate::preview::STORE;
 use crate::project::Project;
 use dioxus::prelude::*;
-use framecraft_core::commands::{Change, Command, History};
+use framecraft_core::commands::{AddItem, Change, Command, DeleteItems, DuplicateItems, History};
+use framecraft_core::layers::{NewLayer, new_layer};
 use framecraft_core::normalize::Document;
 use framecraft_core::preview::{PreviewState, PreviewUpdate};
+use framecraft_core::schema::Tab;
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -49,6 +51,8 @@ pub struct Ui {
     /// pointer move and nothing renders from it).
     pub drag: Signal<Option<Drag>>,
     pub status: Signal<String>,
+    /// The properties tab last picked.
+    pub tab: Signal<Tab>,
 }
 
 /// `FRAMECRAFT_DEBUG=1` logs preview requests and bridge activity.
@@ -67,6 +71,7 @@ impl Ui {
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),
             status: use_signal(|| "Open a .frameproject.zip or .framepack.zip".to_string()),
+            tab: use_signal(|| Tab::Transform),
         }
     }
 
@@ -253,6 +258,46 @@ impl Ui {
         });
         if let Some(change) = change {
             self.show(change);
+        }
+    }
+
+    fn selected(&self) -> Option<String> {
+        self.editor.peek().as_ref().and_then(|e| e.selected.clone())
+    }
+
+    /// Adds a layer on top and selects it.
+    pub fn add_layer(self, kind: NewLayer) {
+        if self.editor.peek().is_none() {
+            return;
+        }
+        let item = new_layer(kind, None);
+        let id = item.id.clone();
+        self.execute(&AddItem { item });
+        self.select_layer(Some(id));
+    }
+
+    /// Duplicates the selected layer (with its children) and selects the copy.
+    pub fn duplicate_selected(self) {
+        let Some(id) = self.selected() else { return };
+        let cmd = match self.editor.peek().as_ref() {
+            Some(e) => DuplicateItems::new(e.doc(), vec![id]),
+            None => return,
+        };
+        self.execute(&cmd);
+        let copy = self
+            .editor
+            .peek()
+            .as_ref()
+            .and_then(|e| cmd.copy_ids(e.doc()).into_iter().next());
+        if copy.is_some() {
+            self.select_layer(copy);
+        }
+    }
+
+    pub fn delete_selected(self) {
+        if let Some(id) = self.selected() {
+            self.select_layer(None);
+            self.execute(&DeleteItems { items: vec![id] });
         }
     }
 }

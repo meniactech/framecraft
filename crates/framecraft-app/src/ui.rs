@@ -1,17 +1,16 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The editor's panels: header, viewport, properties and timeline.
+//! The editor's panels: header, viewport and timeline (the Outliner and
+//! properties have their own modules).
 
 use crate::bridge::{self, FRAME_A, FRAME_B};
 use crate::interact::{Geom, ROTATE_OFFSET};
 use crate::state::{Editor, Ui};
 use dioxus::prelude::*;
-use framecraft_core::commands::{SetKeyframe, SetText, SetValueAt};
 use framecraft_core::manipulate::Handle;
-use framecraft_core::model::{Item, ItemType};
+use framecraft_core::model::Item;
 use framecraft_core::normalize::CLIP_START;
 use framecraft_core::selection::movable;
 use framecraft_core::timeline::pose_at;
-use framecraft_core::timeline::{base_value, lane_value};
 
 /// Timeline scale: pixels per millisecond (10 s = 1000 px). The bridge
 /// uses the same numbers to move the playhead during playback.
@@ -233,122 +232,6 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                         circle { class: "sel-pivot", cx: "{pivot.0}", cy: "{pivot.1}", r: "{hs * 0.55}" }
                         line { class: "sel-pivot", x1: "{pivot.0 - hs}", y1: "{pivot.1}", x2: "{pivot.0 + hs}", y2: "{pivot.1}" }
                         line { class: "sel-pivot", x1: "{pivot.0}", y1: "{pivot.1 - hs}", x2: "{pivot.0}", y2: "{pivot.1 + hs}" }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// Number fields the properties tab edits; each is also a timeline lane.
-const FIELDS: [(&str, &str); 8] = [
-    ("x", "X"),
-    ("y", "Y"),
-    ("width", "Width"),
-    ("height", "Height"),
-    ("rotation", "Rotation"),
-    ("opacity", "Opacity"),
-    ("scaleX", "Scale X"),
-    ("scaleY", "Scale Y"),
-];
-
-fn round3(v: f64) -> f64 {
-    (v * 1000.0).round() / 1000.0
-}
-
-#[component]
-pub fn Properties(ui: Ui) -> Element {
-    let time = (ui.time)();
-    let editor = ui.editor.read();
-    let Some(ed) = editor.as_ref() else {
-        return rsx! { div { class: "properties", h3 { "Transform" } p { class: "dim", "Nothing open" } } };
-    };
-    let Some(item) = ed
-        .selected
-        .as_ref()
-        .and_then(|id| ed.doc().items.iter().find(|i| &i.id == id))
-    else {
-        return rsx! { div { class: "properties", h3 { "Transform" } p { class: "dim", "Select a layer in the timeline" } } };
-    };
-    let id = item.id.clone();
-    let doc = ed.doc();
-    // Values at the playhead: animated lanes show their animated value.
-    let values: Vec<(&str, &str, f64, bool)> = FIELDS
-        .iter()
-        .map(|(lane, label)| {
-            let animated = lane_value(doc, &id, lane, time);
-            let v = animated.or_else(|| base_value(item, lane)).unwrap_or(0.0);
-            (*lane, *label, round3(v), animated.is_some())
-        })
-        .collect();
-    let text = (item.item_type == Some(ItemType::Text))
-        .then(|| item.text_content.clone().unwrap_or_default());
-    let name = item.name.clone();
-    let kind = format!("{:?}", item.item_type.unwrap_or(ItemType::Shape));
-    drop(editor);
-
-    rsx! {
-        div { class: "properties",
-            h3 { "Transform" }
-            p { class: "layer-name", "{name} " span { class: "dim", "{kind}" } }
-            for (lane , label , value , is_animated) in values {
-                {
-                    let id = id.clone();
-                    rsx! {
-                        label { class: "field",
-                            span { "{label}" }
-                            input {
-                                r#type: "number",
-                                step: "any",
-                                value: "{value}",
-                                onchange: move |evt| {
-                                    if let Ok(v) = evt.value().parse::<f64>() {
-                                        ui.execute(&SetValueAt {
-                                            item: id.clone(),
-                                            lane: lane.to_string(),
-                                            time_ms: (ui.time)(),
-                                            value: v,
-                                            auto_key: (ui.auto_key)(),
-                                        });
-                                    }
-                                },
-                            }
-                            {
-                                let id = id.clone();
-                                rsx! {
-                                    button {
-                                        class: if is_animated { "key-button animated" } else { "key-button" },
-                                        title: if is_animated {
-                                            "Animated. Click to set a keyframe at the playhead. With Auto-key off, editing shifts the whole animation."
-                                        } else {
-                                            "Click to animate: sets the first keyframe at the playhead."
-                                        },
-                                        onclick: move |_| {
-                                            ui.execute(&SetKeyframe {
-                                                item: id.clone(),
-                                                lane: lane.to_string(),
-                                                time_ms: (ui.time)(),
-                                                value,
-                                                easing: None,
-                                            });
-                                        },
-                                        if is_animated { "◆" } else { "◇" }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-            if let Some(text) = text {
-                {
-                    let id = id.clone();
-                    rsx! {
-                        h3 { "Text" }
-                        textarea {
-                            value: "{text}",
-                            onchange: move |evt| ui.execute(&SetText { item: id.clone(), text: evt.value() }),
-                        }
                     }
                 }
             }

@@ -167,6 +167,7 @@ if (!window.__fc) {
     let key = null;
     if (mod && k.toLowerCase() === 'z') key = e.shiftKey ? 'redo' : 'undo';
     else if (mod && k.toLowerCase() === 'y') key = 'redo';
+    else if (mod && k.toLowerCase() === 'd') key = 'duplicate';
     else if (!mod && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Backspace', 'Escape'].includes(k)) key = k;
     if (!key) return;
     e.preventDefault();
@@ -262,7 +263,8 @@ pub fn select(ids: &[String]) {
 /// Delivers events from the page to `on_event`, for as long as the page
 /// lives: `{type: "pointer", kind: "down"|"move"|"up", x, y, shift, alt,
 /// ctrl, hits?}`, `{type: "geometry", items: [{id, corners}]}` and
-/// `{type: "key", key, shift}`.
+/// `{type: "key", key, shift}` (`key`: `undo`, `redo`, `duplicate` or a
+/// DOM key name).
 pub async fn events(mut on_event: impl FnMut(Value)) {
     install();
     let mut eval = document::eval(

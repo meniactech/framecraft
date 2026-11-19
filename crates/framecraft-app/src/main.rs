@@ -11,17 +11,21 @@
 
 mod bridge;
 mod interact;
+mod outliner;
 mod preview;
 mod project;
+mod properties;
 mod state;
 mod ui;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
 use dioxus::prelude::*;
+use outliner::Outliner;
 use preview::{HOST, SCHEME, STORE};
+use properties::Properties;
 use state::{Ui, debug};
 use std::path::PathBuf;
-use ui::{Header, Properties, Timeline, Viewport};
+use ui::{Header, Timeline, Viewport};
 
 const STYLE: &str = include_str!("style.css");
 
@@ -78,7 +82,10 @@ fn App() -> Element {
             Header { ui }
             div { class: "main",
                 Viewport { ui }
-                Properties { ui }
+                div { class: "side",
+                    Outliner { ui }
+                    Properties { ui }
+                }
             }
             Timeline { ui }
         }
