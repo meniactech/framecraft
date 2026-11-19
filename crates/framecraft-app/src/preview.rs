@@ -19,11 +19,12 @@ pub const SCHEME: &str = "framecraft";
 /// Host part of preview URLs.
 pub const HOST: &str = "preview";
 
+/// The latest packages by revision. Two are kept: while a rebuilt preview
+/// loads in the hidden frame, the visible one may still request files.
 #[derive(Default)]
 pub struct PreviewFiles {
     revision: u64,
-    package: Package,
-    entry: String,
+    packages: Vec<(u64, Package)>,
 }
 
 pub type SharedPreview = Rc<RefCell<PreviewFiles>>;
@@ -38,34 +39,37 @@ impl PreviewFiles {
     /// Replaces the package; returns the iframe URL of the new revision.
     pub fn publish(&mut self, package: Package) -> String {
         self.revision += 1;
-        self.entry = package
+        let entry = package
             .files
             .iter()
             .map(|(p, _)| p.as_str())
             .find(|p| p.ends_with(".html") && !p.contains('/'))
             .unwrap_or("index.html")
             .to_string();
-        self.package = package;
+        self.packages.push((self.revision, package));
+        if self.packages.len() > 2 {
+            self.packages.remove(0);
+        }
         format!(
             "{SCHEME}://{HOST}/{}/{}",
             self.revision,
-            percent_encode_path(&self.entry)
+            percent_encode_path(&entry)
         )
     }
 
+    #[cfg(test)]
     pub fn revision(&self) -> u64 {
         self.revision
     }
 
-    /// The file for a request path (`/<revision>/<file>`), if it belongs to
-    /// the current revision.
+    /// The file for a request path (`/<revision>/<file>`), if that revision
+    /// is still kept.
     pub fn lookup(&self, request_path: &str) -> Option<(Vec<u8>, &'static str)> {
         let (rev, file) = request_path.trim_start_matches('/').split_once('/')?;
-        if rev.parse::<u64>().ok()? != self.revision {
-            return None;
-        }
+        let rev = rev.parse::<u64>().ok()?;
+        let (_, package) = self.packages.iter().find(|(r, _)| *r == rev)?;
         let file = percent_decode(file);
-        let bytes = self.package.get(&file)?;
+        let bytes = package.get(&file)?;
         Some((bytes.to_vec(), mime_type(&file)))
     }
 }
@@ -131,7 +135,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn serves_only_the_current_revision() {
+    fn serves_the_latest_two_revisions() {
         let mut files = PreviewFiles::default();
         let mut pkg = Package::default();
         pkg.files.push(("js/a.js".into(), b"x".to_vec()));
@@ -145,6 +149,12 @@ mod tests {
         assert!(files.lookup("/1/js/a.js").is_some());
         assert!(files.lookup("/0/js/a.js").is_none());
         assert!(files.lookup("/x/1/js/a.js").is_none());
+        // The previous revision stays available while the next one loads;
+        // the one before that is dropped.
+        files.publish(Package::default());
+        assert!(files.lookup("/1/js/a.js").is_some());
+        files.publish(Package::default());
+        assert!(files.lookup("/1/js/a.js").is_none());
     }
 
     #[test]

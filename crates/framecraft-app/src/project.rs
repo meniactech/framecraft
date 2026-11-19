@@ -2,11 +2,13 @@
 //! An open project: the pack it came from, its graphics loaded for editing,
 //! and the media they use.
 
+use framecraft_core::commands::Change;
 use framecraft_core::export::package::{
     ExportRequest, MediaSource, Package, banner_package, ograf_package, spx_package,
 };
 use framecraft_core::normalize::{Document, normalize};
 use framecraft_core::pack::{Pack, PackSource, ProjectPack, read_pack, write_project_pack};
+use framecraft_core::preview::{self, PreviewState, PreviewUpdate};
 use framecraft_core::profile::Profile;
 use std::path::{Path, PathBuf};
 
@@ -99,9 +101,26 @@ impl Project {
         }
     }
 
-    /// The SPX package the viewport shows.
-    pub fn preview(&self, index: usize) -> Package {
-        spx_package(
+    /// The preview package the viewport shows (SPX package plus the
+    /// editor script) and the state it was built from.
+    pub fn preview(&self, index: usize) -> (Package, PreviewState) {
+        preview::build(
+            &self.request(index, ""),
+            &self.media,
+            &Profile::framecraft(),
+        )
+    }
+
+    /// The update that brings a loaded preview in line after an edit.
+    pub fn preview_update(
+        &self,
+        index: usize,
+        prev: &PreviewState,
+        change: &Change,
+    ) -> (PreviewUpdate, PreviewState) {
+        preview::update(
+            prev,
+            change,
             &self.request(index, ""),
             &self.media,
             &Profile::framecraft(),
@@ -207,7 +226,7 @@ mod tests {
             let project = Project::open(&path).unwrap();
             assert!(project.warnings.is_empty(), "{:?}", project.warnings);
             for i in 0..project.docs.len() {
-                let pkg = project.preview(i);
+                let (pkg, _) = project.preview(i);
                 assert!(
                     pkg.missing.is_empty(),
                     "{}: missing {:?}",
