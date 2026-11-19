@@ -471,3 +471,4 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .guide-btn.on.rulers { background: rgba(124, 58, 237, .7); border-color: #c4b5fd; color: #fff; }
 .guide-btn.on.snap { background: var(--accent); border-color: var(--accent); color: #fff; }
 .overlay .guides, .overlay .guides * { vector-effect: none; pointer-events: none; }
+.point.ruler { grid-template-columns: 18px 1fr 14px 22px; }

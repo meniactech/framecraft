@@ -130,6 +130,8 @@ pub enum Kind {
     PolygonPoints,
     /// A button that turns a tinted SVG image into a polygon layer.
     SvgToPolygon,
+    /// Custom ruler positions in percent (0–100) of the scene.
+    Rulers,
 }
 
 /// Where a property's value lives.
@@ -376,6 +378,87 @@ pub const PROPERTIES: &[Property] = &[
         Scene,
         None,
         Rebuild
+    ),
+    // Editor guides (Scene → Guides). Editor-only; never exported.
+    p!(
+        Scene,
+        "Guides",
+        "guideLineWidth",
+        "Line width (px)",
+        num(1.0, 20.0, 1.0),
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Guides",
+        "guideColorSafe10",
+        "Safe 10%",
+        Kind::Color,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Guides",
+        "guideColorSafe20",
+        "Safe 20%",
+        Kind::Color,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Guides",
+        "guideColorThirds",
+        "Thirds",
+        Kind::Color,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Guides",
+        "guideColorCenter",
+        "Center +",
+        Kind::Color,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Guides",
+        "customRulerColor",
+        "Rulers",
+        Kind::Color,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Custom rulers",
+        "customRulersH",
+        "Horizontal (% from top)",
+        Kind::Rulers,
+        Scene,
+        None,
+        None
+    ),
+    p!(
+        Scene,
+        "Custom rulers",
+        "customRulersV",
+        "Vertical (% from left)",
+        Kind::Rulers,
+        Scene,
+        None,
+        None
     ),
     // Transform
     p!(
@@ -1767,6 +1850,12 @@ pub fn group_help(
         (Tab::Scene, "Plates") => {
             "Editor-only underlay plate behind your graphics. Never exported to OGraf / SPX / HTML."
         }
+        (Tab::Scene, "Guides") => {
+            "Editor-only overlays (Safe 10% / 20%, Thirds, Center +, Rulers): shown with the toggles above the viewport. Never exported."
+        }
+        (Tab::Scene, "Custom rulers") => {
+            "Your own guide lines, in percent of the scene. Show them with Rulers above the viewport; moving layers snap to them when Snap is on."
+        }
         (Tab::Scene, "Cues") => {
             "Edit on the timeline (Pause / API / Script diamonds). Select a diamond for time, delay and type fields."
         }
@@ -2211,6 +2300,7 @@ mod tests {
                         serde_json::json!([{ "offset": 0, "value": 1 }, { "offset": 1, "value": 0 }])
                     }
                     (Kind::ColorList, _) => serde_json::json!(["#ff0000"]),
+                    (Kind::Rulers, _) => serde_json::json!([50]),
                     (Kind::Seed, _) => Value::from(7),
                     (Kind::ClipStart, _) => Value::from(0),
                     (Kind::ChartPoints, _) => {

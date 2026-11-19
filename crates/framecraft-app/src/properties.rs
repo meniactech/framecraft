@@ -30,6 +30,7 @@ fn number_default(path: &str) -> Option<f64> {
         "chartPointRadius" => Some(4.0),
         "chartLineTension" => Some(0.2),
         "qrMargin" => Some(2.0),
+        "guideLineWidth" => Some(5.0),
         _ => None,
     }
 }
@@ -577,6 +578,9 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 }
             }
         }
+        Kind::Rulers => rsx! {
+            Rulers { value: field.value.clone(), set }
+        },
         Kind::PolygonPoints => rsx! {
             PolygonPoints { ui, item: item.clone().unwrap_or_default(), value: field.value.clone(), set }
         },
@@ -674,6 +678,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             | Kind::ColorList
             | Kind::MaskPoints
             | Kind::PolygonPoints
+            | Kind::Rulers
     );
     if wide {
         // A div, not a label: these hold several inputs and buttons.
@@ -2196,6 +2201,80 @@ fn RgbaSliders(value: String, set: Callback<Value>) -> Element {
                             }
                         },
                     }
+                }
+            }
+        }
+    }
+}
+
+/// Custom ruler positions (FRAME's Custom Rulers): percent of the scene,
+/// each editable or removable; + Ruler adds one at 50 %, Sort orders them.
+#[component]
+fn Rulers(value: Value, set: Callback<Value>) -> Element {
+    let list: Vec<f64> = value
+        .as_array()
+        .map(|a| a.iter().filter_map(Value::as_f64).collect())
+        .unwrap_or_default();
+    let round = |v: f64| (v.clamp(0.0, 100.0) * 100.0).round() / 100.0;
+    let write = move |l: Vec<f64>| set(Value::Array(l.into_iter().map(Value::from).collect()));
+    let (add, sort) = (list.clone(), list.clone());
+    rsx! {
+        div { class: "points",
+            if list.is_empty() {
+                p { class: "dim hint", "No rulers." }
+            }
+            for (i , v) in list.iter().copied().enumerate() {
+                {
+                    let (a, b) = (list.clone(), list.clone());
+                    rsx! {
+                        div { class: "point ruler",
+                            span { class: "dim", "{i + 1}" }
+                            input {
+                                r#type: "number",
+                                min: "0",
+                                max: "100",
+                                step: "0.1",
+                                value: "{number_to_string(v)}",
+                                onchange: move |evt| {
+                                    if let Ok(n) = evt.value().trim().parse::<f64>() {
+                                        let mut l = a.clone();
+                                        l[i] = round(n);
+                                        write(l);
+                                    }
+                                },
+                            }
+                            span { class: "dim", "%" }
+                            button {
+                                class: "key-button",
+                                title: "Remove ruler",
+                                onclick: move |_| {
+                                    let mut l = b.clone();
+                                    l.remove(i);
+                                    write(l);
+                                },
+                                "×"
+                            }
+                        }
+                    }
+                }
+            }
+            div { class: "row-buttons",
+                button {
+                    onclick: move |_| {
+                        let mut l = add.clone();
+                        l.push(50.0);
+                        write(l);
+                    },
+                    "+ Ruler"
+                }
+                button {
+                    disabled: list.len() < 2,
+                    onclick: move |_| {
+                        let mut l = sort.clone();
+                        l.sort_by(f64::total_cmp);
+                        write(l);
+                    },
+                    "Sort"
                 }
             }
         }
