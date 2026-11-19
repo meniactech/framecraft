@@ -10,6 +10,7 @@
 //! files this crate writes stay compatible with SPX, OGraf hosts,
 //! MENiAC Air and BOARD.
 
+pub mod color;
 pub mod commands;
 pub mod easing;
 pub mod export;
@@ -23,6 +24,7 @@ pub mod preview;
 pub mod profile;
 pub mod project;
 pub mod ramp;
+pub mod schema;
 pub mod script;
 pub mod selection;
 pub mod timeline;
