@@ -16,6 +16,7 @@ mod preview;
 mod project;
 mod properties;
 mod state;
+mod timeline;
 mod ui;
 
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
@@ -25,7 +26,8 @@ use preview::{HOST, SCHEME, STORE};
 use properties::Properties;
 use state::{Ui, debug};
 use std::path::PathBuf;
-use ui::{Header, Timeline, Viewport};
+use timeline::Timeline;
+use ui::{Header, Viewport};
 
 const STYLE: &str = include_str!("style.css");
 

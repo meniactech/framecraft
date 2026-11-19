@@ -200,7 +200,7 @@ Each platform runs the reference test suite. Rendering differences between web e
 | M1 | Editor core: commands, undo, timeline evaluation, project storage | Unit tests cover every command. Timeline evaluation matches the runtime on all reference graphics. **Done 2026-11-19.** |
 | M2 | Live viewport: editor script, Pose and Layer tiers, double-buffered rebuild | Editing X while playing never reloads. The rebuild never flickers. **Done 2026-11-19.** |
 | M3 | Selection and transform gestures in the viewport, with undo | Move, resize, rotate and pivot on rotated and nested layers. **Done 2026-11-19.** |
-| M4 | Outliner and property schema: Scene, Transform, Look, Text | Parity with FRAME for shapes and text. |
+| M4 | Outliner and property schema: Scene, Transform, Look, Text | Parity with FRAME for shapes and text. **Done 2026-11-19.** |
 | M5 | Timeline editing: keyframes, easing, cues, auto-key | Parity with FRAME's timeline. |
 | M6 | Remaining item types and modifiers | Every FRAME tab works. |
 | M7 | Libraries and media | Media, motions, components, palettes, gradients, SVG shapes. |

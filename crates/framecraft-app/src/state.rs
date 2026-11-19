@@ -6,8 +6,10 @@ use crate::bridge;
 use crate::interact::{Drag, Geom};
 use crate::preview::STORE;
 use crate::project::Project;
+use crate::timeline::TlView;
 use dioxus::prelude::*;
 use framecraft_core::commands::{AddItem, Change, Command, DeleteItems, DuplicateItems, History};
+use framecraft_core::keys::{CopiedKey, KeyRef};
 use framecraft_core::layers::{NewLayer, new_layer};
 use framecraft_core::normalize::Document;
 use framecraft_core::preview::{PreviewState, PreviewUpdate};
@@ -53,6 +55,15 @@ pub struct Ui {
     pub status: Signal<String>,
     /// The properties tab last picked.
     pub tab: Signal<Tab>,
+    /// Selected keyframes (timeline).
+    pub keys: Signal<Vec<KeyRef>>,
+    /// Selected scene cue (timeline).
+    pub cue: Signal<Option<String>>,
+    pub tl_view: Signal<TlView>,
+    /// Timeline scale, pixels per millisecond.
+    pub tl_zoom: Signal<f64>,
+    /// Keyframes copied with Ctrl+C.
+    pub copied: Signal<Vec<CopiedKey>>,
 }
 
 /// `FRAMECRAFT_DEBUG=1` logs preview requests and bridge activity.
@@ -72,6 +83,11 @@ impl Ui {
             drag: use_signal(|| None),
             status: use_signal(|| "Open a .frameproject.zip or .framepack.zip".to_string()),
             tab: use_signal(|| Tab::Transform),
+            keys: use_signal(Vec::new),
+            cue: use_signal(|| None),
+            tl_view: use_signal(|| TlView::Keys),
+            tl_zoom: use_signal(|| 0.1),
+            copied: use_signal(Vec::new),
         }
     }
 
@@ -134,6 +150,8 @@ impl Ui {
             e.selected = None;
         }
         self.geometry.set(Vec::new());
+        self.keys.set(Vec::new());
+        self.cue.set(None);
         bridge::select(&[]);
         bridge::stop(false);
         self.playing.set(false);
@@ -152,6 +170,8 @@ impl Ui {
         }
         if changed {
             self.geometry.set(Vec::new());
+            self.keys.set(Vec::new());
+            self.cue.set(None);
         }
         bridge::select(&id.into_iter().collect::<Vec<_>>());
     }
@@ -299,5 +319,37 @@ impl Ui {
             self.select_layer(None);
             self.execute(&DeleteItems { items: vec![id] });
         }
+    }
+
+    /// Moves the playhead (stopping playback).
+    pub fn set_time(mut self, t: f64) {
+        if *self.playing.peek() {
+            bridge::stop(false);
+        }
+        self.playing.set(false);
+        let t = t.clamp(0.0, self.duration());
+        self.time.set(t);
+        bridge::seek(t);
+    }
+
+    /// Play / Pause. Playback runs in the page; Rust hears where it stopped.
+    pub fn toggle_play(mut self) {
+        if *self.playing.peek() {
+            // Pause: the bridge reports the time it stopped at.
+            bridge::stop(true);
+            return;
+        }
+        let duration = self.duration();
+        self.playing.set(true);
+        let now = *self.time.peek();
+        let from = if now >= duration { 0.0 } else { now };
+        spawn(async move {
+            let stopped_at = bridge::play(from, duration).await;
+            let (mut time, mut playing) = (self.time, self.playing);
+            if let Some(t) = stopped_at {
+                time.set(t);
+            }
+            playing.set(false);
+        });
     }
 }

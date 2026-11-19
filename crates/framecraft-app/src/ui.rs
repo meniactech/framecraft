@@ -1,21 +1,14 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-//! The editor's panels: header, viewport and timeline (the Outliner and
-//! properties have their own modules).
+//! The editor's header and viewport (the Outliner, properties and timeline
+//! have their own modules).
 
-use crate::bridge::{self, FRAME_A, FRAME_B};
+use crate::bridge::{FRAME_A, FRAME_B};
 use crate::interact::{Geom, ROTATE_OFFSET};
-use crate::state::{Editor, Ui};
+use crate::state::Ui;
 use dioxus::prelude::*;
 use framecraft_core::manipulate::Handle;
-use framecraft_core::model::Item;
-use framecraft_core::normalize::CLIP_START;
 use framecraft_core::selection::movable;
 use framecraft_core::timeline::pose_at;
-
-/// Timeline scale: pixels per millisecond (10 s = 1000 px). The bridge
-/// uses the same numbers to move the playhead during playback.
-const PX_PER_MS: f64 = 0.1;
-const LABEL_WIDTH: f64 = 200.0;
 
 /// Zooms the viewport so the whole scene fits.
 pub async fn fit(mut ui: Ui) {
@@ -232,177 +225,6 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                         circle { class: "sel-pivot", cx: "{pivot.0}", cy: "{pivot.1}", r: "{hs * 0.55}" }
                         line { class: "sel-pivot", x1: "{pivot.0 - hs}", y1: "{pivot.1}", x2: "{pivot.0 + hs}", y2: "{pivot.1}" }
                         line { class: "sel-pivot", x1: "{pivot.0}", y1: "{pivot.1 - hs}", x2: "{pivot.0}", y2: "{pivot.1 + hs}" }
-                    }
-                }
-            }
-        }
-    }
-}
-
-/// A timeline row: one layer, indented under its parent.
-struct Row {
-    id: String,
-    name: String,
-    depth: usize,
-    keys: Vec<f64>,
-}
-
-fn rows(ed: &Editor) -> Vec<Row> {
-    let doc = ed.doc();
-    fn visit<'a>(
-        items: &'a [Item],
-        parent: Option<&str>,
-        depth: usize,
-        out: &mut Vec<(&'a Item, usize)>,
-    ) {
-        for item in items
-            .iter()
-            .filter(|i| i.parent_id.clone().flatten().as_deref() == parent)
-        {
-            out.push((item, depth));
-            if depth < 32 {
-                visit(items, Some(&item.id), depth + 1, out);
-            }
-        }
-    }
-    let mut ordered = Vec::new();
-    visit(&doc.items, None, 0, &mut ordered);
-    ordered
-        .into_iter()
-        .map(|(item, depth)| {
-            let mut keys: Vec<f64> = doc
-                .timeline
-                .item_tracks
-                .iter()
-                .filter(|t| t.item_id == item.id)
-                .flat_map(|t| {
-                    t.properties
-                        .iter()
-                        .filter(|(p, _)| p.as_str() != CLIP_START)
-                        .flat_map(|(_, k)| k.iter().map(|k| k.time))
-                })
-                .collect();
-            keys.sort_by(f64::total_cmp);
-            keys.dedup();
-            Row {
-                id: item.id.clone(),
-                name: item.name.clone(),
-                depth,
-                keys,
-            }
-        })
-        .collect()
-}
-
-#[component]
-pub fn Timeline(ui: Ui) -> Element {
-    let duration = ui.duration();
-    let time = (ui.time)();
-    let playing = (ui.playing)();
-    let (rows, selected) = match ui.editor.read().as_ref() {
-        Some(e) => (rows(e), e.selected.clone()),
-        None => (Vec::new(), None),
-    };
-    let width = duration * PX_PER_MS;
-    let seconds = (duration / 1000.0).ceil() as usize;
-
-    let set_time = move |t: f64| {
-        let (mut time, mut playing) = (ui.time, ui.playing);
-        if playing() {
-            bridge::stop(false);
-        }
-        playing.set(false);
-        let t = t.clamp(0.0, duration);
-        time.set(t);
-        bridge::seek(t);
-    };
-
-    let toggle = move |_| {
-        let mut playing = ui.playing;
-        if playing() {
-            // Pause: the bridge reports the time it stopped at.
-            bridge::stop(true);
-            return;
-        }
-        playing.set(true);
-        let from = if (ui.time)() >= duration {
-            0.0
-        } else {
-            (ui.time)()
-        };
-        spawn(async move {
-            let stopped_at = bridge::play(from, duration).await;
-            let (mut time, mut playing) = (ui.time, ui.playing);
-            if let Some(t) = stopped_at {
-                time.set(t);
-            }
-            playing.set(false);
-        });
-    };
-
-    rsx! {
-        div { class: "timeline",
-            div { class: "transport",
-                button { onclick: move |_| set_time(0.0), "⏮" }
-                button { onclick: toggle, if playing { "⏸ Pause" } else { "▶ Play" } }
-                button {
-                    class: if (ui.auto_key)() { "auto-key on" } else { "auto-key" },
-                    title: "Auto-key on: edits write keyframes at the playhead. Off: edits shift existing animations and add no keyframes.",
-                    onclick: move |_| {
-                        let mut auto_key = ui.auto_key;
-                        auto_key.set(!auto_key());
-                    },
-                    span { class: "dot" }
-                    "Auto-key"
-                }
-                span { class: "time",
-                    span { id: "fc-time", "{time / 1000.0:.2}" }
-                    " s / {duration / 1000.0:.2} s"
-                }
-            }
-            div { class: "tl-body",
-                div { class: "tl-inner", style: "width:{LABEL_WIDTH + width + 40.0}px;",
-                    div { class: "tl-row ruler",
-                        div { class: "label" }
-                        div {
-                            class: "track",
-                            style: "width:{width}px;",
-                            onmousedown: move |evt| set_time(evt.element_coordinates().x / PX_PER_MS),
-                            onmousemove: move |evt| {
-                                if evt.held_buttons().contains(dioxus::html::input_data::MouseButton::Primary) {
-                                    set_time(evt.element_coordinates().x / PX_PER_MS);
-                                }
-                            },
-                            for s in 0..=seconds {
-                                div { class: "tick", style: "left:{s as f64 * 1000.0 * PX_PER_MS}px;", "{s}s" }
-                            }
-                        }
-                    }
-                    for row in rows {
-                        {
-                            let id = row.id.clone();
-                            let is_selected = selected.as_deref() == Some(row.id.as_str());
-                            rsx! {
-                                div { class: if is_selected { "tl-row selected" } else { "tl-row" },
-                                    div {
-                                        class: "label",
-                                        style: "padding-left:{8 + row.depth * 14}px;",
-                                        onclick: move |_| ui.select_layer(Some(id.clone())),
-                                        "{row.name}"
-                                    }
-                                    div { class: "track", style: "width:{width}px;",
-                                        for k in row.keys {
-                                            div { class: "key", style: "left:{k * PX_PER_MS}px;", onclick: move |_| set_time(k) }
-                                        }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                    div {
-                        id: "fc-playhead",
-                        class: "playhead",
-                        style: "left:{LABEL_WIDTH + time * PX_PER_MS}px;",
                     }
                 }
             }

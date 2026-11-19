@@ -134,6 +134,7 @@ pub fn on_event(ui: Ui, ev: Value) {
             _ => {}
         },
         Some("outliner-drop") => crate::outliner::on_drop(ui, &ev),
+        Some("tl") => crate::timeline::on_event(ui, &ev),
         Some("key") => key(ui, ev["key"].as_str().unwrap_or(""), flag(&ev, "shift")),
         _ => {}
     }
@@ -294,6 +295,10 @@ fn pointer_up(ui: Ui) {
 }
 
 fn key(ui: Ui, key: &str, shift: bool) {
+    // Selected keyframes and cues take Delete, Escape and arrows first.
+    if crate::timeline::key(ui, key, shift) {
+        return;
+    }
     match key {
         "undo" => ui.undo(),
         "redo" => ui.redo(),

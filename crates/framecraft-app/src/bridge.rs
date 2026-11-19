@@ -221,6 +221,105 @@ if (!window.__fc) {
   document.addEventListener('pointerup', endRowDrag(true));
   document.addEventListener('pointercancel', endRowDrag(false));
 
+  // Timeline: keys (`.tl-key[data-item][data-lane?][data-time]`), cues
+  // (`.tl-cue[data-cue]`) and layer bars (`.tl-span`) are dragged here, and
+  // empty track space box-selects. Rust hears `{type: 'tl', action, …}`.
+  fc.snapStep = 0;
+  const tlEmit = (m) => fc.emit(Object.assign({ type: 'tl' }, m));
+  const keyData = (el) => ({ item: el.dataset.item, lane: el.dataset.lane || null, time: parseFloat(el.dataset.time) });
+  fc.tlDelta = (primary, raw) => {
+    const s = fc.snapStep;
+    return s > 0 ? Math.round((primary + raw) / s) * s - primary : Math.round(raw);
+  };
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const t = e.target;
+    const key = t.closest('.tl-key');
+    const cue = t.closest('.tl-cue');
+    const span = t.closest('.tl-span');
+    const surface = t.closest('.tl-lanes .track');
+    if (!key && !cue && !span && !surface) return;
+    e.preventDefault();
+    const d = { x: e.clientX, y: e.clientY, pointer: e.pointerId, moved: false, delta: 0, els: [] };
+    if (key) {
+      const k = keyData(key);
+      const extra = e.shiftKey || e.ctrlKey || e.metaKey;
+      tlEmit(Object.assign({ action: 'key-down', shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey }, k));
+      Object.assign(d, { kind: 'key', primary: k.time, extra, k, el: key });
+    } else if (cue) {
+      tlEmit({ action: 'cue-down', id: cue.dataset.cue });
+      Object.assign(d, { kind: 'cue', id: cue.dataset.cue, primary: parseFloat(cue.dataset.time), els: [cue] });
+    } else if (span) {
+      const row = span.closest('.tl-row');
+      Object.assign(d, { kind: 'span', item: span.dataset.item, primary: parseFloat(span.dataset.start),
+        els: row ? [...row.querySelectorAll('.tl-key, .tl-span')] : [span] });
+    } else {
+      Object.assign(d, { kind: 'box', root: t.closest('.tl-inner'), track: surface, additive: e.shiftKey || e.ctrlKey || e.metaKey, box: null });
+    }
+    fc.tlDrag = d;
+  });
+  document.addEventListener('pointermove', (e) => {
+    const d = fc.tlDrag;
+    if (!d || e.pointerId !== d.pointer) return;
+    const dx = e.clientX - d.x, dy = e.clientY - d.y;
+    if (!d.moved && Math.hypot(dx, dy) < 4) return;
+    if (!d.moved) {
+      d.moved = true;
+      if (d.kind === 'key') {
+        d.els = [...document.querySelectorAll('.tl-key.selected')];
+        if (!d.els.includes(d.el)) d.els = [d.el];
+      }
+    }
+    if (d.kind === 'box') {
+      if (!d.root) return;
+      if (!d.box) { d.box = document.createElement('div'); d.box.className = 'tl-box'; d.root.appendChild(d.box); }
+      const r = d.root.getBoundingClientRect();
+      const x1 = Math.min(d.x, e.clientX), x2 = Math.max(d.x, e.clientX);
+      const y1 = Math.min(d.y, e.clientY), y2 = Math.max(d.y, e.clientY);
+      Object.assign(d.box.style, { left: (x1 - r.left) + 'px', top: (y1 - r.top) + 'px', width: (x2 - x1) + 'px', height: (y2 - y1) + 'px' });
+      d.rect = { x1, x2, y1, y2 };
+      return;
+    }
+    d.delta = fc.tlDelta(d.primary, dx / (fc.pxPerMs || 0.1));
+    for (const el of d.els) el.style.translate = (d.delta * fc.pxPerMs) + 'px 0';
+  });
+  const endTl = (commit) => (e) => {
+    const d = fc.tlDrag;
+    if (!d || e.pointerId !== d.pointer) return;
+    fc.tlDrag = null;
+    // Rust redraws the moved items; clear the drag offset after that.
+    setTimeout(() => { for (const el of d.els) el.style.translate = ''; }, 120);
+    if (d.box) d.box.remove();
+    if (!commit) return;
+    if (d.kind === 'key') {
+      if (d.moved) tlEmit({ action: 'key-drag', delta: d.delta, primary: d.primary });
+      else if (!d.extra) tlEmit(Object.assign({ action: 'key-click' }, d.k));
+    } else if (d.kind === 'cue') {
+      if (d.moved) tlEmit({ action: 'cue-drag', id: d.id, delta: d.delta, primary: d.primary });
+    } else if (d.kind === 'span') {
+      if (d.moved) tlEmit({ action: 'span-drag', item: d.item, delta: d.delta, primary: d.primary });
+    } else if (d.kind === 'box') {
+      if (d.moved && d.rect && d.root) {
+        const keys = [];
+        for (const el of d.root.querySelectorAll('.tl-key')) {
+          const r = el.getBoundingClientRect();
+          if (r.right >= d.rect.x1 && r.left <= d.rect.x2 && r.bottom >= d.rect.y1 && r.top <= d.rect.y2) keys.push(keyData(el));
+        }
+        tlEmit({ action: 'box', keys, additive: d.additive });
+      } else if (d.track) {
+        const r = d.track.getBoundingClientRect();
+        tlEmit({ action: 'track-click', time: Math.max(0, (e.clientX - r.left) / (fc.pxPerMs || 0.1)) });
+      }
+    }
+  };
+  document.addEventListener('pointerup', endTl(true));
+  document.addEventListener('pointercancel', endTl(false));
+  document.addEventListener('wheel', (e) => {
+    if (!(e.ctrlKey || e.metaKey) || !e.target || !e.target.closest || !e.target.closest('.tl-body')) return;
+    e.preventDefault();
+    tlEmit({ action: 'zoom', factor: e.deltaY < 0 ? 1.25 : 0.8 });
+  }, { passive: false });
+
   // Editor keys, outside text fields.
   document.addEventListener('keydown', (e) => {
     const t = e.target;
@@ -231,6 +330,11 @@ if (!window.__fc) {
     if (mod && k.toLowerCase() === 'z') key = e.shiftKey ? 'redo' : 'undo';
     else if (mod && k.toLowerCase() === 'y') key = 'redo';
     else if (mod && k.toLowerCase() === 'd') key = 'duplicate';
+    else if (mod && k.toLowerCase() === 'c') key = 'copy';
+    else if (mod && k.toLowerCase() === 'v') key = 'paste';
+    else if (e.code === 'Comma' || e.code === 'Period') key = (mod ? 'jump-' : 'step-') + (e.code === 'Comma' ? 'prev' : 'next');
+    else if (!mod && !e.altKey && k === ' ') key = 'play';
+    else if (!mod && !e.altKey && k.toLowerCase() === 'k') key = 'key-toggle';
     else if (!mod && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Backspace', 'Escape'].includes(k)) key = k;
     if (!key) return;
     e.preventDefault();
@@ -314,6 +418,21 @@ pub async fn stats() -> Option<Value> {
     .join::<Value>()
     .await
     .ok()
+}
+
+/// Timeline scale (pixels per ms) and label width, for the playhead and
+/// key drags.
+pub fn set_timeline_scale(px_per_ms: f64, label_width: f64) {
+    let _ = document::eval(&format!(
+        "if (window.__fc) {{ window.__fc.pxPerMs = {px_per_ms}; window.__fc.labelWidth = {label_width}; }}"
+    ));
+}
+
+/// Snap step for key drags (0 = off).
+pub fn set_snap(step_ms: f64) {
+    let _ = document::eval(&format!(
+        "if (window.__fc) window.__fc.snapStep = {step_ms};"
+    ));
 }
 
 /// Tells the editor script which layers to track (it then reports their
