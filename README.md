@@ -33,4 +33,6 @@ cargo run -p framecraft-app
 
 FrameCraft is licensed under the GNU Affero General Public License v3.0 or later. See [LICENSE](LICENSE).
 
+Graphics you export are yours. The playout code FrameCraft copies into exported packages is MIT-licensed, so exports carry no AGPL obligations. See [crates/framecraft-core/runtime/README.md](crates/framecraft-core/runtime/README.md).
+
 Bundled fonts, animations and libraries keep their own licenses. See [THIRD_PARTY.md](THIRD_PARTY.md).
