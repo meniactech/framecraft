@@ -50,10 +50,12 @@ pub enum NewLayer {
     Particles,
     Lightning,
     Pattern,
+    Lottie,
+    Video,
 }
 
 impl NewLayer {
-    pub const ALL: [NewLayer; 14] = [
+    pub const ALL: [NewLayer; 16] = [
         NewLayer::Empty,
         NewLayer::Text,
         NewLayer::Box,
@@ -68,6 +70,8 @@ impl NewLayer {
         NewLayer::Particles,
         NewLayer::Lightning,
         NewLayer::Pattern,
+        NewLayer::Lottie,
+        NewLayer::Video,
     ];
 
     pub fn label(self) -> &'static str {
@@ -86,6 +90,8 @@ impl NewLayer {
             NewLayer::Particles => "Particles",
             NewLayer::Lightning => "Lightning",
             NewLayer::Pattern => "Pattern",
+            NewLayer::Lottie => "Lottie",
+            NewLayer::Video => "Video (experimental)",
         }
     }
 }
@@ -239,6 +245,18 @@ pub fn new_layer(kind: NewLayer, parent: Option<&str>) -> Item {
                 "patternKind": "checker", "patternColorA": "#1e293b", "patternColorB": "#334155",
                 "patternCellSize": 32, "patternStripeWidth": 16, "patternStripeGap": 16,
                 "patternStripeAngleDeg": 45, "patternDotRadius": 6, "patternLineWidth": 2, "patternPhase": 0 }),
+        ),
+        NewLayer::Lottie => set(
+            &mut v,
+            json!({ "itemType": "lottie", "name": "Lottie", "width": 400, "height": 400,
+                "bg_color": "#00000000", "borderWidth": 0, "borderWidths": [0, 0, 0, 0],
+                "mediaUrl": "", "lottieStartMs": 0, "lottieLoop": false }),
+        ),
+        NewLayer::Video => set(
+            &mut v,
+            json!({ "itemType": "video", "name": "Video (experimental)", "width": 480, "height": 270,
+                "bg_color": "#00000000", "borderWidth": 0, "borderWidths": [0, 0, 0, 0],
+                "mediaUrl": "", "videoStartMs": 0, "videoLoop": false }),
         ),
     }
     v["id"] = new_id().into();

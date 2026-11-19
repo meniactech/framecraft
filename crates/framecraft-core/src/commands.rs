@@ -776,6 +776,14 @@ impl Command for AddItem {
             return Err(CommandError::NoSuchItem(p));
         }
         doc.items.push(self.item.clone());
+        // Lottie and video get their Start key.
+        if crate::normalize::uses_clip_start(&self.item) {
+            let start = match self.item.item_type {
+                Some(crate::model::ItemType::Lottie) => self.item.lottie_start_ms,
+                _ => self.item.video_start_ms,
+            };
+            crate::keys::set_clip_start(doc, &self.item.id, start.unwrap_or(0.0))?;
+        }
         Ok(Change::Rebuild)
     }
     fn label(&self, _doc: &Document) -> String {

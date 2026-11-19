@@ -20,6 +20,8 @@ pub enum Tab {
     Particles,
     Lightning,
     Pattern,
+    Lottie,
+    Video,
 }
 
 impl Tab {
@@ -34,6 +36,8 @@ impl Tab {
             Tab::Particles => "Particles",
             Tab::Lightning => "Lightning",
             Tab::Pattern => "Pattern",
+            Tab::Lottie => "Lottie",
+            Tab::Video => "Video",
         }
     }
 
@@ -46,6 +50,7 @@ impl Tab {
             Tab::Text => "text",
             Tab::Chart | Tab::Qr => "chart",
             Tab::Particles | Tab::Lightning | Tab::Pattern => "particles",
+            Tab::Lottie | Tab::Video => "look",
         }
     }
 
@@ -62,6 +67,8 @@ impl Tab {
             Some(ItemType::Particles) => tabs.push(Tab::Particles),
             Some(ItemType::Lightning) => tabs.push(Tab::Lightning),
             Some(ItemType::Pattern) => tabs.push(Tab::Pattern),
+            Some(ItemType::Lottie) => tabs.push(Tab::Lottie),
+            Some(ItemType::Video) => tabs.push(Tab::Video),
             _ => {}
         }
         tabs
@@ -96,6 +103,8 @@ pub enum Kind {
     ColorList,
     /// A random seed (whole number), with a Randomize button.
     Seed,
+    /// When a Lottie / video clip starts (ms); moves its timeline Start key.
+    ClipStart,
 }
 
 /// Where a property's value lives.
@@ -1591,6 +1600,67 @@ pub const PROPERTIES: &[Property] = &[
         None,
         Layer
     ),
+    // Lottie and video clips
+    p!(
+        Lottie,
+        "Lottie",
+        "mediaUrl",
+        "Source URL",
+        Kind::Text,
+        Item,
+        None,
+        Rebuild
+    ),
+    p!(
+        Lottie,
+        "Lottie",
+        "lottieStartMs",
+        "Start (ms)",
+        Kind::ClipStart,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Lottie,
+        "Lottie",
+        "lottieLoop",
+        "Loop",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Video,
+        "Video (experimental)",
+        "mediaUrl",
+        "Source URL",
+        Kind::Text,
+        Item,
+        None,
+        Rebuild
+    ),
+    p!(
+        Video,
+        "Video (experimental)",
+        "videoStartMs",
+        "Start (ms)",
+        Kind::ClipStart,
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Video,
+        "Video (experimental)",
+        "videoLoop",
+        "Loop",
+        Kind::Toggle,
+        Item,
+        None,
+        Layer
+    ),
 ];
 
 fn is_text(item: &Item) -> bool {
@@ -1692,6 +1762,8 @@ impl Property {
                 Tab::Particles => item.item_type == Some(ItemType::Particles),
                 Tab::Lightning => item.item_type == Some(ItemType::Lightning),
                 Tab::Pattern => item.item_type == Some(ItemType::Pattern),
+                Tab::Lottie => item.item_type == Some(ItemType::Lottie),
+                Tab::Video => item.item_type == Some(ItemType::Video),
                 _ => true,
             },
         }
@@ -1741,6 +1813,16 @@ impl Property {
             }
             (_, v) => v,
         };
+        if let (Kind::ClipStart, Some(id)) = (self.kind, item) {
+            let t = match &value {
+                Value::String(s) => s.trim().parse::<f64>().ok()?,
+                v => v.as_f64()?,
+            };
+            return Some(Box::new(crate::keys::SetClipStart {
+                item: id.into(),
+                time_ms: t,
+            }));
+        }
         if let (Some(lane), Some(id)) = (self.lane, item) {
             return Some(Box::new(SetValueAt {
                 item: id.into(),
@@ -1827,6 +1909,7 @@ mod tests {
                     }
                     (Kind::ColorList, _) => serde_json::json!(["#ff0000"]),
                     (Kind::Seed, _) => Value::from(7),
+                    (Kind::ClipStart, _) => Value::from(0),
                     (Kind::ChartPoints, _) => {
                         serde_json::json!([{ "id": "p", "label": "A", "value": 1 }])
                     }

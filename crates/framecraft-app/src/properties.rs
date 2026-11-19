@@ -274,6 +274,16 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         Kind::ColorList => rsx! {
             ColorList { value: field.value.clone(), set }
         },
+        Kind::ClipStart => rsx! {
+            input {
+                r#type: "number",
+                step: "10",
+                min: "0",
+                value: "{text}",
+                title: "Also set by dragging the Start key on the timeline",
+                onchange: move |evt| set(Value::String(evt.value())),
+            }
+        },
         Kind::Seed => {
             let seed = text.clone();
             rsx! {

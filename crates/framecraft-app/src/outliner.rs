@@ -48,6 +48,8 @@ fn icon(item: &Item) -> &'static str {
         Some(ItemType::Particles) => "✦",
         Some(ItemType::Lightning) => "ϟ",
         Some(ItemType::Pattern) => "▩",
+        Some(ItemType::Lottie) => "◍",
+        Some(ItemType::Video) => "▶",
         Some(ItemType::Shape) | None => "▭",
         _ => "•",
     }

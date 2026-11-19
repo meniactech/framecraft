@@ -671,7 +671,8 @@ fn normalize_timeline(raw: Option<&Timeline>) -> Timeline {
     }
 }
 
-fn uses_clip_start(item: &Item) -> bool {
+/// Lottie and video layers have a move-only Start key (`clipStart`).
+pub fn uses_clip_start(item: &Item) -> bool {
     matches!(item.item_type, Some(ItemType::Lottie | ItemType::Video))
 }
 

@@ -6,7 +6,7 @@ use crate::commands::{
     Change, Command, CommandError, item_mut, item_name, set_number, track_mut, with_json,
 };
 use crate::model::{CueKind, Item, Keyframe, Modifier, SceneCue};
-use crate::normalize::{CLIP_START, Document};
+use crate::normalize::{CLIP_START, Document, uses_clip_start};
 use crate::timeline::{lane_enabled, lane_value};
 use std::collections::BTreeMap;
 
@@ -236,13 +236,65 @@ pub fn shown_lanes(doc: &Document, item_id: &str) -> Vec<&'static str> {
     else {
         return Vec::new();
     };
-    LANES
+    let clip = doc
+        .items
         .iter()
-        .copied()
-        .filter(|lane| {
-            lane_enabled(track, lane) && track.properties.get(*lane).is_some_and(|k| !k.is_empty())
-        })
-        .collect()
+        .any(|i| i.id == item_id && uses_clip_start(i))
+        && track
+            .properties
+            .get(CLIP_START)
+            .is_some_and(|k| !k.is_empty());
+    let lanes = LANES.iter().copied().filter(|lane| {
+        lane_enabled(track, lane) && track.properties.get(*lane).is_some_and(|k| !k.is_empty())
+    });
+    if clip {
+        std::iter::once(CLIP_START).chain(lanes).collect()
+    } else {
+        lanes.collect()
+    }
+}
+
+/// Moves a Lottie / video layer's Start key (its only `clipStart` key) and
+/// keeps the layer's start field in step, as FRAME does.
+pub fn set_clip_start(doc: &mut Document, item: &str, time_ms: f64) -> Result<(), CommandError> {
+    let t = time_ms.max(0.0).round();
+    let it = item_mut(doc, item)?;
+    match it.item_type {
+        Some(crate::model::ItemType::Lottie) => it.lottie_start_ms = Some(t),
+        Some(crate::model::ItemType::Video) => it.video_start_ms = Some(t),
+        _ => return Ok(()),
+    }
+    let track = track_mut(doc, item);
+    track.properties.insert(
+        CLIP_START.into(),
+        vec![Keyframe {
+            time: t,
+            value: 0.0,
+            easing: Some("linear".into()),
+            extra: Default::default(),
+        }],
+    );
+    track
+        .enabled_properties
+        .get_or_insert_default()
+        .insert(CLIP_START.into(), true);
+    Ok(())
+}
+
+/// Sets when a Lottie / video clip starts.
+pub struct SetClipStart {
+    pub item: String,
+    pub time_ms: f64,
+}
+
+impl Command for SetClipStart {
+    fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
+        set_clip_start(doc, &self.item, self.time_ms)?;
+        Ok(Change::Layer(vec![self.item.clone()]))
+    }
+    fn label(&self, doc: &Document) -> String {
+        format!("Move start of {}", item_name(doc, &self.item))
+    }
 }
 
 /// Keys this close (ms) are the same key (FRAME's `timesMatch`).
@@ -417,7 +469,13 @@ impl Command for RetimeKeys {
             merged.sort_by(|a, b| a.time.total_cmp(&b.time));
             *keys = merged;
         }
-        Ok(Change::Pose)
+        // Start keys: one per clip; the clip start moves with it.
+        let mut change = Change::Pose;
+        for k in self.keys.iter().filter(|k| k.lane == CLIP_START) {
+            set_clip_start(doc, &k.item, self.new_time(doc, k.time, delta))?;
+            change = change.merge(Change::Layer(vec![k.item.clone()]));
+        }
+        Ok(change)
     }
     fn label(&self, doc: &Document) -> String {
         keys_label(doc, "Move", &self.keys)
@@ -819,6 +877,53 @@ mod tests {
         assert_eq!(lane_base(a, "modBlurRadius"), None);
         assert_eq!(value_now(&d, a, "x", 250.0), Some(25.0));
         assert_eq!(shown_lanes(&d, "a"), ["x", "opacity"]);
+    }
+
+    #[test]
+    fn clip_start_key_moves_the_clip() {
+        use crate::commands::AddItem;
+        let mut d = doc();
+        let mut h = History::default();
+        let clip = new_layer(NewLayer::Lottie, None);
+        let id = clip.id.clone();
+        h.execute(&mut d, &AddItem { item: clip }).unwrap();
+        assert_eq!(shown_lanes(&d, &id), [CLIP_START]);
+        h.execute(
+            &mut d,
+            &RetimeKeys {
+                keys: vec![KeyRef::new(&id, CLIP_START, 0.0)],
+                delta: 640.4,
+                snap: false,
+            },
+        )
+        .unwrap();
+        let item = d.items.iter().find(|i| i.id == id).unwrap();
+        assert_eq!(item.lottie_start_ms, Some(640.0));
+        assert_eq!(
+            key_at(&d, &KeyRef::new(&id, CLIP_START, 640.0)).map(|k| k.time),
+            Some(640.0)
+        );
+        // Start keys cannot be deleted.
+        h.execute(
+            &mut d,
+            &RemoveKeys {
+                keys: vec![KeyRef::new(&id, CLIP_START, 640.0)],
+            },
+        )
+        .unwrap();
+        assert_eq!(shown_lanes(&d, &id), [CLIP_START]);
+        h.execute(
+            &mut d,
+            &SetClipStart {
+                item: id.clone(),
+                time_ms: 100.0,
+            },
+        )
+        .unwrap();
+        assert_eq!(
+            d.items.iter().find(|i| i.id == id).unwrap().lottie_start_ms,
+            Some(100.0)
+        );
     }
 
     #[test]

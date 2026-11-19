@@ -405,16 +405,20 @@ fn RowView(ui: Ui, row: Row, px: f64, width: f64) -> Element {
             let shown = value
                 .map(framecraft_core::js::number_to_string)
                 .unwrap_or_default();
+            let toggle_item = item.clone();
             rsx! {
                 div { class: "tl-row", "data-item": "{item}",
                     div { class: "label lane-label",
                         span { class: "lane-name", "{lane_label(lane)}" }
                         span { class: "lane-value dim", "{shown}" }
-                        button {
-                            class: if key_here { "key-button animated" } else { "key-button" },
-                            title: if key_here { "Remove the key at the playhead" } else { "Add a key at the playhead" },
-                            onclick: move |_| toggle_lane_key(ui, &item, lane),
-                            if key_here { "◆" } else { "◇" }
+                        // The Start key of a clip is move-only.
+                        if lane != CLIP_START {
+                            button {
+                                class: if key_here { "key-button animated" } else { "key-button" },
+                                title: if key_here { "Remove the key at the playhead" } else { "Add a key at the playhead" },
+                                onclick: move |_| toggle_lane_key(ui, &toggle_item, lane),
+                                if key_here { "◆" } else { "◇" }
+                            }
                         }
                     }
                     div { class: "track", style: "width:{width}px;",
@@ -629,6 +633,8 @@ fn Inspector(ui: Ui) -> Element {
     let refs: Vec<KeyRef> = keys.iter().map(|k| k.0.clone()).collect();
     let (r1, r2) = (refs.clone(), refs.clone());
     let single = (keys.len() == 1).then(|| keys[0].clone());
+    // Start keys have no value, easing, or delete.
+    let only_starts = keys.iter().all(|k| k.0.lane == CLIP_START);
 
     rsx! {
         div { class: "inspector",
@@ -651,6 +657,9 @@ fn Inspector(ui: Ui) -> Element {
                                 },
                             }
                         }
+                        if rv.lane == CLIP_START {
+                            span { class: "dim", "Drag the Start key to set when the clip begins." }
+                        } else {
                         label { "Value"
                             input {
                                 r#type: "number",
@@ -669,11 +678,13 @@ fn Inspector(ui: Ui) -> Element {
                                 },
                             }
                         }
+                        }
                     }
                 }
             } else {
                 span { class: "insp-title", "{keys.len()} keys" }
             }
+            if !only_starts {
             label { title: "Easing of the move arriving at the key",
                 "Easing"
                 select {
@@ -696,6 +707,7 @@ fn Inspector(ui: Ui) -> Element {
                     ui.execute(&RemoveKeys { keys: r2.clone() });
                 },
                 "Delete"
+            }
             }
         }
     }
@@ -762,7 +774,7 @@ fn toggle_keys(ui: Ui, item: &str, lanes: &[String]) {
         let t = snap_time(doc, time);
         let mut remove = Vec::new();
         let mut add = Vec::new();
-        for lane in lanes {
+        for lane in lanes.iter().filter(|l| l.as_str() != CLIP_START) {
             let r = KeyRef::new(item, lane, t);
             match key_at(doc, &r) {
                 Some(k) => remove.push(KeyRef { time: k.time, ..r }),
