@@ -671,6 +671,14 @@ fn pointer_up(ui: Ui) {
 }
 
 fn key(ui: Ui, key: &str, shift: bool) {
+    // Tab: between the Project view and the editor.
+    if key == "project-view" {
+        if ui.editor.peek().is_some() {
+            let mut open = ui.project_view;
+            open.toggle();
+        }
+        return;
+    }
     // Selected keyframes and cues take Delete, Escape and arrows first.
     if crate::timeline::key(ui, key, shift) {
         return;

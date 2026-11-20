@@ -714,6 +714,7 @@ if (!window.__fc) {
     else if (e.code === 'Comma' || e.code === 'Period') key = (mod ? 'jump-' : 'step-') + (e.code === 'Comma' ? 'prev' : 'next');
     else if (!mod && !e.altKey && k === ' ') key = 'play';
     else if (!mod && !e.altKey && k.toLowerCase() === 'k') key = 'key-toggle';
+    else if (!mod && !e.altKey && !e.shiftKey && k === 'Tab') key = 'project-view';
     else if (!mod && ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Delete', 'Backspace', 'Escape'].includes(k)) key = k;
     if (!key) return;
     e.preventDefault();

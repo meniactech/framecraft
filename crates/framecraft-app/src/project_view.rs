@@ -64,7 +64,7 @@ pub fn ProjectView(ui: Ui) -> Element {
                         "{name}"
                     }
                 }
-                button { class: "active", onclick: move |_| open.set(false), "Back to editor" }
+                button { class: "active", title: "Back to the editor (Tab)", onclick: move |_| open.set(false), "Back to editor" }
             }
             div { class: "project-body",
                 aside { class: "project-graphics",

@@ -107,7 +107,7 @@ pub fn Header(ui: Ui) -> Element {
                 }
             }
             button {
-                title: "The project's graphics, media and your palettes",
+                title: "The project's graphics, media and your palettes (Tab)",
                 onclick: move |_| {
                     let mut open = ui.project_view;
                     open.set(true);
