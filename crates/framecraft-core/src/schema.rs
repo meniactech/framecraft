@@ -891,6 +891,18 @@ pub const PROPERTIES: &[Property] = &[
         Layer
     ),
     // Polygon and path shapes
+    // FRAME: a path is a motion guide only (dashed in the editor, hidden in
+    // playout) unless Keep Visible is on (e.g. bracket connectors).
+    p!(
+        Look,
+        "Points",
+        "pathKeepVisible",
+        "Keep Visible",
+        Kind::Toggle,
+        Item,
+        None,
+        Rebuild
+    ),
     p!(
         Look,
         "Points",
@@ -2124,6 +2136,7 @@ impl Property {
             "patternCellSize" => pattern_kind(item) != "stripes",
             "patternDotRadius" => pattern_kind(item) == "dots",
             "patternLineWidth" => pattern_kind(item) == "grid",
+            "pathKeepVisible" => shape == Some(ShapeType::Path),
             "polygonCurve" | "polygonPoints" => {
                 matches!(shape, Some(ShapeType::Polygon | ShapeType::Path))
             }

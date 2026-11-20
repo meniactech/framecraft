@@ -584,3 +584,4 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .px-drag-line.v { top: 0; bottom: 0; width: 1px; }
 .px-drag-line span { position: absolute; left: 26px; top: 4px; font-size: 10px; padding: 1px 4px; border-radius: 3px; background: rgba(0, 0, 0, .75); color: #fff; white-space: nowrap; }
 .px-drag-line.v span { left: 4px; top: 26px; }
+.path-guide { fill: none; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 7 5; vector-effect: non-scaling-stroke; pointer-events: none; }

@@ -298,6 +298,55 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
             marks,
         ))
     });
+    // FRAME: a path that is only a motion guide is drawn dashed in the
+    // editor (hidden while playing); Keep Visible paths draw themselves.
+    let playing = (ui.playing)();
+    let path_guides: Vec<(String, String, String, f64)> = match editor.as_ref() {
+        Some(e) if !playing => e
+            .doc()
+            .items
+            .iter()
+            .filter(|i| {
+                i.shape_type == Some(framecraft_core::model::ShapeType::Path)
+                    && i.path_keep_visible != Some(true)
+                    && i.visible != Some(false)
+            })
+            .filter_map(|i| {
+                let g = geometry.iter().find(|g| g.id == i.id)?;
+                let pts = i.polygon_points.as_deref().unwrap_or_default();
+                if pts.len() < 2 {
+                    return None;
+                }
+                let d = framecraft_core::export::css::open_path_d(
+                    pts,
+                    Some(i.polygon_curve.as_deref().unwrap_or("bezier")),
+                );
+                // The item's own box (0..width, 0..height) onto its corners.
+                let (w, h) = (i.width.max(1.0), i.height.max(1.0));
+                let (o, a, b) = (g.at((0.0, 0.0)), g.at((1.0, 0.0)), g.at((0.0, 1.0)));
+                let m = format!(
+                    "matrix({} {} {} {} {} {})",
+                    (a.0 - o.0) / w,
+                    (a.1 - o.1) / w,
+                    (b.0 - o.0) / h,
+                    (b.1 - o.1) / h,
+                    o.0,
+                    o.1
+                );
+                let color = Some(i.border_color.trim())
+                    .filter(|c| !c.is_empty() && *c != "transparent")
+                    .unwrap_or("rgba(56, 189, 248, 0.95)")
+                    .to_string();
+                let width = if i.border_width > 0.0 {
+                    i.border_width
+                } else {
+                    2.0
+                };
+                Some((d, m, color, width.max(1.0)))
+            })
+            .collect(),
+        _ => Vec::new(),
+    };
     drop(geometry);
     drop(editor);
     let hs = 8.0 / zoom;
@@ -315,6 +364,15 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 // Other selected layers: a dark halo under a bright dashed
                 // line, readable on light and dark graphics.
                 Guides { ui, width, height }
+                for (d , m , color , w) in path_guides {
+                    path {
+                        class: "path-guide",
+                        d: "{d}",
+                        transform: "{m}",
+                        stroke: "{color}",
+                        stroke_width: "{w * zoom}",
+                    }
+                }
                 for outline in others {
                     polygon { class: "sel-other-halo", points: "{outline}" }
                     polygon { class: "sel-other", points: "{outline}" }
