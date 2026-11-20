@@ -1378,7 +1378,10 @@ fn jump_lane(ui: Ui, item: &str, lane: &str, next: bool) {
         .and_then(|e| framecraft_core::timeline::lane_keys(e.doc(), item, lane))
         .map(|k| k.iter().map(|k| k.time).collect())
         .unwrap_or_default();
-    if let Some(t) = step(&times, *ui.time.peek(), next) {
+    // Read first: a guard in the `if let` would still borrow the time
+    // signal when set_time writes it (that panicked).
+    let now = *ui.time.peek();
+    if let Some(t) = step(&times, now, next) {
         ui.set_time(t);
         let mut keys = ui.keys;
         keys.set(vec![KeyRef::new(item, lane, t)]);
@@ -1404,7 +1407,10 @@ fn jump_cue(ui: Ui, kind: CueKind, next: bool) {
         .unwrap_or_default();
     cues.sort_by(|a, b| a.0.total_cmp(&b.0));
     let times: Vec<f64> = cues.iter().map(|c| c.0).collect();
-    if let Some(t) = step(&times, *ui.time.peek(), next) {
+    // Read first: a guard in the `if let` would still borrow the time
+    // signal when set_time writes it (that panicked).
+    let now = *ui.time.peek();
+    if let Some(t) = step(&times, now, next) {
         ui.set_time(t);
         let mut cue = ui.cue;
         cue.set(cues.iter().find(|c| same_time(c.0, t)).map(|c| c.1.clone()));
