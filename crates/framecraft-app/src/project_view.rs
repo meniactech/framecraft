@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
 //! The Project view (FRAME's dashboard for one project): the project's
 //! graphics, and the Media Manager with the project's images, Lottie files
-//! and videos, and the user's palettes. It covers the editor while open;
-//! the editor stays loaded underneath.
+//! and videos, and the user's palettes. A tab under the shared header and
+//! menu bar (Editor | Project); the editor stays loaded underneath.
 
 use crate::preview::library_url;
 use crate::state::Ui;
@@ -21,7 +21,7 @@ const TABS: &[(&str, &str)] = &[
 
 #[component]
 pub fn ProjectView(ui: Ui) -> Element {
-    let mut open = ui.project_view;
+    let open = ui.project_view;
     let mut tab = use_signal(|| "palettes");
     // Opening the view refreshes the open graphic's thumbnail.
     use_effect(move || {
@@ -57,7 +57,6 @@ pub fn ProjectView(ui: Ui) -> Element {
     rsx! {
         div { class: "project-view",
             div { class: "project-head",
-                span { class: "brand", "FrameCraft" }
                 h2 {
                     if name.is_empty() {
                         "No project open"
@@ -66,7 +65,6 @@ pub fn ProjectView(ui: Ui) -> Element {
                     }
                 }
                 UpdateToggle {}
-                button { class: "active", title: "Back to the editor (Tab)", onclick: move |_| open.set(false), "Back to editor" }
             }
             div { class: "project-body",
                 aside { class: "project-graphics",

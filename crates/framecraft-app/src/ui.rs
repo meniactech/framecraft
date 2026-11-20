@@ -74,13 +74,26 @@ pub fn Header(ui: Ui) -> Element {
                     }
                 }
             }
-            button {
-                title: "The project's graphics, media and your palettes (Tab)",
-                onclick: move |_| {
-                    let mut open = ui.project_view;
-                    open.set(true);
-                },
-                "Project"
+            // Editor | Project (Tab switches too).
+            div { class: "seg view-tabs",
+                button {
+                    class: if !(ui.project_view)() { "active" } else { "" },
+                    title: "The editor (Tab)",
+                    onclick: move |_| {
+                        let mut open = ui.project_view;
+                        open.set(false);
+                    },
+                    "Editor"
+                }
+                button {
+                    class: if (ui.project_view)() { "active" } else { "" },
+                    title: "The project's graphics, media and your palettes (Tab)",
+                    onclick: move |_| {
+                        let mut open = ui.project_view;
+                        open.set(true);
+                    },
+                    "Project"
+                }
             }
         }
     }

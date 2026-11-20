@@ -280,7 +280,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .palette-label { font-size: 11px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
 .stock-btn { font-size: 12px; }
 /* Project view (FRAME's dashboard for the project) */
-.project-view { position: fixed; inset: 0; z-index: 40; background: var(--bg); display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; }
+.project-view { position: fixed; left: 0; right: 0; top: 44px; bottom: 24px; z-index: 40; background: var(--bg); display: flex; flex-direction: column; -webkit-user-select: none; user-select: none; }
 .project-head { display: flex; align-items: center; gap: 12px; padding: 0 12px; height: 44px; border-bottom: 1px solid var(--line); background: var(--panel); }
 .project-head h2 { flex: 1; font-size: 15px; margin: 0; }
 .project-body { flex: 1; min-height: 0; display: grid; grid-template-columns: 240px 1fr; }
