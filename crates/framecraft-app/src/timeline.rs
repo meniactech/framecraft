@@ -289,6 +289,22 @@ pub fn Timeline(ui: Ui) -> Element {
         10
     };
     let seconds = (duration / 1000.0).ceil() as usize;
+    // FRAME's time display format (storage stays ms); the bridge draws the
+    // playhead label while playing, so it gets the format and frame rate.
+    let format = (ui.time_format)();
+    let fps = ui
+        .editor
+        .read()
+        .as_ref()
+        .map_or(25.0, |e| e.doc().timeline.fps);
+    let fid = format.id();
+    use_effect(use_reactive!(|fid, fps| crate::bridge::time_format(
+        fid, fps
+    )));
+    let shown_time = ui.fmt_time(time);
+    let shown_duration = ui.fmt_time(duration);
+    let shown_step = ui.fmt_time(snap_step);
+    let hint = format.hint();
     let empty_hint = match (view, layer_selected) {
         (TlView::Keys, true) => {
             "No animated properties. Click ◇ next to a field in Transform (or press K) to add a keyframe."
@@ -304,8 +320,29 @@ pub fn Timeline(ui: Ui) -> Element {
                     if playing { "⏸ Pause" } else { "▶ Play" }
                 }
                 span { class: "time",
-                    span { id: "fc-time", "{time / 1000.0:.2}" }
-                    " s / {duration / 1000.0:.2} s"
+                    input {
+                        id: "fc-time",
+                        class: "time-input",
+                        r#type: "text",
+                        title: "Playhead ({hint}). Type a time; 30s, 500ms or 90fr work in any format.",
+                        value: "{shown_time}",
+                        onchange: move |evt| {
+                            if let Some(t) = ui.parse_time(&evt.value()) {
+                                ui.set_time(t.min(duration));
+                            }
+                        },
+                    }
+                    span { class: "dim", " / {shown_duration}" }
+                    select {
+                        class: "time-format",
+                        title: "Time display format (storage stays ms)",
+                        onchange: move |evt| {
+                            ui.set_time_format(framecraft_core::timecode::Format::from_id(&evt.value()));
+                        },
+                        for (f , id , label , title) in framecraft_core::timecode::FORMATS.iter().copied() {
+                            option { value: "{id}", title: "{title}", selected: f == format, "{label}" }
+                        }
+                    }
                 }
                 button {
                     class: if (ui.auto_key)() { "auto-key on" } else { "auto-key" },
@@ -350,13 +387,11 @@ pub fn Timeline(ui: Ui) -> Element {
                 }
                 input {
                     class: "snap-step",
-                    r#type: "number",
-                    min: "1",
-                    step: "10",
-                    title: "Snap step (ms)",
-                    value: "{snap_step}",
+                    r#type: "text",
+                    title: "Snap step ({hint}), stored as milliseconds",
+                    value: "{shown_step}",
                     onchange: move |evt| {
-                        if let Ok(v) = evt.value().trim().parse::<f64>() {
+                        if let Some(v) = ui.parse_time(&evt.value()) {
                             ui.execute(&SetField {
                                 target: FieldTarget::Timeline,
                                 path: "snapStep".into(),
@@ -366,7 +401,7 @@ pub fn Timeline(ui: Ui) -> Element {
                         }
                     },
                 }
-                span { class: "dim", "ms" }
+                span { class: "dim", "{hint}" }
                 div { class: "spacer" }
                 div { class: "seg",
                     button {
@@ -402,7 +437,7 @@ pub fn Timeline(ui: Ui) -> Element {
                             // Scrubbed by the bridge (pointer capture), see `scrub`.
                             "data-scrub": "1",
                             for s in (0..=seconds).step_by(tick_s) {
-                                div { class: "tick", style: "left:{s as f64 * 1000.0 * px}px;", "{s}s" }
+                                div { class: "tick", style: "left:{s as f64 * 1000.0 * px}px;", "{ui.fmt_time(s as f64 * 1000.0)}" }
                             }
                         }
                     }
@@ -586,7 +621,7 @@ fn Inspector(ui: Ui) -> Element {
             move |evt: FormEvent| {
                 let raw = evt.value();
                 let value = match path {
-                    "time" => raw.trim().parse::<f64>().map(|s| json!(s * 1000.0)).ok(),
+                    "time" => ui.parse_time(&raw).map(|t| json!(t)),
                     "delayMs" => raw.trim().parse::<f64>().map(|v| json!(v)).ok(),
                     _ => Some(json!(raw)),
                 };
@@ -600,14 +635,15 @@ fn Inspector(ui: Ui) -> Element {
             }
         };
         let remove_id = cue.id.clone();
-        let t = round3(cue.time / 1000.0);
+        let t = ui.fmt_time(cue.time);
+        let hint = (ui.time_format)().hint();
         let delay = cue.delay_ms.unwrap_or(0.0);
         let label = cue.label.clone().unwrap_or_default();
         return rsx! {
             div { class: "inspector",
                 span { class: "insp-title", "{cue_label(cue.kind)} cue" }
-                label { "Time (s)"
-                    input { r#type: "number", step: "0.01", value: "{t}", onchange: field("time") }
+                label { "Time ({hint})"
+                    input { r#type: "text", class: "time-input", value: "{t}", onchange: field("time") }
                 }
                 label { "Delay (ms)"
                     input { r#type: "number", step: "10", value: "{delay}", onchange: field("delayMs") }
@@ -700,18 +736,19 @@ fn Inspector(ui: Ui) -> Element {
             if let Some((r, value, _)) = single {
                 {
                     let (rt, rv) = (r.clone(), r.clone());
-                    let t = round3(r.time / 1000.0);
+                    let t = ui.fmt_time(r.time);
+                    let hint = (ui.time_format)().hint();
                     let v = framecraft_core::js::number_to_string(round3(value));
                     rsx! {
                         span { class: "insp-title", "{lane_label(&r.lane)} key" }
-                        label { "Time (s)"
+                        label { "Time ({hint})"
                             input {
-                                r#type: "number",
-                                step: "0.01",
+                                r#type: "text",
+                                class: "time-input",
                                 value: "{t}",
                                 onchange: move |evt| {
-                                    if let Ok(s) = evt.value().trim().parse::<f64>() {
-                                        retime(ui, vec![rt.clone()], s * 1000.0 - rt.time, false);
+                                    if let Some(t) = ui.parse_time(&evt.value()) {
+                                        retime(ui, vec![rt.clone()], t - rt.time, false);
                                     }
                                 },
                             }

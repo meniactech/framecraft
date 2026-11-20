@@ -734,11 +734,35 @@ if (!window.__fc) {
     fc.emit({ type: 'key', key, shift: e.shiftKey });
   });
 
+  // The playhead time in the chosen format (framecraft_core::timecode,
+  // FRAME's timecode.ts); Rust sets fc.timeFormat and fc.fps.
+  fc.timeFormat = fc.timeFormat || 's';
+  fc.fps = fc.fps || 25;
+  fc.fmtTime = (ms) => {
+    const t = Math.max(0, Number.isFinite(ms) ? ms : 0);
+    const r = Math.max(1, Math.round(fc.fps || 25));
+    const pad = (n, w) => String(Math.max(0, Math.floor(n))).padStart(w || 2, '0');
+    const f = fc.timeFormat;
+    if (f === 'ms') return String(Math.round(t));
+    if (f === 's') {
+      const sec = t / 1000;
+      return Math.abs(sec - Math.round(sec)) < 0.0005 ? String(Math.round(sec)) : String(Number(sec.toFixed(3)));
+    }
+    if (f === 'frames') return String(Math.round(t / 1000 * r));
+    const total = Math.round(t);
+    const h = Math.floor(total / 3600000), m = Math.floor((total % 3600000) / 60000);
+    const s = Math.floor((total % 60000) / 1000), mil = total % 1000;
+    if (f === 'mm:ss.mmm') return pad(Math.floor(total / 60000)) + ':' + pad(s) + '.' + pad(mil, 3);
+    if (f === 'hh:mm:ss.mmm') return pad(h) + ':' + pad(m) + ':' + pad(s) + '.' + pad(mil, 3);
+    const frames = Math.floor(total / 1000 * r);
+    return pad(Math.floor(frames / r / 3600)) + ':' + pad(Math.floor(frames / r / 60) % 60) + ':' + pad(Math.floor(frames / r) % 60) + ':' + pad(frames % r);
+  };
   fc.drawPlayhead = (t) => {
     const p = document.getElementById('fc-playhead');
     if (p) p.style.left = (fc.labelWidth + t * fc.pxPerMs) + 'px';
     const l = document.getElementById('fc-time');
-    if (l) l.textContent = (t / 1000).toFixed(2);
+    // Not while the user is typing a time there.
+    if (l && document.activeElement !== l) l.value = fc.fmtTime(t);
   };
   fc.play = (from, duration, onStop) => {
     fc.stop(false);
@@ -783,6 +807,15 @@ pub fn load(url: &str) {
 /// Sends a live edit to the editor script.
 pub fn edit(msg: &Value) {
     let _ = document::eval(&format!("window.__fc && window.__fc.edit({msg});"));
+}
+
+/// The time format and frame rate for the playhead label (see `fc.fmtTime`).
+pub fn time_format(id: &str, fps: f64) {
+    let _ = document::eval(&format!(
+        "if (window.__fc) {{ window.__fc.timeFormat = {}; window.__fc.fps = {}; }}",
+        serde_json::to_string(id).unwrap_or_default(),
+        if fps.is_finite() { fps } else { 25.0 }
+    ));
 }
 
 pub fn seek(time_ms: f64) {

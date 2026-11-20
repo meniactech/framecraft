@@ -102,3 +102,31 @@ pub fn save_guides(g: &framecraft_core::manipulate::GuideToggles) {
         );
     }
 }
+
+/// The time display format (FRAME's: shared by the timeline and Scene).
+pub fn load_time_format() -> framecraft_core::timecode::Format {
+    load()
+        .and_then(|l| {
+            l.get("timeFormat")
+                .and_then(Value::as_str)
+                .map(String::from)
+        })
+        .map_or_else(Default::default, |id| {
+            framecraft_core::timecode::Format::from_id(&id)
+        })
+}
+
+/// Saves the time display format with the panel sizes.
+pub fn save_time_format(f: framecraft_core::timecode::Format) {
+    let mut layout = load().unwrap_or_default();
+    layout.insert("timeFormat".into(), Value::from(f.id()));
+    if let Some(p) = path() {
+        if let Some(dir) = p.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(
+            p,
+            serde_json::to_vec_pretty(&Value::Object(layout)).unwrap_or_default(),
+        );
+    }
+}

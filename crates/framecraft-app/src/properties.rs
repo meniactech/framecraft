@@ -327,6 +327,9 @@ pub fn Properties(ui: Ui) -> Element {
                 if tab == Tab::Scene && f.prop.path == "width" {
                     ResolutionPreset { ui }
                 }
+                if tab == Tab::Scene && f.prop.path == "duration" {
+                    TimeFormatRow { ui }
+                }
                 if f.prop.path == "borderWidthMode" {
                     if let Some(item) = id.clone() {
                         BorderMode { ui, item }
@@ -503,6 +506,27 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         Kind::ChartPoints => rsx! {
             ChartPoints { ui, value: field.value.clone(), set }
         },
+        Kind::Time { .. } => {
+            let ms = field.value.as_f64().unwrap_or(0.0);
+            let shown = ui.fmt_time(ms);
+            rsx! {
+                input {
+                    r#type: "text",
+                    class: "time-input",
+                    title: "Type a time in the chosen format; 30s, 500ms or 90fr work in any format",
+                    value: "{shown}",
+                    onchange: move |evt| {
+                        match ui.parse_time(&evt.value()) {
+                            Some(t) => set(Value::from(t)),
+                            None => {
+                                let mut status = ui.status;
+                                status.set(format!("{}: not a time", prop.label));
+                            }
+                        }
+                    },
+                }
+            }
+        }
         Kind::GradientCenter => rsx! {
             GradientCenter { value: field.value.clone(), item: field.context.clone(), set }
         },
@@ -741,9 +765,14 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             }
         };
     }
+    let label = if matches!(prop.kind, Kind::Time { .. }) {
+        format!("{} ({})", prop.label, (ui.time_format)().hint())
+    } else {
+        prop.label.to_string()
+    };
     rsx! {
         label { class: "field",
-            span { class: "field-label", title: "{help}", "{prop.label}" }
+            span { class: "field-label", title: "{help}", "{label}" }
             {input}
             {key_button}
         }
@@ -2632,6 +2661,25 @@ fn BorderMode(ui: Ui, item: String) -> Element {
                 },
                 option { value: "single", selected: !sides, "Single" }
                 option { value: "sides", selected: sides, "4-sided" }
+            }
+            span {}
+        }
+    }
+}
+
+/// FRAME's Time format menu in Scene → Timing (the same setting as the
+/// timeline's menu; times stay stored in ms).
+#[component]
+fn TimeFormatRow(ui: Ui) -> Element {
+    let format = (ui.time_format)();
+    rsx! {
+        label { class: "field",
+            span { class: "field-label", title: "How times are shown and typed here and in the timeline. Stored as milliseconds.", "Time format" }
+            select {
+                onchange: move |evt| ui.set_time_format(framecraft_core::timecode::Format::from_id(&evt.value())),
+                for (f , id , _label , title) in framecraft_core::timecode::FORMATS.iter().copied() {
+                    option { value: "{id}", selected: f == format, "{title}" }
+                }
             }
             span {}
         }

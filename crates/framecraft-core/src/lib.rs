@@ -35,6 +35,7 @@ pub mod resolutions;
 pub mod schema;
 pub mod script;
 pub mod selection;
+pub mod timecode;
 pub mod timeline;
 
 /// Product name used in generated files (`generator` fields and similar).

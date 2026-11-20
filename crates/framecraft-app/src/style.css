@@ -529,3 +529,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .gradient-readouts label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
 .gradient-readouts input { width: 56px; }
 .font-sample { font-size: 30px; line-height: 1; color: var(--text); }
+/* Times in FRAME's display formats */
+.time-input { width: 96px; font-variant-numeric: tabular-nums; }
+.transport .time { display: inline-flex; align-items: center; gap: 6px; }
+.time-format { max-width: 78px; padding-top: 2px; padding-bottom: 2px; }
+.snap-step { width: 84px; }

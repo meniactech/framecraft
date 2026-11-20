@@ -109,6 +109,8 @@ pub struct Ui {
     pub user_components: Signal<framecraft_core::components::UserComponents>,
     /// Make Component waiting for its name.
     pub pending_component: Signal<Option<crate::components::PendingComponent>>,
+    /// How times are shown and typed (storage stays ms).
+    pub time_format: Signal<framecraft_core::timecode::Format>,
     /// New / Open waiting for an answer about unsaved changes.
     pub switch_prompt: Signal<Option<Switch>>,
     /// Add → Insert Component… is open.
@@ -151,6 +153,7 @@ impl Ui {
             zoom: use_signal(|| 0.5),
             pan: use_signal(|| (0.0, 0.0)),
             guides: use_signal(crate::layout::load_guides),
+            time_format: use_signal(crate::layout::load_time_format),
             auto_key: use_signal(|| false),
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),
@@ -1279,6 +1282,35 @@ fn follow_move(current: usize, from: usize, to: usize) -> usize {
         current + 1
     } else {
         current
+    }
+}
+
+impl Ui {
+    /// The open graphic's frame rate (frames and timecode formats).
+    pub fn fps(self) -> f64 {
+        self.editor
+            .peek()
+            .as_ref()
+            .map_or(25.0, |e| e.doc().timeline.fps)
+    }
+
+    /// `ms` in the chosen time format.
+    pub fn fmt_time(self, ms: f64) -> String {
+        framecraft_core::timecode::format_time(ms, *self.time_format.peek(), self.fps())
+    }
+
+    /// Typed time (in the chosen format, or with a unit) as ms.
+    pub fn parse_time(self, text: &str) -> Option<f64> {
+        framecraft_core::timecode::parse_time(text, *self.time_format.peek(), self.fps())
+    }
+
+    /// Sets the time format, remembers it and tells the bridge (the
+    /// playhead label is drawn there while playing).
+    pub fn set_time_format(self, f: framecraft_core::timecode::Format) {
+        let mut tf = self.time_format;
+        tf.set(f);
+        crate::layout::save_time_format(f);
+        crate::bridge::time_format(f.id(), self.fps());
     }
 }
 

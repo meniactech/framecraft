@@ -134,6 +134,11 @@ pub enum Kind {
     Rulers,
     /// A radial / conic gradient's center (`{x, y}`, 0–1), FRAME's pad.
     GradientCenter,
+    /// A time in ms, shown and typed in the chosen time format.
+    Time {
+        min: f64,
+        max: f64,
+    },
 }
 
 /// Where a property's value lives.
@@ -245,8 +250,11 @@ pub const PROPERTIES: &[Property] = &[
         Scene,
         "Timing",
         "duration",
-        "Duration (ms)",
-        num(100.0, 3_600_000.0, 10.0),
+        "Duration",
+        Kind::Time {
+            min: 100.0,
+            max: 3_600_000.0
+        },
         Timeline,
         None,
         Rebuild
@@ -2157,6 +2165,12 @@ impl Property {
             }
             (Kind::Number { min, max, .. }, Value::Number(n)) => {
                 Value::from(n.as_f64()?.clamp(min, max))
+            }
+            (Kind::Time { min, max }, Value::Number(n)) => {
+                Value::from(n.as_f64()?.round().clamp(min, max))
+            }
+            (Kind::Time { min, max }, Value::String(s)) => {
+                Value::from(s.trim().parse::<f64>().ok()?.round().clamp(min, max))
             }
             (Kind::TextOrNumber, Value::String(s)) => match s.trim().parse::<f64>() {
                 Ok(n) => Value::from(n),
