@@ -244,14 +244,20 @@ pub fn Outliner(ui: Ui) -> Element {
                 div { class: "menu context-menu", style: "left:{x}px;top:{y}px;",
                     {
                         let a = id.clone();
+                        let selection = ui.selection();
+                        let many = if selection.len() > 1 && selection.contains(&id) {
+                            selection.len()
+                        } else {
+                            1
+                        };
                         rsx! {
                             button {
-                                title: "Save this layer with everything under it as a reusable component",
+                                title: if many > 1 { "Save the selected layers (under a new Empty) as one reusable component" } else { "Save this layer with everything under it as a reusable component" },
                                 onclick: move |_| {
                                     context.set(None);
                                     crate::components::make_component(ui, &a);
                                 },
-                                "Make Component…"
+                                if many > 1 { "Make Component of {many} layers…" } else { "Make Component…" }
                             }
                             button {
                                 onclick: move |_| {

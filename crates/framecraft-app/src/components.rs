@@ -21,13 +21,19 @@ pub struct PendingComponent {
     pub data: ComponentData,
 }
 
-/// Starts Make Component for a layer: the name dialog opens.
+/// Starts Make Component for a layer, or for the whole selection when the
+/// layer is part of it (FRAME: several layers go under a new Empty): the
+/// name dialog opens.
 pub fn make_component(ui: Ui, id: &str) {
-    let made = ui
-        .editor
-        .peek()
-        .as_ref()
-        .and_then(|e| framecraft_core::components::from_selection(e.doc(), &[id.to_string()]));
+    let made = ui.editor.peek().as_ref().and_then(|e| {
+        let selection = e.selection();
+        let ids = if selection.len() > 1 && selection.iter().any(|s| s == id) {
+            selection
+        } else {
+            vec![id.to_string()]
+        };
+        framecraft_core::components::from_selection(e.doc(), &ids)
+    });
     let mut pending = ui.pending_component;
     pending.set(made.map(|(name, data)| PendingComponent { name, data }));
 }

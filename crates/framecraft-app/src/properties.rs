@@ -176,6 +176,9 @@ pub fn Properties(ui: Ui) -> Element {
         .selected
         .as_ref()
         .and_then(|id| doc.items.iter().find(|i| &i.id == id));
+    // Several layers selected: FRAME shows a summary instead of one
+    // layer's properties.
+    let many = ed.selection().len();
     // FRAME: Scene and Script always, then the layer's tabs.
     let mut tabs = vec![Tab::Scene, Tab::Script, Tab::Export];
     if let Some(i) = item {
@@ -224,8 +227,11 @@ pub fn Properties(ui: Ui) -> Element {
             }
         })
         .collect();
+    let layer_tab = !matches!(tab, Tab::Scene | Tab::Script | Tab::Export);
+    let multi = many > 1 && layer_tab;
+    let fields = if multi { Vec::new() } else { fields };
     let cards = match item {
-        Some(i) if tab == Tab::Modifiers => modifier_cards(doc, i, time),
+        Some(i) if tab == Tab::Modifiers && !multi => modifier_cards(doc, i, time),
         _ => Vec::new(),
     };
     let addable: Vec<(&'static str, bool)> = item.map_or_else(Vec::new, |i| {
@@ -246,6 +252,7 @@ pub fn Properties(ui: Ui) -> Element {
     let item_ref = item.cloned();
     let board_hook = doc.scene.ionboard_hook_enabled == Some(true);
     let heading = match item {
+        Some(_) if multi => format!("{many} layers"),
         Some(i) if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) => i.name.clone(),
         _ => doc.scene.name.clone(),
     };
@@ -280,8 +287,15 @@ pub fn Properties(ui: Ui) -> Element {
             if tab == Tab::Export {
                 crate::export::ExportTab { ui }
             }
-            if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) && id.is_none() {
+            if layer_tab && id.is_none() {
                 p { class: "dim", "Select a layer" }
+            }
+            if multi && tab == Tab::Transform {
+                h3 { "Selection summary" }
+                p { "{many} items selected." }
+                p { class: "dim", "Use the align buttons in the viewport, or select one item for detailed properties." }
+            } else if multi {
+                p { class: "dim", "Select a single item" }
             }
             for (i , f) in fields.iter().enumerate() {
                 if i == 0 || fields[i - 1].prop.group != f.prop.group {
@@ -300,7 +314,7 @@ pub fn Properties(ui: Ui) -> Element {
             if tab == Tab::Scene && ui.editor.read().is_some() {
                 SceneCues { ui }
             }
-            if tab == Tab::Modifiers {
+            if tab == Tab::Modifiers && !multi {
                 if let Some(item) = id.clone() {
                     ModifierStack { ui, item, cards, addable }
                 }

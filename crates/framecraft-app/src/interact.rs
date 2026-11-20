@@ -338,12 +338,17 @@ fn pointer_down(ui: Ui, ev: &Value) {
     // The selected layer's own controls come first: polygon points, then
     // the box handles.
     let current = ui.editor.peek().as_ref().and_then(|e| e.selected.clone());
-    if let Some(id) = &current
+    // FRAME: the handles (and point editing) are there only while one
+    // layer is selected; a multi-selection is moved as a group.
+    let single = current
+        .clone()
+        .filter(|_| ui.editor.peek().as_ref().is_some_and(|e| e.also.is_empty()));
+    if let Some(id) = &single
         && point_edit(ui, id, p, ev)
     {
         return;
     }
-    if let Some(id) = &current {
+    if let Some(id) = &single {
         let control = {
             let editor = ui.editor.peek();
             let geometry = ui.geometry.peek();

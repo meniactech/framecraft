@@ -241,6 +241,32 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                 .collect()
         })
         .unwrap_or_default();
+    // FRAME: a box around the whole multi-selection.
+    let union = editor.as_ref().and_then(|e| {
+        if e.also.is_empty() {
+            return None;
+        }
+        let boxes: Vec<(f64, f64, f64, f64)> = e
+            .selection()
+            .iter()
+            .filter_map(|id| geometry.iter().find(|g| &g.id == id))
+            .filter_map(|g| {
+                let xs = g.corners.iter().map(|c| c.0);
+                let ys = g.corners.iter().map(|c| c.1);
+                let (x0, x1) = (
+                    xs.clone().fold(f64::INFINITY, f64::min),
+                    xs.fold(f64::NEG_INFINITY, f64::max),
+                );
+                let (y0, y1) = (
+                    ys.clone().fold(f64::INFINITY, f64::min),
+                    ys.fold(f64::NEG_INFINITY, f64::max),
+                );
+                (x0.is_finite() && y0.is_finite()).then_some((x0, y0, x1 - x0, y1 - y0))
+            })
+            .collect();
+        framecraft_core::manipulate::bounds_of(&boxes)
+    });
+    let single = editor.as_ref().is_some_and(|e| e.also.is_empty());
     let drawn = editor.as_ref().and_then(|e| {
         let id = e.selected.as_ref()?;
         let g: &Geom = geometry.iter().find(|g| &g.id == id)?;
@@ -289,9 +315,13 @@ fn Overlay(ui: Ui, width: f64, height: f64) -> Element {
                     polygon { class: "sel-other-halo", points: "{outline}" }
                     polygon { class: "sel-other", points: "{outline}" }
                 }
+                if let Some((x, y, w, h)) = union {
+                    rect { class: "sel-union-halo", x: "{x}", y: "{y}", width: "{w}", height: "{h}" }
+                    rect { class: "sel-union", x: "{x}", y: "{y}", width: "{w}", height: "{h}" }
+                }
                 if let Some((outline, handles, pivot, top, rotate, can_move, marks)) = drawn {
                     polygon { class: if can_move { "sel-outline" } else { "sel-outline locked" }, points: "{outline}" }
-                    if can_move {
+                    if can_move && single {
                         line { class: "sel-stem", x1: "{top.0}", y1: "{top.1}", x2: "{rotate.0}", y2: "{rotate.1}" }
                         circle { class: "sel-rotate", cx: "{rotate.0}", cy: "{rotate.1}", r: "{hs * 0.6}" }
                         for (x , y) in handles {

@@ -499,3 +499,6 @@ input, textarea { -webkit-user-select: text; user-select: text; }
   text-align: center; padding: 0 4px; font-variant-numeric: tabular-nums; outline: none; -webkit-appearance: textfield; appearance: textfield; }
 .pill input::-webkit-outer-spin-button, .pill input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
 .field .pill input:focus { background: #000; }
+/* FRAME: one box around a multi-selection */
+.overlay .sel-union-halo { fill: none; stroke: rgba(0, 0, 0, .55); stroke-width: 4px; }
+.overlay .sel-union { fill: none; stroke: #d4d4d4; stroke-width: 2px; }
