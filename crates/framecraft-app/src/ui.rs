@@ -110,6 +110,7 @@ pub fn Viewport(ui: Ui) -> Element {
         .as_ref()
         .is_some_and(|e| e.selected.is_some());
     let frame_style = format!("width:{w}px;height:{h}px;transform:scale({zoom});");
+    let px_rulers = open && (ui.guides)().pixel_rulers;
     rsx! {
         div { class: "viewport-panel",
             div { class: "viewport-tools",
@@ -125,8 +126,15 @@ pub fn Viewport(ui: Ui) -> Element {
                 }
                 button { onclick: move |_| { spawn(fit(ui)); }, "Fit" }
                 span { class: "dim", "{w}×{h}" }
+                div { class: "spacer" }
+                button {
+                    class: if px_rulers { "active" } else { "" },
+                    title: "Show / hide the pixel rulers along the viewport edges (Ctrl+R)",
+                    onclick: move |_| crate::menubar::toggle_guide(ui, "pixel_rulers"),
+                    "Px rulers"
+                }
             }
-            div { class: "viewport-area",
+            div { class: if px_rulers { "viewport-area with-px-rulers" } else { "viewport-area" },
             div { class: "viewport", id: "fc-viewport",
                 // Both frames always exist; the bridge sets their src and
                 // shows one (class "active"). Dioxus never touches either.
@@ -150,6 +158,21 @@ pub fn Viewport(ui: Ui) -> Element {
                 }
                 if !open {
                     div { class: "empty", "No graphic open" }
+                }
+            }
+            // Scene-pixel scales on the top and left edges (the bridge draws
+            // them and turns a drag from one into a new custom ruler).
+            if px_rulers {
+                div { class: "px-rulers", "data-w": "{w}", "data-h": "{h}",
+                    canvas {
+                        class: "px-ruler top",
+                        title: "Scene pixels. Drag down into the scene to add a horizontal ruler",
+                    }
+                    canvas {
+                        class: "px-ruler left",
+                        title: "Scene pixels. Drag right into the scene to add a vertical ruler",
+                    }
+                    div { class: "px-corner", title: "Pixel rulers (Ctrl+R hides them)", "px" }
                 }
             }
             // FRAME's places: guide toggles down the right edge, align

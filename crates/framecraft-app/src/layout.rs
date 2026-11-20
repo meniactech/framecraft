@@ -77,6 +77,7 @@ pub fn load_guides() -> framecraft_core::manipulate::GuideToggles {
             thirds: b("thirds", g.thirds),
             rulers: b("rulers", g.rulers),
             snap: b("snap", g.snap),
+            pixel_rulers: b("pixelRulers", g.pixel_rulers),
         };
     }
     g
@@ -90,6 +91,7 @@ pub fn save_guides(g: &framecraft_core::manipulate::GuideToggles) {
         serde_json::json!({
             "safe10": g.safe10, "safe20": g.safe20, "center": g.center,
             "thirds": g.thirds, "rulers": g.rulers, "snap": g.snap,
+            "pixelRulers": g.pixel_rulers,
         }),
     );
     if let Some(p) = path() {

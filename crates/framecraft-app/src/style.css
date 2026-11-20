@@ -569,3 +569,18 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .render-progress { display: flex; align-items: center; gap: 8px; }
 .render-progress progress { width: 120px; }
 .key-button.jump { width: 16px; font-size: 14px; }
+/* Pixel rulers (FrameCraft's): scene-pixel scales on the viewport's top
+   and left edges; the bridge draws them on the canvases. */
+.viewport-tools .spacer { flex: 1; }
+.px-rulers { position: absolute; inset: 0; pointer-events: none; z-index: 18; }
+.px-ruler, .px-corner { position: absolute; pointer-events: auto; background: var(--panel, #1c1c1c); }
+.px-ruler.top { left: 20px; right: 0; top: 0; height: 20px; width: calc(100% - 20px); border-bottom: 1px solid var(--line); cursor: s-resize; }
+.px-ruler.left { top: 20px; bottom: 0; left: 0; width: 20px; height: calc(100% - 20px); border-right: 1px solid var(--line); cursor: e-resize; }
+.px-corner { left: 0; top: 0; width: 20px; height: 20px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line);
+  font-size: 9px; line-height: 19px; text-align: center; color: var(--dim); }
+.with-px-rulers .align-tools { left: 32px; }
+.px-drag-line { position: absolute; z-index: 17; pointer-events: none; background: rgba(167, 139, 250, .9); }
+.px-drag-line.h { left: 0; right: 0; height: 1px; }
+.px-drag-line.v { top: 0; bottom: 0; width: 1px; }
+.px-drag-line span { position: absolute; left: 26px; top: 4px; font-size: 10px; padding: 1px 4px; border-radius: 3px; background: rgba(0, 0, 0, .75); color: #fff; white-space: nowrap; }
+.px-drag-line.v span { left: 4px; top: 26px; }

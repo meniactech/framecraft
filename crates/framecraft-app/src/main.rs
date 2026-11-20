@@ -215,7 +215,7 @@ fn App() -> Element {
 
     // Closing with unsaved changes asks first: the window hides instead of
     // closing and is shown again with the prompt.
-    let mut close_prompt = use_signal(|| false);
+    let mut close_prompt = ui.close_prompt;
     // Dioxus hides the window right after this handler sees the close
     // request (app handlers run first), so the window is shown again on the
     // next event the loop delivers.

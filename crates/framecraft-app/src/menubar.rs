@@ -12,6 +12,7 @@ use framecraft_core::schema::Tab;
 /// What a menu item does.
 #[derive(Clone, Copy, PartialEq, Debug)]
 enum Act {
+    Quit,
     New,
     Open,
     Save,
@@ -124,6 +125,14 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
         check("Rulers", "", Act::Guide("rulers"), true, g.rulers),
         check("Snap to guides", "", Act::Guide("snap"), true, g.snap),
         Item::Sep,
+        check(
+            "Pixel rulers",
+            "Ctrl+R",
+            Act::Guide("pixel_rulers"),
+            true,
+            g.pixel_rulers,
+        ),
+        Item::Sep,
         item("Project view", "Tab", Act::ProjectView, open),
     ]);
 
@@ -146,6 +155,8 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
                 item("Export FRAME pack…", "", Act::ExportPack, open),
                 Item::Sep,
                 item("Project view", "Tab", Act::ProjectView, open),
+                Item::Sep,
+                item("Quit", "Ctrl+Q", Act::Quit, true),
             ])
             .collect(),
         ),
@@ -230,6 +241,7 @@ fn run(ui: Ui, act: Act) {
             }
         }
         Act::ClearRecent => crate::recent::clear(ui),
+        Act::Quit => crate::state::quit(ui),
         Act::New => ui.new_project(),
         Act::Open => ui.open_dialog(),
         Act::Save => ui.save(),
@@ -270,20 +282,7 @@ fn run(ui: Ui, act: Act) {
         Act::Fit => {
             spawn(crate::ui::fit(ui));
         }
-        Act::Guide(which) => {
-            let mut guides = ui.guides;
-            let mut g = *guides.peek();
-            match which {
-                "safe10" => g.safe10 = !g.safe10,
-                "safe20" => g.safe20 = !g.safe20,
-                "center" => g.center = !g.center,
-                "thirds" => g.thirds = !g.thirds,
-                "rulers" => g.rulers = !g.rulers,
-                _ => g.snap = !g.snap,
-            }
-            guides.set(g);
-            crate::layout::save_guides(&g);
-        }
+        Act::Guide(which) => toggle_guide(ui, which),
         Act::Play => ui.toggle_play(),
         Act::ToStart => ui.set_time(0.0),
         Act::AutoKey => {
@@ -383,8 +382,10 @@ pub fn HelpDialog(ui: Ui) -> Element {
     let keys: &[(&str, &str)] = &[
         ("Ctrl+N / Ctrl+O", "New project / Open"),
         ("Ctrl+S / Ctrl+Shift+S", "Save / Save as"),
+        ("Ctrl+Q", "Quit (asks to save unsaved changes)"),
         ("Ctrl+Z / Ctrl+Shift+Z (Ctrl+Y)", "Undo / Redo"),
         ("Ctrl+D", "Duplicate the selected layer(s)"),
+        ("Ctrl+R", "Show / hide the pixel rulers"),
         ("Ctrl+C / Ctrl+V", "Copy / paste selected keyframes"),
         ("Delete", "Delete the selected layer(s), keys or cue"),
         ("Esc", "Select none"),
@@ -441,4 +442,22 @@ pub fn HelpDialog(ui: Ui) -> Element {
             }
         }
     }
+}
+
+/// Flips one viewport guide toggle (View menu, guide bar, Ctrl+R) and
+/// keeps it for the next session.
+pub fn toggle_guide(ui: Ui, which: &str) {
+    let mut guides = ui.guides;
+    let mut g = *guides.peek();
+    match which {
+        "safe10" => g.safe10 = !g.safe10,
+        "safe20" => g.safe20 = !g.safe20,
+        "center" => g.center = !g.center,
+        "thirds" => g.thirds = !g.thirds,
+        "rulers" => g.rulers = !g.rulers,
+        "pixel_rulers" => g.pixel_rulers = !g.pixel_rulers,
+        _ => g.snap = !g.snap,
+    }
+    guides.set(g);
+    crate::layout::save_guides(&g);
 }

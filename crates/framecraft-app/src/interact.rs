@@ -233,6 +233,38 @@ pub fn on_event(ui: Ui, ev: Value) {
                     update: framecraft_core::commands::Update::None,
                 }),
                 Some("end") => ui.end_gesture(),
+                // Dragged in from a pixel ruler: a new ruler, shown.
+                Some("add") => {
+                    let Some(value) = ev["value"].as_f64() else {
+                        return;
+                    };
+                    let mut list: Vec<f64> = ui
+                        .editor
+                        .peek()
+                        .as_ref()
+                        .map(|e| {
+                            let s = &e.doc().scene;
+                            if field == "customRulersH" {
+                                s.custom_rulers_h.clone()
+                            } else {
+                                s.custom_rulers_v.clone()
+                            }
+                            .unwrap_or_default()
+                        })
+                        .unwrap_or_default();
+                    list.push((value.clamp(0.0, 100.0) * 100.0).round() / 100.0);
+                    ui.begin_gesture("Add ruler".into());
+                    ui.execute(&framecraft_core::commands::SetField {
+                        target: framecraft_core::commands::FieldTarget::Scene,
+                        path: field.into(),
+                        value: serde_json::json!(list),
+                        update: framecraft_core::commands::Update::None,
+                    });
+                    ui.end_gesture();
+                    if !ui.guides.peek().rulers {
+                        crate::menubar::toggle_guide(ui, "rulers");
+                    }
+                }
                 _ => {}
             }
         }
@@ -746,6 +778,8 @@ fn key(ui: Ui, key: &str, shift: bool) {
         "save-as" => ui.save_as(),
         "new" => ui.new_project(),
         "open" => ui.open_dialog(),
+        "quit" => crate::state::quit(ui),
+        "px-rulers" => crate::menubar::toggle_guide(ui, "pixel_rulers"),
         "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" => {
             let step = if shift { 10.0 } else { 1.0 };
             let (dx, dy) = match key {

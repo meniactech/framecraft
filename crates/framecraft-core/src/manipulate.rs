@@ -350,6 +350,9 @@ pub struct GuideToggles {
     pub rulers: bool,
     /// Moving layers snap to the shown guides.
     pub snap: bool,
+    /// Scene-pixel scales along the viewport's top and left edges
+    /// (FrameCraft's; FRAME has none).
+    pub pixel_rulers: bool,
 }
 
 impl Default for GuideToggles {
@@ -362,6 +365,7 @@ impl Default for GuideToggles {
             thirds: false,
             rulers: false,
             snap: true,
+            pixel_rulers: true,
         }
     }
 }

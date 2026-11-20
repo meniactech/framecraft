@@ -127,6 +127,8 @@ pub struct Ui {
     pub recent: Signal<Vec<PathBuf>>,
     /// Help → "keys" (shortcuts) or "about".
     pub help_dialog: Signal<Option<&'static str>>,
+    /// The unsaved-changes prompt on closing (window ✕ or File → Quit).
+    pub close_prompt: Signal<bool>,
     /// Add → Insert Component… is open.
     pub component_library: Signal<bool>,
     /// The script editor is open.
@@ -198,6 +200,7 @@ impl Ui {
             switch_prompt: use_signal(|| None),
             update: use_signal(|| None),
             help_dialog: use_signal(|| None),
+            close_prompt: use_signal(|| false),
             recent: use_signal(crate::recent::load),
             render: use_signal(|| None),
             dirty: use_signal(|| false),
@@ -1471,6 +1474,19 @@ impl Ui {
             ));
         });
     }
+}
+
+/// File → Quit / Ctrl+Q: closes the window as its ✕ does, asking first when
+/// there are unsaved changes.
+pub fn quit(ui: Ui) {
+    if *ui.dirty.peek() {
+        let mut prompt = ui.close_prompt;
+        prompt.set(true);
+        return;
+    }
+    let w = dioxus::desktop::window();
+    w.set_close_behavior(dioxus::desktop::WindowCloseBehaviour::WindowCloses);
+    w.close();
 }
 
 #[cfg(test)]

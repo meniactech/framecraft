@@ -663,6 +663,150 @@ if (!window.__fc) {
     hd.addEventListener('pointercancel', up);
   }, true);
 
+  // Pixel rulers (.px-rulers): scene-pixel scales on the viewport's top
+  // and left edges, following zoom and pan, with a mark at the pointer.
+  // Redrawn on the next frame only when something they show has changed.
+  // Dragging from one into the scene adds a custom ruler there (top ->
+  // horizontal, left -> vertical, as in Photoshop), at a whole scene pixel.
+  {
+    let pointer = null, drag = null, lastKey = '';
+    const nice = (min) => {
+      const p = Math.pow(10, Math.floor(Math.log10(min)));
+      for (const m of [1, 2, 5]) if (m * p >= min) return m * p;
+      return 10 * p;
+    };
+    const near = (v, step) => Math.abs(v / step - Math.round(v / step)) < 1e-6;
+    // s0: scene px at the canvas start; len / thick: the canvas size in CSS px.
+    const draw = (cv, horiz, s0, len, thick, scale, span, mark) => {
+      const dpr = window.devicePixelRatio || 1;
+      const W = horiz ? len : thick, H = horiz ? thick : len;
+      if (W <= 0 || H <= 0) return;
+      if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) {
+        cv.width = Math.round(W * dpr);
+        cv.height = Math.round(H * dpr);
+      }
+      const g = cv.getContext('2d');
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.clearRect(0, 0, W, H);
+      const at = (v) => (v - s0) * scale;
+      // The scene's extent, slightly lighter.
+      const a = Math.max(0, at(0)), b = Math.min(len, at(span));
+      if (b > a) {
+        g.fillStyle = 'rgba(255, 255, 255, 0.07)';
+        if (horiz) g.fillRect(a, 0, b - a, H); else g.fillRect(0, a, W, b - a);
+      }
+      const major = nice(64 / scale);
+      let minor = major / 10;
+      if (minor * scale < 5) minor = major / 5;
+      if (minor * scale < 5) minor = major / 2;
+      g.strokeStyle = '#7a7a7a';
+      g.fillStyle = '#b5b5b5';
+      g.font = '9px system-ui, sans-serif';
+      g.lineWidth = 1;
+      g.beginPath();
+      const i0 = Math.floor(s0 / minor), i1 = Math.ceil((s0 + len / scale) / minor);
+      for (let i = i0; i <= i1; i++) {
+        const v = i * minor, p = Math.round(at(v)) + 0.5;
+        const t = near(v, major) ? thick : near(v, major / 2) ? thick * 0.5 : thick * 0.28;
+        if (horiz) { g.moveTo(p, H); g.lineTo(p, H - t); } else { g.moveTo(W, p); g.lineTo(W - t, p); }
+      }
+      g.stroke();
+      for (let i = Math.floor(s0 / major); i * major <= s0 + len / scale; i++) {
+        const v = i * major, p = at(v), label = String(Math.round(v * 100) / 100);
+        if (horiz) g.fillText(label, p + 3, 9);
+        else { g.save(); g.translate(9, p - 3); g.rotate(-Math.PI / 2); g.fillText(label, 0, 0); g.restore(); }
+      }
+      if (mark !== null && mark >= 0 && mark <= len) {
+        g.strokeStyle = '#f472b6';
+        g.beginPath();
+        const p = Math.round(mark) + 0.5;
+        if (horiz) { g.moveTo(p, 0); g.lineTo(p, H); } else { g.moveTo(0, p); g.lineTo(W, p); }
+        g.stroke();
+      }
+    };
+    const parts = () => {
+      const box = document.querySelector('.px-rulers');
+      const stage = document.querySelector('#fc-viewport .stage');
+      if (!box || !stage) return null;
+      const top = box.querySelector('.px-ruler.top'), left = box.querySelector('.px-ruler.left');
+      if (!top || !left) return null;
+      const w = parseFloat(box.dataset.w) || 1, h = parseFloat(box.dataset.h) || 1;
+      const sr = stage.getBoundingClientRect();
+      return { box, top, left, w, h, sr, scale: sr.width / w || 1 };
+    };
+    const frame = () => {
+      requestAnimationFrame(frame);
+      const q = parts();
+      if (!q) { lastKey = ''; return; }
+      const tr = q.top.getBoundingClientRect(), lr = q.left.getBoundingClientRect();
+      const key = [q.sr.left, q.sr.top, q.sr.width, tr.left, tr.width, tr.height, lr.top, lr.height, lr.width,
+        q.w, q.h, pointer ? pointer.x : '', pointer ? pointer.y : '', window.devicePixelRatio].join(',');
+      if (key === lastKey) return;
+      lastKey = key;
+      draw(q.top, true, (tr.left - q.sr.left) / q.scale, tr.width, tr.height, q.scale, q.w, pointer ? pointer.x - tr.left : null);
+      draw(q.left, false, (lr.top - q.sr.top) / q.scale, lr.height, lr.width, q.scale, q.h, pointer ? pointer.y - lr.top : null);
+    };
+    requestAnimationFrame(frame);
+    document.addEventListener('pointermove', (e) => {
+      const area = e.target && e.target.closest ? e.target.closest('.viewport-area') : null;
+      pointer = area || drag ? { x: e.clientX, y: e.clientY } : null;
+    }, true);
+    document.addEventListener('pointerleave', () => { pointer = null; });
+    // Where a drag would put the new ruler: whole scene px, and percent.
+    const place = (q, axis, e) => {
+      const px = axis === 'h' ? Math.round((e.clientY - q.sr.top) / q.scale) : Math.round((e.clientX - q.sr.left) / q.scale);
+      const span = axis === 'h' ? q.h : q.w;
+      return { px, pct: px / span * 100, inside: px >= 0 && px <= span };
+    };
+    document.addEventListener('pointerdown', (e) => {
+      if (e.button !== 0 || !e.target || !e.target.closest) return;
+      const cv = e.target.closest('.px-ruler');
+      if (!cv) return;
+      const q0 = parts();
+      if (!q0) return;
+      e.preventDefault();
+      e.stopPropagation();
+      const axis = cv.classList.contains('top') ? 'h' : 'v';
+      const area = q0.box.parentElement;
+      const line = document.createElement('div');
+      line.className = 'px-drag-line ' + axis;
+      line.style.display = 'none';
+      const tag = document.createElement('span');
+      line.appendChild(tag);
+      area.appendChild(line);
+      drag = { axis };
+      cv.setPointerCapture(e.pointerId);
+      const over = (ev) => {
+        const r = cv.getBoundingClientRect();
+        return axis === 'h' ? ev.clientY <= r.bottom : ev.clientX <= r.right;
+      };
+      const move = (ev) => {
+        const q = parts();
+        if (!q) return;
+        const at = place(q, axis, ev);
+        const ar = area.getBoundingClientRect();
+        line.style.display = over(ev) || !at.inside ? 'none' : 'block';
+        if (axis === 'h') line.style.top = (q.sr.top + at.px * q.scale - ar.top) + 'px';
+        else line.style.left = (q.sr.left + at.px * q.scale - ar.left) + 'px';
+        tag.textContent = (axis === 'h' ? 'y ' : 'x ') + at.px + ' px';
+      };
+      const up = (ev) => {
+        cv.removeEventListener('pointermove', move);
+        cv.removeEventListener('pointerup', up);
+        cv.removeEventListener('pointercancel', up);
+        line.remove();
+        drag = null;
+        const q = parts();
+        if (!q || ev.type === 'pointercancel' || over(ev)) return;
+        const at = place(q, axis, ev);
+        if (at.inside) fc.emit({ type: 'ruler', action: 'add', axis, value: Math.round(at.pct * 100) / 100 });
+      };
+      cv.addEventListener('pointermove', move);
+      cv.addEventListener('pointerup', up);
+      cv.addEventListener('pointercancel', up);
+    }, true);
+  }
+
   // Number pills: drag the label (.scrub) to change the value, 1 step per
   // pixel (Shift ×10, Alt ×0.1). Each new value is a `change` event on the
   // input, so Rust sees it like typing; the label's own pointerdown/up
@@ -773,6 +917,8 @@ if (!window.__fc) {
     else if (mod && k.toLowerCase() === 'd') key = 'duplicate';
     else if (mod && !e.shiftKey && k.toLowerCase() === 'n') key = 'new';
     else if (mod && !e.shiftKey && k.toLowerCase() === 'o') key = 'open';
+    else if (mod && !e.shiftKey && k.toLowerCase() === 'r') key = 'px-rulers';
+    else if (mod && !e.shiftKey && k.toLowerCase() === 'q') key = 'quit';
     else if (mod && k.toLowerCase() === 'c') key = 'copy';
     else if (mod && k.toLowerCase() === 'v') key = 'paste';
     else if (e.code === 'Comma' || e.code === 'Period') key = (mod ? 'jump-' : 'step-') + (e.code === 'Comma' ? 'prev' : 'next');
