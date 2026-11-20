@@ -1417,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "framecraft-app"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "block2",
  "cairo-rs",
@@ -1438,7 +1438,7 @@ dependencies = [
 
 [[package]]
 name = "framecraft-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "png 0.18.1",
  "serde",
