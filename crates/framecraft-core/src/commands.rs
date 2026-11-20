@@ -146,6 +146,11 @@ pub struct SetNumber {
 impl Command for SetNumber {
     fn apply(&self, doc: &mut Document) -> Result<Change, CommandError> {
         set_number(item_mut(doc, &self.item)?, &self.field, self.value)?;
+        // The pivot is the layer's CSS transform-origin, not an animated
+        // value: the layer itself has to be redrawn.
+        if matches!(self.field.as_str(), "pivotX" | "pivotY") {
+            return Ok(Change::Layer(vec![self.item.clone()]));
+        }
         Ok(Change::Pose)
     }
     fn label(&self, doc: &Document) -> String {

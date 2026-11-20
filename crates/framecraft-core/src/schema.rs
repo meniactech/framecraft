@@ -561,7 +561,7 @@ pub const PROPERTIES: &[Property] = &[
         num(-ANY, ANY, 1.0),
         Item,
         None,
-        Pose
+        Layer
     ),
     p!(
         Transform,
@@ -571,7 +571,7 @@ pub const PROPERTIES: &[Property] = &[
         num(-ANY, ANY, 1.0),
         Item,
         None,
-        Pose
+        Layer
     ),
     p!(
         Transform,
