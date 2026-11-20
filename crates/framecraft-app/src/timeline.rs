@@ -506,11 +506,18 @@ fn RowView(ui: Ui, row: Row, px: f64, width: f64) -> Element {
                 .map(framecraft_core::js::number_to_string)
                 .unwrap_or_default();
             let toggle_item = item.clone();
+            let (prev_item, next_item) = (item.clone(), item.clone());
             rsx! {
                 div { class: "tl-row", "data-item": "{item}",
                     div { class: "label lane-label",
                         span { class: "lane-name", "{lane_label(lane)}" }
                         span { class: "lane-value dim", "{shown}" }
+                        button {
+                            class: "key-button jump",
+                            title: "Previous keyframe of {lane_label(lane)}",
+                            onclick: move |_| jump_lane(ui, &prev_item, lane, false),
+                            "‹"
+                        }
                         // The Start key of a clip is move-only.
                         if lane != CLIP_START {
                             button {
@@ -519,6 +526,12 @@ fn RowView(ui: Ui, row: Row, px: f64, width: f64) -> Element {
                                 onclick: move |_| toggle_lane_key(ui, &toggle_item, lane),
                                 if key_here { "◆" } else { "◇" }
                             }
+                        }
+                        button {
+                            class: "key-button jump",
+                            title: "Next keyframe of {lane_label(lane)}",
+                            onclick: move |_| jump_lane(ui, &next_item, lane, true),
+                            "›"
                         }
                     }
                     div { class: "track", style: "width:{width}px;",
@@ -557,10 +570,22 @@ fn RowView(ui: Ui, row: Row, px: f64, width: f64) -> Element {
                     div { class: "label lane-label",
                         span { class: "lane-name", "{cue_label(kind)}" }
                         button {
+                            class: "key-button jump",
+                            title: "Previous {cue_label(kind)} cue",
+                            onclick: move |_| jump_cue(ui, kind, false),
+                            "‹"
+                        }
+                        button {
                             class: "key-button",
                             title: "Add a {cue_label(kind)} cue at the playhead",
                             onclick: move |_| add_cue(ui, kind),
                             "+"
+                        }
+                        button {
+                            class: "key-button jump",
+                            title: "Next {cue_label(kind)} cue",
+                            onclick: move |_| jump_cue(ui, kind, true),
+                            "›"
                         }
                     }
                     div { class: "track", style: "width:{width}px;",
@@ -1340,5 +1365,67 @@ fn EasingPicker(ui: Ui, keys: Vec<KeyRef>, current: String) -> Element {
                 }
             }
         }
+    }
+}
+
+/// FRAME's ‹ › on a lane: the playhead to the previous / next keyframe of
+/// that lane (the first / last at the ends), and that key selected.
+fn jump_lane(ui: Ui, item: &str, lane: &str, next: bool) {
+    let times: Vec<f64> = ui
+        .editor
+        .peek()
+        .as_ref()
+        .and_then(|e| framecraft_core::timeline::lane_keys(e.doc(), item, lane))
+        .map(|k| k.iter().map(|k| k.time).collect())
+        .unwrap_or_default();
+    if let Some(t) = step(&times, *ui.time.peek(), next) {
+        ui.set_time(t);
+        let mut keys = ui.keys;
+        keys.set(vec![KeyRef::new(item, lane, t)]);
+    }
+}
+
+/// FRAME's ‹ › on a cue row: the previous / next cue of that kind.
+fn jump_cue(ui: Ui, kind: CueKind, next: bool) {
+    let mut cues: Vec<(f64, String)> = ui
+        .editor
+        .peek()
+        .as_ref()
+        .map(|e| {
+            e.doc()
+                .timeline
+                .scene_cues
+                .iter()
+                .flatten()
+                .filter(|c| c.kind == kind)
+                .map(|c| (c.time, c.id.clone()))
+                .collect()
+        })
+        .unwrap_or_default();
+    cues.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let times: Vec<f64> = cues.iter().map(|c| c.0).collect();
+    if let Some(t) = step(&times, *ui.time.peek(), next) {
+        ui.set_time(t);
+        let mut cue = ui.cue;
+        cue.set(cues.iter().find(|c| same_time(c.0, t)).map(|c| c.1.clone()));
+    }
+}
+
+/// The time before / after `now` in sorted `times` (the first / last when
+/// there is none).
+fn step(times: &[f64], now: f64, next: bool) -> Option<f64> {
+    if next {
+        times
+            .iter()
+            .copied()
+            .find(|t| *t > now + 0.5)
+            .or(times.last().copied())
+    } else {
+        times
+            .iter()
+            .rev()
+            .copied()
+            .find(|t| *t < now - 0.5)
+            .or(times.first().copied())
     }
 }

@@ -568,3 +568,4 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .header .unsaved:hover { border-color: var(--line); }
 .render-progress { display: flex; align-items: center; gap: 8px; }
 .render-progress progress { width: 120px; }
+.key-button.jump { width: 16px; font-size: 14px; }
