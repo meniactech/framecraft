@@ -105,6 +105,43 @@ fn App() -> Element {
         }
     });
 
+    // Debugging captures: FRAMECRAFT_DEBUG_SNAPSHOT=<graphic>:<ms>:<out.png>
+    // opens that graphic, seeks and writes one snapshot, logging canvases.
+    use_hook(move || {
+        let Some(spec) = std::env::var("FRAMECRAFT_DEBUG_SNAPSHOT").ok() else {
+            return;
+        };
+        spawn_forever(async move {
+            let mut parts = spec.splitn(3, ':');
+            let g = parts
+                .next()
+                .and_then(|v| v.parse::<usize>().ok())
+                .unwrap_or(0);
+            let t = parts
+                .next()
+                .and_then(|v| v.parse::<f64>().ok())
+                .unwrap_or(1000.0);
+            let out = parts.next().unwrap_or("snapshot.png").to_string();
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            ui.select_graphic(g);
+            tokio::time::sleep(std::time::Duration::from_secs(4)).await;
+            bridge::seek(t);
+            let (w, h) = ui.editor.peek().as_ref().map_or((1920.0, 1080.0), |e| {
+                (e.doc().scene.width, e.doc().scene.height)
+            });
+            match bridge::snapshot(w, h).await {
+                Ok(url) => {
+                    let bytes = url
+                        .split_once(',')
+                        .and_then(|(_, b)| export::decode_base64(b));
+                    let written = bytes.map(|b| std::fs::write(&out, b));
+                    eprintln!("[snapshot] wrote {out}: {written:?}");
+                }
+                Err(e) => eprintln!("[snapshot] failed: {e}"),
+            }
+        });
+    });
+
     // A newer FrameCraft on GitHub (at most one request a day).
     use_hook(move || {
         spawn_forever(updates::check(ui));

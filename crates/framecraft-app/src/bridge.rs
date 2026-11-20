@@ -931,6 +931,9 @@ async fn snapshot_sized(
         "#
     ));
     let reply: Value = eval.recv().await.map_err(|e| format!("{e:?}"))?;
+    if crate::state::debug() {
+        eprintln!("[snapshot] canvases: {}", reply["canvases"]);
+    }
     match reply["dataUrl"].as_str() {
         Some(url) => Ok(url.to_string()),
         None => Err(reply["error"]

@@ -209,6 +209,20 @@
       // canvas in its place for the capture, then put the canvases back.
       var swaps = [];
       var canvases = root.querySelectorAll('canvas');
+      // What each canvas holds, for FRAMECRAFT_DEBUG (drawn? readable?).
+      var diag = [];
+      for (var di = 0; di < canvases.length; di++) {
+        var dc = canvases[di];
+        var info = { id: dc.id, w: dc.width, h: dc.height, shown: dc.getClientRects().length > 0 };
+        try {
+          var dctx = dc.getContext('2d');
+          var px = dctx ? dctx.getImageData(0, 0, dc.width, dc.height).data : null;
+          var lit = 0;
+          if (px) for (var pi = 3; pi < px.length; pi += 4) if (px[pi]) lit++;
+          info.litPixels = lit;
+        } catch (err) { info.error = String(err && err.message || err); }
+        diag.push(info);
+      }
       var decoding = [];
       for (var ci = 0; ci < canvases.length; ci++) {
         var cv = canvases[ci];
@@ -255,7 +269,7 @@
       };
       Promise.all(decoding)
         .then(capture)
-        .then(function (url) { restore(); reply({ dataUrl: url }); })
+        .then(function (url) { restore(); reply({ dataUrl: url, canvases: diag }); })
         .catch(function (err) { restore(); reply({ error: String((err && err.message) || err) }); });
       return;
     }
