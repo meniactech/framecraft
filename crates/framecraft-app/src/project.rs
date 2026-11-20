@@ -18,6 +18,15 @@ use std::path::{Path, PathBuf};
 /// particle sprites, stock animations).
 pub struct ProjectMedia {
     pub pack: ProjectPack,
+    /// The project's fonts (`media/fonts`), for exports and the preview.
+    pub fonts: Vec<framecraft_core::export::assets::UserFont>,
+}
+
+impl ProjectMedia {
+    pub fn new(pack: ProjectPack) -> Self {
+        let fonts = framecraft_core::media::user_fonts(&pack);
+        Self { pack, fonts }
+    }
 }
 
 impl MediaSource for ProjectMedia {
@@ -231,7 +240,7 @@ impl Project {
         Ok(Self {
             path: path.to_path_buf(),
             folder: None,
-            media: ProjectMedia { pack },
+            media: ProjectMedia::new(pack),
             docs,
             warnings,
             palette_colors: Vec::new(),
@@ -283,7 +292,7 @@ impl Project {
         Ok(Self {
             path: dir.to_path_buf(),
             folder: Some(dir.to_path_buf()),
-            media: ProjectMedia { pack },
+            media: ProjectMedia::new(pack),
             docs: p.graphics.into_iter().map(|g| g.doc).collect(),
             warnings: Vec::new(),
             palette_colors: Vec::new(),
@@ -310,7 +319,7 @@ impl Project {
         Self {
             path: home.join(format!("{name}.framecraft")),
             folder: None,
-            media: ProjectMedia { pack },
+            media: ProjectMedia::new(pack),
             docs: vec![doc],
             warnings: Vec::new(),
             palette_colors: Vec::new(),
@@ -382,7 +391,9 @@ impl Project {
         let bytes =
             std::fs::read(path).map_err(|e| format!("Could not read {}: {e}", path.display()))?;
         let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
-        framecraft_core::media::import(&mut self.media.pack, name, bytes)
+        let entry = framecraft_core::media::import(&mut self.media.pack, name, bytes)?;
+        self.media.fonts = framecraft_core::media::user_fonts(&self.media.pack);
+        Ok(entry)
     }
 
     /// Every media file of the project, by URL (for the library's thumbnails).
@@ -404,7 +415,7 @@ impl Project {
             doc: &self.docs[index],
             graphic_name: self.graphic_name(index),
             palette_colors: &self.palette_colors,
-            user_fonts: &[],
+            user_fonts: &self.media.fonts,
             exported_at,
         }
     }
@@ -467,7 +478,7 @@ impl Project {
             project_name: self.name(),
             graphics: &graphics,
             palette_colors: &self.palette_colors,
-            user_fonts: &[],
+            user_fonts: &self.media.fonts,
             exported_at: &now,
         };
         suite_package(&req, ograf, &self.media, &Profile::framecraft())
@@ -599,7 +610,7 @@ impl Project {
             &g.name,
             &self.docs[i],
             &self.media,
-            &[],
+            &self.media.fonts,
             g.thumbnail.as_deref(),
             &now_iso(),
         )
@@ -622,7 +633,14 @@ impl Project {
                 thumbnail: g.thumbnail.as_deref(),
             })
             .collect();
-        let pkg = write_project_pack(self.name(), &sources, &self.media, &[], None, &now_iso());
+        let pkg = write_project_pack(
+            self.name(),
+            &sources,
+            &self.media,
+            &self.media.fonts,
+            None,
+            &now_iso(),
+        );
         pkg.to_zip().map_err(|e| e.to_string())
     }
 }

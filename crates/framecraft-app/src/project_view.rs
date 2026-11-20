@@ -12,6 +12,7 @@ use framecraft_core::media::{accept, of_category};
 /// Media Manager tabs, in FRAME's order (Plates and Fonts come later).
 const TABS: &[(&str, &str)] = &[
     ("images", "Images"),
+    ("fonts", "Fonts"),
     ("palettes", "Palettes"),
     ("components", "Components"),
     ("lottie", "Lottie"),
@@ -146,22 +147,61 @@ fn MediaTab(ui: Ui, category: &'static str) -> Element {
             p { class: "dim", "Open a project to manage its media." }
         };
     };
-    let files: Vec<(String, String)> = of_category(&ed.project.media.pack, category)
+    // Fonts show a sample in their own face (FRAME's font tiles).
+    let faces: Vec<(String, String)> = if category == "fonts" {
+        ed.project
+            .media
+            .fonts
+            .iter()
+            .map(|f| {
+                (
+                    framecraft_core::media::font_family(f),
+                    library_url(&f.source),
+                )
+            })
+            .collect()
+    } else {
+        Vec::new()
+    };
+    let face_css: String = faces
+        .iter()
+        .map(|(family, url)| {
+            format!(
+                "@font-face {{ font-family: 'fc-pv-{}'; src: url('{url}'); }}\n",
+                family.replace('\'', "")
+            )
+        })
+        .collect();
+    // (url, file name, sample font family for font files)
+    let files: Vec<(String, String, String)> = of_category(&ed.project.media.pack, category)
         .into_iter()
         .map(|e| {
             let name = e
                 .original_name
                 .clone()
                 .unwrap_or_else(|| e.url.rsplit('/').next().unwrap_or("").to_string());
-            (e.url.clone(), name)
+            let lib = library_url(&e.url);
+            let face = faces
+                .iter()
+                .find(|(_, u)| *u == lib)
+                .map(|(f, _)| format!("fc-pv-{}", f.replace('\'', "")))
+                .unwrap_or_default();
+            (e.url.clone(), name, face)
         })
         .collect();
     drop(editor);
     rsx! {
+        if !face_css.is_empty() {
+            style { "{face_css}" }
+        }
         section { class: "lib-section",
             div { class: "lib-section-head",
                 p { class: "dim",
-                    "{files.len()} file(s). Saving the project keeps the files that layers use."
+                    if category == "fonts" {
+                        "{files.len()} font(s). Use one by typing or picking its family name in a text layer's Font field; exports include the fonts that layers use."
+                    } else {
+                        "{files.len()} file(s). Saving the project keeps them in its media folder."
+                    }
                 }
                 label {
                     class: "button",
@@ -179,11 +219,17 @@ fn MediaTab(ui: Ui, category: &'static str) -> Element {
                 }
             }
             div { class: "media-grid",
-                for (url , name) in files {
+                for (url , name , face) in files {
                     div { class: "media-tile", title: "{name}",
                         div { class: "media-thumb",
                             if category == "images" {
                                 img { src: "{library_url(&url)}", loading: "lazy", draggable: "false" }
+                            } else if category == "fonts" {
+                                span {
+                                    class: "font-sample",
+                                    style: "font-family: '{face}', sans-serif;",
+                                    "Aa 123"
+                                }
                             } else if category == "videos" {
                                 span { class: "media-kind", "▶" }
                             } else {

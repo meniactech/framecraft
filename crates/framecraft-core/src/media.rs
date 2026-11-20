@@ -7,6 +7,7 @@ use crate::pack::{PackMediaEntry, PackedMedia, ProjectPack, normalize_pack_url};
 /// Media library categories, as FRAME's: `(category, label)`.
 pub const CATEGORIES: &[(&str, &str)] = &[
     ("images", "Images"),
+    ("fonts", "Fonts"),
     ("videos", "Videos"),
     ("lottie", "Lottie"),
 ];
@@ -19,6 +20,7 @@ pub fn category_for(name: &str) -> Option<&'static str> {
         "png" | "jpg" | "jpeg" | "gif" | "webp" | "svg" | "avif" => "images",
         "mp4" | "webm" | "mov" | "m4v" => "videos",
         "json" | "lottie" => "lottie",
+        "ttf" | "otf" | "woff" | "woff2" => "fonts",
         _ => return None,
     })
 }
@@ -28,6 +30,7 @@ pub fn accept(category: &str) -> &'static str {
     match category {
         "videos" => ".mp4,.webm,.mov,.m4v",
         "lottie" => ".json",
+        "fonts" => ".ttf,.otf,.woff,.woff2",
         _ => ".png,.jpg,.jpeg,.gif,.webp,.svg,.avif",
     }
 }
@@ -91,6 +94,42 @@ pub fn import(
         bytes,
     });
     Ok(entry)
+}
+
+/// The project's fonts for exports and the preview (FRAME's uploaded
+/// fonts): the family is the stored one, else the file name without its
+/// extension.
+pub fn user_fonts(pack: &ProjectPack) -> Vec<crate::export::assets::UserFont> {
+    of_category(pack, "fonts")
+        .into_iter()
+        .map(|e| crate::export::assets::UserFont {
+            family: e.font_family.clone().unwrap_or_default(),
+            original_name: e
+                .original_name
+                .clone()
+                .unwrap_or_else(|| e.url.rsplit('/').next().unwrap_or("").to_string()),
+            source: e.url.clone(),
+        })
+        .collect()
+}
+
+/// A font's family name as the font list shows it.
+pub fn font_family(font: &crate::export::assets::UserFont) -> String {
+    let family = font.family.trim();
+    if !family.is_empty() {
+        return family.to_string();
+    }
+    let name = font.original_name.as_str();
+    let stem = name
+        .rfind('.')
+        .filter(|d| *d > 0)
+        .map_or(name, |d| &name[..d]);
+    // Imported files carry a hash prefix (`<hash>-Name.ttf`).
+    let stem = stem
+        .split_once('-')
+        .filter(|(h, _)| h.len() == 16 && h.chars().all(|c| c.is_ascii_hexdigit()))
+        .map_or(stem, |(_, n)| n);
+    stem.trim().to_string()
 }
 
 /// The project's media of one category, in import order.
@@ -228,6 +267,13 @@ mod tests {
         assert_eq!(p.media.len(), 1);
         assert!(import(&mut p, "notes.txt", vec![1]).is_err());
         assert_eq!(category_for("clip.webm"), Some("videos"));
+        assert_eq!(category_for("Brand Sans.OTF"), Some("fonts"));
+        let f = crate::export::assets::UserFont {
+            family: String::new(),
+            original_name: "Brand Sans.ttf".into(),
+            source: "/media/fonts/x.ttf".into(),
+        };
+        assert_eq!(font_family(&f), "Brand Sans");
         assert_eq!(of_category(&p, "images").len(), 1);
         use crate::export::package::MediaSource;
         assert_eq!(p.read(&a.url), Some(vec![1, 2, 3]));
