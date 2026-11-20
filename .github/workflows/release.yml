@@ -1,5 +1,6 @@
 # Pushing a version tag (v0.2.0, …) builds the installers and publishes
-# them as a GitHub release. Linux .deb for now; AppImage, Windows and
+# them as a GitHub release. Before tagging: set the version in Cargo.toml
+# and write docs/releases/<tag>.md (the release notes). Linux .deb for now; AppImage, Windows and
 # macOS follow.
 name: Release
 
@@ -32,7 +33,9 @@ jobs:
           test "v$v" = "$GITHUB_REF_NAME" || { echo "Cargo.toml version $v does not match tag $GITHUB_REF_NAME"; exit 1; }
       - name: Build .deb
         run: packaging/linux/build-deb.sh
+      # Release notes: docs/releases/<tag>.md, then GitHub's commit list.
       - uses: softprops/action-gh-release@v2
         with:
           files: target/dist/*.deb
+          body_path: docs/releases/${{ github.ref_name }}.md
           generate_release_notes: true
