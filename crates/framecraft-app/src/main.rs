@@ -79,7 +79,15 @@ fn App() -> Element {
     // A pack given on the command line opens at start.
     use_hook(move || {
         if let Some(path) = std::env::args_os().nth(1) {
-            ui.open(PathBuf::from(path));
+            let mut path = PathBuf::from(path);
+            // An AppImage runs from inside itself (see build-appimage.sh);
+            // its runtime keeps the folder it was started from in $OWD.
+            if path.is_relative()
+                && let Some(owd) = std::env::var_os("OWD").filter(|d| !d.is_empty())
+            {
+                path = PathBuf::from(owd).join(path);
+            }
+            ui.open(path);
         }
     });
 
