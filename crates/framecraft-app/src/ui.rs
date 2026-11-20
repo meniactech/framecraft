@@ -156,26 +156,9 @@ pub fn Viewport(ui: Ui) -> Element {
                     }
                 }
                 button { onclick: move |_| { spawn(fit(ui)); }, "Fit" }
-                GuideBar { ui }
-                // FRAME's align tools: one layer aligns to its parent or
-                // the scene.
-                div { class: "align-tools", role: "toolbar",
-                    for (mode , title , icon) in framecraft_core::manipulate::ALIGN_MODES {
-                        button {
-                            class: "align-btn",
-                            title: "{title} (to the scene, or the parent layer)",
-                            disabled: !has_selection,
-                            onclick: move |_| ui.align(mode),
-                            img {
-                                src: crate::preview::library_url(&format!("/icons/align/{icon}.svg")),
-                                alt: "",
-                                draggable: "false",
-                            }
-                        }
-                    }
-                }
                 span { class: "dim", "{w}×{h}" }
             }
+            div { class: "viewport-area",
             div { class: "viewport", id: "fc-viewport",
                 // Both frames always exist; the bridge sets their src and
                 // shows one (class "active"). Dioxus never touches either.
@@ -200,6 +183,29 @@ pub fn Viewport(ui: Ui) -> Element {
                 if !open {
                     div { class: "empty", "No graphic open" }
                 }
+            }
+            // FRAME's places: guide toggles down the right edge, align
+            // groups (horizontal, vertical) at the bottom left.
+            GuideBar { ui }
+            div { class: "align-tools", role: "toolbar",
+                for row in framecraft_core::manipulate::ALIGN_MODES.chunks(3) {
+                    div { class: "align-group", role: "group",
+                        for (mode , title , icon) in row.iter().copied() {
+                            button {
+                                class: "align-btn",
+                                title: "{title} (to the scene, or the parent layer)",
+                                disabled: !has_selection,
+                                onclick: move |_| ui.align(mode),
+                                img {
+                                    src: crate::preview::library_url(&format!("/icons/align/{icon}.svg")),
+                                    alt: "",
+                                    draggable: "false",
+                                }
+                            }
+                        }
+                    }
+                }
+            }
             }
         }
     }

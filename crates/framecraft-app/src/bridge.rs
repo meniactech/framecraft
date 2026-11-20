@@ -662,6 +662,19 @@ if (!window.__fc) {
   });
 
   // Editor keys, outside text fields.
+  // Fields give the keyboard back (FRAME's shortcuts): Enter commits and
+  // leaves a one-line field, Escape leaves any field, and a dropdown lets
+  // go once a value is picked.
+  document.addEventListener('keydown', (e) => {
+    const t = e.target;
+    if (!t || (t.tagName !== 'INPUT' && t.tagName !== 'SELECT')) return;
+    if (e.key === 'Enter' || e.key === 'Escape') setTimeout(() => { if (document.activeElement === t) t.blur(); }, 0);
+  }, true);
+  document.addEventListener('change', (e) => {
+    const t = e.target;
+    if (t && t.tagName === 'SELECT') setTimeout(() => { if (document.activeElement === t) t.blur(); }, 0);
+  }, true);
+
   document.addEventListener('keydown', (e) => {
     const t = e.target;
     // Ctrl+S saves from anywhere; a field being edited commits first (blur).
