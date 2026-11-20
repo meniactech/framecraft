@@ -769,6 +769,8 @@ if (!window.__fc) {
     if (mod && k.toLowerCase() === 'z') key = e.shiftKey ? 'redo' : 'undo';
     else if (mod && k.toLowerCase() === 'y') key = 'redo';
     else if (mod && k.toLowerCase() === 'd') key = 'duplicate';
+    else if (mod && !e.shiftKey && k.toLowerCase() === 'n') key = 'new';
+    else if (mod && !e.shiftKey && k.toLowerCase() === 'o') key = 'open';
     else if (mod && k.toLowerCase() === 'c') key = 'copy';
     else if (mod && k.toLowerCase() === 'v') key = 'paste';
     else if (e.code === 'Comma' || e.code === 'Period') key = (mod ? 'jump-' : 'step-') + (e.code === 'Comma' ? 'prev' : 'next');

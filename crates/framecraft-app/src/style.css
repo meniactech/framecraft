@@ -542,3 +542,27 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .update-note { padding: 0 8px; height: 18px; font-size: 11px; line-height: 1; border-radius: 9999px;
   background: rgba(139, 92, 246, .8); border-color: #ddd6fe; color: #fff; }
 .update-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 12px; font-size: 12px; }
+/* Menu bar (File | Edit | …) */
+.menubar { display: flex; align-items: center; gap: 2px; position: relative; }
+.menubar-menu { position: relative; }
+.menubar-title { background: none; border-color: transparent; padding: 4px 10px; }
+.menubar-title:hover, .menubar-title.open { background: var(--hover); border-color: var(--line); }
+.menubar-drop { position: absolute; left: 0; top: calc(100% + 4px); z-index: 60; min-width: 240px; padding: 4px; }
+.menubar-catcher { position: fixed; inset: 0; z-index: 55; }
+.menubar-menu .menubar-title { position: relative; z-index: 61; }
+.menu-item { display: grid; grid-template-columns: 16px 1fr auto; align-items: center; gap: 8px; width: 100%; text-align: left;
+  background: none; border-color: transparent; padding: 4px 8px; }
+.menu-item:hover:not(:disabled) { background: var(--active); border-color: transparent; }
+.menu-item:disabled { opacity: .4; }
+.menu-check { color: var(--accent); font-size: 12px; }
+.menu-label { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 320px; }
+.menu-keys { color: var(--dim); font-size: 11px; white-space: nowrap; }
+.menu-sep { height: 1px; margin: 4px 6px; background: var(--line); }
+.header .spacer { flex: 1; }
+.help-dialog { max-width: 560px; }
+.help-dialog .modal-head .key-button { margin-left: auto; }
+.keys-table { border-collapse: collapse; width: 100%; font-size: 12px; }
+.keys-table td { padding: 4px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+.keys-table kbd { font: inherit; font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); white-space: nowrap; }
+.header .unsaved { background: none; border-color: transparent; color: var(--key); font-size: 12px; }
+.header .unsaved:hover { border-color: var(--line); }

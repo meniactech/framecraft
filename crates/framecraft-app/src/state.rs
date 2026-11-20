@@ -119,6 +119,8 @@ pub struct Ui {
     pub switch_prompt: Signal<Option<Switch>>,
     /// A newer FrameCraft release (status bar notice).
     pub update: Signal<Option<crate::updates::Update>>,
+    /// Help → "keys" (shortcuts) or "about".
+    pub help_dialog: Signal<Option<&'static str>>,
     /// Add → Insert Component… is open.
     pub component_library: Signal<bool>,
     /// The script editor is open.
@@ -189,6 +191,7 @@ impl Ui {
             pending_component: use_signal(|| None),
             switch_prompt: use_signal(|| None),
             update: use_signal(|| None),
+            help_dialog: use_signal(|| None),
             dirty: use_signal(|| false),
             hint: use_signal(String::new),
             ramp_event: use_signal(|| None),

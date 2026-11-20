@@ -18,6 +18,7 @@ mod export;
 mod interact;
 mod layout;
 mod media;
+mod menubar;
 mod motions;
 mod outliner;
 mod palettes;
@@ -219,6 +220,7 @@ fn App() -> Element {
                 SwitchPrompt { ui, next }
             }
             script_editor::ScriptEditor { ui }
+            menubar::HelpDialog { ui }
         }
     }
 }

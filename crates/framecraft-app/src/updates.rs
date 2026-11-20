@@ -102,9 +102,12 @@ pub async fn check(ui: Ui) {
     }
 }
 
-/// Opens a release page in the default browser (only FrameCraft's).
+/// FrameCraft's own pages: the only links the app opens.
+const REPO_PAGES: &str = "https://github.com/meniactech/framecraft";
+
+/// Opens one of FrameCraft's GitHub pages in the default browser.
 pub fn open(url: &str) {
-    if !url.starts_with(RELEASES) {
+    if !url.starts_with(REPO_PAGES) {
         return;
     }
     let result = if cfg!(target_os = "windows") {

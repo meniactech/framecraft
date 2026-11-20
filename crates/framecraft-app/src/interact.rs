@@ -739,6 +739,8 @@ fn key(ui: Ui, key: &str, shift: bool) {
         "duplicate" => ui.duplicate_selected(),
         "save" => ui.save(),
         "save-as" => ui.save_as(),
+        "new" => ui.new_project(),
+        "open" => ui.open_dialog(),
         "ArrowLeft" | "ArrowRight" | "ArrowUp" | "ArrowDown" => {
             let step = if shift { 10.0 } else { 1.0 };
             let (dx, dy) = match key {

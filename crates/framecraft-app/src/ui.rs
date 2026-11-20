@@ -37,16 +37,14 @@ pub async fn fit(mut ui: Ui) {
 
 #[component]
 pub fn Header(ui: Ui) -> Element {
-    let (graphics, current, undo, redo) = match ui.editor.read().as_ref() {
+    let (graphics, current) = match ui.editor.read().as_ref() {
         Some(e) => (
             (0..e.project.docs.len())
                 .map(|i| e.project.graphic_name(i).to_string())
                 .collect::<Vec<_>>(),
             e.graphic,
-            e.history().undo_label().map(String::from),
-            e.history().redo_label().map(String::from),
         ),
-        None => (Vec::new(), 0, None, None),
+        None => (Vec::new(), 0),
     };
     let has_project = !graphics.is_empty();
     let dirty = (ui.dirty)();
@@ -54,20 +52,15 @@ pub fn Header(ui: Ui) -> Element {
     rsx! {
         div { class: "header",
             span { class: "brand", "FrameCraft" }
-            button { title: "A new project with one empty graphic: asks where to create its folder", onclick: move |_| ui.new_project(), "New…" }
-            button {
-                title: "Open a FrameCraft project (its project.json) or a FRAME pack (.frameproject.zip / .framepack.zip)",
-                onclick: move |_| ui.open_dialog(),
-                "Open…"
-            }
-            if has_project {
+            crate::menubar::MenuBar { ui }
+            div { class: "spacer" }
+            if has_project && dirty {
                 button {
-                    class: if dirty { "save dirty" } else { "save" },
-                    title: "Save the project folder (Ctrl+S)",
+                    class: "unsaved",
+                    title: "Unsaved changes: click to save (Ctrl+S)",
                     onclick: move |_| ui.save(),
-                    if dirty { "Save •" } else { "Save" }
+                    "● Unsaved"
                 }
-                button { title: "Save as a new FrameCraft project folder", onclick: move |_| ui.save_as(), "Save as…" }
             }
             if has_project {
                 select {
@@ -79,31 +72,6 @@ pub fn Header(ui: Ui) -> Element {
                     for (i , name) in graphics.iter().enumerate() {
                         option { value: "{i}", selected: i == current, "{name}" }
                     }
-                }
-                button {
-                    disabled: undo.is_none(),
-                    title: undo.as_deref().map(|l| format!("Undo {l} (Ctrl+Z)")).unwrap_or_default(),
-                    onclick: move |_| ui.undo(),
-                    "↶ Undo"
-                }
-                button {
-                    disabled: redo.is_none(),
-                    title: redo.as_deref().map(|l| format!("Redo {l} (Ctrl+Shift+Z)")).unwrap_or_default(),
-                    onclick: move |_| ui.redo(),
-                    "↷ Redo"
-                }
-                button {
-                    title: "Export OGraf, SPX, banner or PNG (Properties → Export)",
-                    onclick: move |_| {
-                        let mut tab = ui.tab;
-                        tab.set(framecraft_core::schema::Tab::Export);
-                    },
-                    "Export…"
-                }
-                button {
-                    title: "Write the project as a FRAME project pack (.frameproject.zip), to open in FRAME",
-                    onclick: move |_| ui.export_pack(),
-                    "Export FRAME pack…"
                 }
             }
             button {
