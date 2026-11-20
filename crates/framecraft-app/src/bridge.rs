@@ -379,11 +379,58 @@ if (!window.__fc) {
   };
   document.addEventListener('pointerup', endScrub);
   document.addEventListener('pointercancel', endScrub);
+  // Timeline zoom and pan: Ctrl+wheel zooms keeping the time under the
+  // pointer in place, Shift+wheel pans, the middle button drags.
   document.addEventListener('wheel', (e) => {
-    if (!(e.ctrlKey || e.metaKey) || !e.target || !e.target.closest || !e.target.closest('.tl-body')) return;
-    e.preventDefault();
-    tlEmit({ action: 'zoom', factor: e.deltaY < 0 ? 1.25 : 0.8 });
+    const body = e.target && e.target.closest ? e.target.closest('.tl-body') : null;
+    if (!body) return;
+    if (e.ctrlKey || e.metaKey) {
+      e.preventDefault();
+      const x = e.clientX - body.getBoundingClientRect().left;
+      fc.zoomAnchor = { t: (body.scrollLeft + x - fc.labelWidth) / (fc.pxPerMs || 0.1), x };
+      tlEmit({ action: 'zoom', factor: e.deltaY < 0 ? 1.25 : 0.8 });
+    } else if (e.shiftKey) {
+      e.preventDefault();
+      body.scrollLeft += e.deltaY || e.deltaX;
+    }
   }, { passive: false });
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 1) return;
+    const body = e.target && e.target.closest ? e.target.closest('.tl-body') : null;
+    if (!body) return;
+    e.preventDefault();
+    body.setPointerCapture(e.pointerId);
+    const start = { x: e.clientX, y: e.clientY, l: body.scrollLeft, t: body.scrollTop };
+    const move = (ev) => {
+      body.scrollLeft = start.l - (ev.clientX - start.x);
+      body.scrollTop = start.t - (ev.clientY - start.y);
+    };
+    const up = () => {
+      body.removeEventListener('pointermove', move);
+      body.removeEventListener('pointerup', up);
+      body.removeEventListener('pointercancel', up);
+    };
+    body.addEventListener('pointermove', move);
+    body.addEventListener('pointerup', up);
+    body.addEventListener('pointercancel', up);
+  });
+  // The timeline's width, for the fit (1×) zoom.
+  fc.tlWidth = 0;
+  setInterval(() => {
+    const body = document.querySelector('.tl-body');
+    const w = body ? body.clientWidth : 0;
+    if (w > 0 && Math.abs(w - fc.tlWidth) > 0.5) { fc.tlWidth = w; tlEmit({ action: 'width', width: w }); }
+  }, 250);
+  // After a zoom, scroll so the anchored time is under the pointer again.
+  fc.onScale = () => {
+    const a = fc.zoomAnchor;
+    if (!a) return;
+    fc.zoomAnchor = null;
+    setTimeout(() => {
+      const body = document.querySelector('.tl-body');
+      if (body) body.scrollLeft = Math.max(0, fc.labelWidth + a.t * fc.pxPerMs - a.x);
+    }, 0);
+  };
 
   // Viewport navigation (FRAME's): the wheel zooms around the pointer,
   // the middle button drags the view.
@@ -760,6 +807,13 @@ if (!window.__fc) {
   fc.drawPlayhead = (t) => {
     const p = document.getElementById('fc-playhead');
     if (p) p.style.left = (fc.labelWidth + t * fc.pxPerMs) + 'px';
+    // While playing, follow the playhead when it leaves the visible part.
+    const body = fc.playing ? document.querySelector('.tl-body') : null;
+    if (body) {
+      const x = t * fc.pxPerMs;
+      const from = body.scrollLeft, to = from + body.clientWidth - fc.labelWidth - 20;
+      if (x > to || x < from) body.scrollLeft = Math.max(0, x - 20);
+    }
     const l = document.getElementById('fc-time');
     // Not while the user is typing a time there.
     if (l && document.activeElement !== l) l.value = fc.fmtTime(t);
@@ -898,7 +952,7 @@ pub async fn stats() -> Option<Value> {
 /// key drags.
 pub fn set_timeline_scale(px_per_ms: f64, label_width: f64) {
     let _ = document::eval(&format!(
-        "if (window.__fc) {{ window.__fc.pxPerMs = {px_per_ms}; window.__fc.labelWidth = {label_width}; }}"
+        "if (window.__fc) {{ window.__fc.pxPerMs = {px_per_ms}; window.__fc.labelWidth = {label_width}; if (window.__fc.onScale) window.__fc.onScale(); }}"
     ));
 }
 

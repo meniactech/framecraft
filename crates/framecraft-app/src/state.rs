@@ -85,7 +85,10 @@ pub struct Ui {
     pub cue: Signal<Option<String>>,
     pub tl_view: Signal<TlView>,
     /// Timeline scale, pixels per millisecond.
+    /// Timeline zoom: 1 = the whole duration fits (FRAME), up to 64.
     pub tl_zoom: Signal<f64>,
+    /// Width (px) the track area has, measured by the bridge.
+    pub tl_fit: Signal<f64>,
     /// Keyframes copied with Ctrl+C.
     pub copied: Signal<Vec<CopiedKey>>,
     /// The open media library dialog, if any.
@@ -165,7 +168,8 @@ impl Ui {
             keys: use_signal(Vec::new),
             cue: use_signal(|| None),
             tl_view: use_signal(|| TlView::Keys),
-            tl_zoom: use_signal(|| 0.1),
+            tl_zoom: use_signal(|| 1.0),
+            tl_fit: use_signal(|| 800.0),
             copied: use_signal(Vec::new),
             media: use_signal(|| None),
             palettes: use_signal(|| {

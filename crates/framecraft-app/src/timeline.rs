@@ -237,15 +237,18 @@ pub fn Timeline(ui: Ui) -> Element {
     let duration = ui.duration();
     let time = (ui.time)();
     let playing = (ui.playing)();
-    let px = (ui.tl_zoom)();
+    // FRAME: at 1× the whole duration fits the panel; zoom widens it.
+    let zoom_x = (ui.tl_zoom)();
+    let px = ((ui.tl_fit)().max(100.0) / duration.max(1.0)) * zoom_x;
     let view = (ui.tl_view)();
     let sel = ui.keys.read().clone();
     let cue_sel = ui.cue.read().clone();
 
     // Keep the bridge's playhead scale and snap in step with ours.
-    use_effect(move || {
-        bridge::set_timeline_scale((ui.tl_zoom)(), LABEL_WIDTH);
-    });
+    use_effect(use_reactive!(|px| bridge::set_timeline_scale(
+        px,
+        LABEL_WIDTH
+    )));
     use_effect(move || {
         let step = ui.editor.read().as_ref().map_or(0.0, |e| {
             let tl = &e.doc().timeline;
@@ -280,15 +283,17 @@ pub fn Timeline(ui: Ui) -> Element {
         None => (Vec::new(), false, 100.0, false),
     };
     let width = duration * px;
-    // Ruler ticks: every second, or every 5 / 10 when zoomed out.
-    let tick_s = if px >= 0.05 {
-        1
-    } else if px >= 0.02 {
-        5
-    } else {
-        10
-    };
-    let seconds = (duration / 1000.0).ceil() as usize;
+    // Ruler ticks: the smallest round step that keeps labels ~70 px apart.
+    let tick_ms = [
+        10.0, 20.0, 50.0, 100.0, 200.0, 250.0, 500.0, 1000.0, 2000.0, 5000.0, 10_000.0, 15_000.0,
+        30_000.0, 60_000.0, 120_000.0, 300_000.0, 600_000.0,
+    ]
+    .into_iter()
+    .find(|s| s * px >= 70.0)
+    .unwrap_or(1_200_000.0);
+    let ticks: Vec<f64> = (0..=((duration / tick_ms).floor() as usize))
+        .map(|i| i as f64 * tick_ms)
+        .collect();
     // FRAME's time display format (storage stays ms); the bridge draws the
     // playhead label while playing, so it gets the format and frame rate.
     let format = (ui.time_format)();
@@ -423,8 +428,34 @@ pub fn Timeline(ui: Ui) -> Element {
                         "Dope"
                     }
                 }
-                button { title: "Zoom out (Ctrl+wheel)", onclick: move |_| zoom(ui, 0.8), "−" }
-                button { title: "Zoom in (Ctrl+wheel)", onclick: move |_| zoom(ui, 1.25), "+" }
+                div { class: "tl-zoom",
+                    button {
+                        class: if zoom_x <= 1.0001 { "active" } else { "" },
+                        title: "Fit the whole duration (1×)",
+                        onclick: move |_| {
+                            let mut z = ui.tl_zoom;
+                            z.set(1.0);
+                        },
+                        "Fit"
+                    }
+                    button { title: "Zoom out (Ctrl+wheel)", onclick: move |_| zoom(ui, 0.8), "−" }
+                    input {
+                        r#type: "range",
+                        min: "0",
+                        max: "6",
+                        step: "0.1",
+                        title: "Timeline zoom. Ctrl+wheel zooms at the pointer; Shift+wheel or the middle button pans.",
+                        value: "{zoom_x.log2()}",
+                        oninput: move |evt| {
+                            if let Ok(v) = evt.value().parse::<f64>() {
+                                let mut z = ui.tl_zoom;
+                                z.set(2f64.powf(v).clamp(1.0, 64.0));
+                            }
+                        },
+                    }
+                    button { title: "Zoom in (Ctrl+wheel)", onclick: move |_| zoom(ui, 1.25), "+" }
+                    span { class: "dim zoom-label", "{zoom_x:.1}×" }
+                }
             }
             Inspector { ui }
             div { class: "tl-body",
@@ -436,8 +467,8 @@ pub fn Timeline(ui: Ui) -> Element {
                             style: "width:{width}px;",
                             // Scrubbed by the bridge (pointer capture), see `scrub`.
                             "data-scrub": "1",
-                            for s in (0..=seconds).step_by(tick_s) {
-                                div { class: "tick", style: "left:{s as f64 * 1000.0 * px}px;", "{ui.fmt_time(s as f64 * 1000.0)}" }
+                            for t in ticks {
+                                div { class: "tick", style: "left:{t * px}px;", "{ui.fmt_time(t)}" }
                             }
                         }
                     }
@@ -798,7 +829,7 @@ fn Inspector(ui: Ui) -> Element {
 
 fn zoom(ui: Ui, factor: f64) {
     let mut z = ui.tl_zoom;
-    let next = (*z.peek() * factor).clamp(0.005, 2.0);
+    let next = (*z.peek() * factor).clamp(1.0, 64.0);
     z.set(next);
 }
 
@@ -1061,6 +1092,16 @@ pub fn on_event(ui: Ui, ev: &Value) {
             }
         }
         Some("zoom") => zoom(ui, ev["factor"].as_f64().unwrap_or(1.0)),
+        // The track area's width: 1× fits the duration into it.
+        Some("width") => {
+            if let Some(w) = ev["width"].as_f64() {
+                let fit = (w - LABEL_WIDTH - 40.0).max(100.0);
+                let mut f = ui.tl_fit;
+                if (*f.peek() - fit).abs() > 0.5 {
+                    f.set(fit);
+                }
+            }
+        }
         _ => {}
     }
 }

@@ -534,3 +534,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .transport .time { display: inline-flex; align-items: center; gap: 6px; }
 .time-format { max-width: 78px; padding-top: 2px; padding-bottom: 2px; }
 .snap-step { width: 84px; }
+/* Timeline zoom (FRAME: 1× fits the duration) */
+.tl-zoom { display: inline-flex; align-items: center; gap: 4px; }
+.tl-zoom input[type=range] { width: 90px; }
+.tl-zoom .zoom-label { width: 40px; font-variant-numeric: tabular-nums; }
