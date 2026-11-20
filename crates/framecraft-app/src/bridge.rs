@@ -996,3 +996,12 @@ await new Promise(() => {});
         on_event(event);
     }
 }
+
+/// The visible preview page's URL (for the native capture).
+pub async fn active_url() -> Option<String> {
+    document::eval("return window.__fc && window.__fc.active ? window.__fc.active.src : null;")
+        .join::<Option<String>>()
+        .await
+        .ok()
+        .flatten()
+}

@@ -19,3 +19,11 @@ framecraft-core.workspace = true
 rfd = { version = "0.17.2", default-features = false, features = ["xdg-portal"] }
 serde_json.workspace = true
 tokio = { version = "1.54.1", default-features = false, features = ["time"] }
+
+# Linux: native frame capture (hidden WebKit view + WebKit's own snapshot),
+# the same versions wry already uses; cairo's PNG writer is a feature switch.
+[target.'cfg(target_os = "linux")'.dependencies]
+webkit2gtk = "2.0.1"
+gtk = "0.18.2"
+cairo-rs = { version = "0.18.5", features = ["png"] }
+javascriptcore-rs = "1.1.2"

@@ -1419,11 +1419,15 @@ dependencies = [
 name = "framecraft-app"
 version = "0.2.0"
 dependencies = [
+ "cairo-rs",
  "dioxus",
  "framecraft-core",
+ "gtk",
+ "javascriptcore-rs",
  "rfd",
  "serde_json",
  "tokio",
+ "webkit2gtk",
 ]
 
 [[package]]

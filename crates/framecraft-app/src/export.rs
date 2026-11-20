@@ -169,9 +169,22 @@ pub fn ExportTab(ui: Ui) -> Element {
                 let folder = folder.clone();
                 busy.set(true);
                 spawn_forever(async move {
+                    let mut status = ui.status;
+                    // Linux: native capture (canvases and images included).
+                    #[cfg(target_os = "linux")]
+                    {
+                        let t = *ui.time.peek();
+                        if let Some(url) = crate::bridge::active_url().await
+                            && let Ok(c) = crate::capture::Capture::open(&url, w, h).await
+                            && let Ok(png) = c.frame(t).await
+                        {
+                            busy.set(false);
+                            save_as(ui, file, png, folder).await;
+                            return;
+                        }
+                    }
                     let shot = crate::bridge::snapshot(w, h).await;
                     busy.set(false);
-                    let mut status = ui.status;
                     match shot {
                         Ok(url) => match url.split_once(',').and_then(|(_, b)| decode_base64(b)) {
                             Some(bytes) => save_as(ui, file, bytes, folder).await,

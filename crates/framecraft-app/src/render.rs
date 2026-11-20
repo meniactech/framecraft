@@ -159,6 +159,13 @@ fn start(ui: Ui, format: &'static str) {
             }
         }
         let resume_at = *ui.time.peek();
+        // Linux: native capture in a hidden view (canvases, images, video
+        // included); elsewhere the in-page capture of the viewport.
+        #[cfg(target_os = "linux")]
+        let native = match crate::bridge::active_url().await {
+            Some(url) => crate::capture::Capture::open(&url, w, h).await.ok(),
+            None => None,
+        };
         let mut progress = ui.render;
         progress.set(Some(Progress {
             done: 0,
@@ -172,14 +179,30 @@ fn start(ui: Ui, format: &'static str) {
                 break;
             }
             let t = (i as f64 * 1000.0 / fps).min(duration);
-            crate::bridge::seek(t);
-            let png = match crate::bridge::snapshot(w, h).await {
-                Ok(url) => url
-                    .split_once(',')
-                    .and_then(|(_, b)| crate::export::decode_base64(b)),
-                Err(e) => {
+            #[cfg(target_os = "linux")]
+            let shot = match &native {
+                Some(c) => Some(c.frame(t).await),
+                None => None,
+            };
+            #[cfg(not(target_os = "linux"))]
+            let shot: Option<Result<Vec<u8>, String>> = None;
+            let png = match shot {
+                Some(Ok(png)) => Some(png),
+                Some(Err(e)) => {
                     error = Some(format!("Frame {i}: {e}"));
                     break;
+                }
+                None => {
+                    crate::bridge::seek(t);
+                    match crate::bridge::snapshot(w, h).await {
+                        Ok(url) => url
+                            .split_once(',')
+                            .and_then(|(_, b)| crate::export::decode_base64(b)),
+                        Err(e) => {
+                            error = Some(format!("Frame {i}: {e}"));
+                            break;
+                        }
+                    }
                 }
             };
             let Some(png) = png else {

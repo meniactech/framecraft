@@ -13,6 +13,8 @@
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod bridge;
+#[cfg(target_os = "linux")]
+mod capture;
 mod components;
 mod export;
 mod interact;
@@ -116,6 +118,25 @@ fn App() -> Element {
             let (w, h) = ui.editor.peek().as_ref().map_or((1920.0, 1080.0), |e| {
                 (e.doc().scene.width, e.doc().scene.height)
             });
+            // Linux: the native capture (what renders use).
+            #[cfg(target_os = "linux")]
+            {
+                let url = bridge::active_url().await.unwrap_or_default();
+                let started = std::time::Instant::now();
+                let result = match capture::Capture::open(&url, w, h).await {
+                    Ok(c) => c.frame(t).await,
+                    Err(e) => Err(e),
+                };
+                match result {
+                    Ok(png) => eprintln!(
+                        "[snapshot] native capture of {url} in {:?}: {:?}",
+                        started.elapsed(),
+                        std::fs::write(&out, png)
+                    ),
+                    Err(e) => eprintln!("[snapshot] native capture failed: {e}"),
+                }
+            }
+            #[cfg(not(target_os = "linux"))]
             match bridge::snapshot(w, h).await {
                 Ok(url) => {
                     let bytes = url
