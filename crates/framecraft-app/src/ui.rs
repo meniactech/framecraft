@@ -167,7 +167,7 @@ pub fn Viewport(ui: Ui) -> Element {
                     // `display` in both: Dioxus updates style properties one by
                     // one, so a value missing from the new style stays (an
                     // empty start's `display:none` hid the viewport after New).
-                    style: if open { "display:block;width:{w * zoom}px;height:{h * zoom}px;transform:translate({px}px,{py}px);" } else { "display:none;width:0;height:0;transform:none;" },
+                    style: if open { "display:block;width:{w * zoom}px;height:{h * zoom}px;transform:translate({px}px,{py}px);--z:{zoom};" } else { "display:none;width:0;height:0;transform:none;--z:1;" },
                     // Editor-only plate behind the graphic (Scene → Plates).
                     if let Some((bg, opacity, blur)) = plate {
                         div {
