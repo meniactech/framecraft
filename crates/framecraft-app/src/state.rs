@@ -1387,10 +1387,19 @@ impl Ui {
                 }
             };
             let mut stored: Vec<(String, Vec<u8>)> = Vec::new();
-            let items = {
+            let (items, missing) = {
                 let mut editor = ui.editor.write();
                 let Some(e) = editor.as_mut() else { return };
-                framecraft_core::psd::to_items(&psd, &file, |name, png| {
+                // The families text layers can use: the project's, then built-in.
+                let fonts: Vec<String> = e
+                    .project
+                    .media
+                    .fonts
+                    .iter()
+                    .map(framecraft_core::media::font_family)
+                    .chain(framecraft_core::schema::builtin_font_families().map(String::from))
+                    .collect();
+                framecraft_core::psd::to_items(&psd, &file, &fonts, |name, png| {
                     let entry = framecraft_core::media::import(
                         &mut e.project.media.pack,
                         name,
@@ -1417,8 +1426,16 @@ impl Ui {
                 commands,
             });
             ui.select_layer(root);
+            let note = if missing.is_empty() {
+                String::new()
+            } else {
+                format!(
+                    " — font(s) not in the project: {} (add them in Project → Fonts)",
+                    missing.join(", ")
+                )
+            };
             ui.set_status(format!(
-                "Imported {file}: {layers} layer(s) at {}×{}",
+                "Imported {file}: {layers} layer(s) at {}×{}{note}",
                 psd.width, psd.height
             ));
         });
