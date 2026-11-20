@@ -15,6 +15,9 @@
 mod bridge;
 #[cfg(target_os = "linux")]
 mod capture;
+#[cfg(target_os = "macos")]
+#[path = "capture_mac.rs"]
+mod capture;
 mod components;
 mod export;
 mod interact;
@@ -24,6 +27,7 @@ mod menubar;
 mod motions;
 mod outliner;
 mod palettes;
+mod pngfit;
 mod preview;
 mod project;
 mod project_view;
@@ -137,7 +141,7 @@ fn App() -> Element {
                 (e.doc().scene.width, e.doc().scene.height)
             });
             // Linux: the native capture (what renders use).
-            #[cfg(target_os = "linux")]
+            #[cfg(any(target_os = "linux", target_os = "macos"))]
             {
                 let url = bridge::active_url().await.unwrap_or_default();
                 let started = std::time::Instant::now();
@@ -154,7 +158,7 @@ fn App() -> Element {
                     Err(e) => eprintln!("[snapshot] native capture failed: {e}"),
                 }
             }
-            #[cfg(not(target_os = "linux"))]
+            #[cfg(not(any(target_os = "linux", target_os = "macos")))]
             match bridge::snapshot(w, h).await {
                 Ok(url) => {
                     let bytes = url

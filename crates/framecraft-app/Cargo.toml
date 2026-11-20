@@ -27,3 +27,16 @@ webkit2gtk = "2.0.1"
 gtk = "0.18.2"
 cairo-rs = { version = "0.18.5", features = ["png"] }
 javascriptcore-rs = "1.1.2"
+
+# PNG decode/encode for scaling captures to the scene size (in the tree).
+[dependencies.png]
+version = "0.18.1"
+
+# macOS: native frame capture (hidden WKWebView + takeSnapshot), the same
+# versions wry already uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2 = "0.6.5"
+block2 = "0.6.2"
+objc2-foundation = { version = "0.3.2", default-features = false, features = ["std", "NSString", "NSURL", "NSURLRequest", "NSData", "NSValue", "NSDictionary", "NSGeometry", "NSError"] }
+objc2-app-kit = { version = "0.3.2", default-features = false, features = ["std", "NSWindow", "NSImage", "NSBitmapImageRep", "NSImageRep", "NSView", "NSResponder", "NSGraphics"] }
+objc2-web-kit = { version = "0.3.2", default-features = false, features = ["std", "WKWebView", "WKWebViewConfiguration", "WKSnapshotConfiguration", "WKNavigation", "block2", "objc2-app-kit"] }

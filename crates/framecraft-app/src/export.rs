@@ -171,7 +171,7 @@ pub fn ExportTab(ui: Ui) -> Element {
                 spawn_forever(async move {
                     let mut status = ui.status;
                     // Linux: native capture (canvases and images included).
-                    #[cfg(target_os = "linux")]
+                    #[cfg(any(target_os = "linux", target_os = "macos"))]
                     {
                         let t = *ui.time.peek();
                         if let Some(url) = crate::bridge::active_url().await

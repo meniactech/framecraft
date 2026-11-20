@@ -191,22 +191,22 @@ impl Sink {
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 type Native = Option<crate::capture::Capture>;
-#[cfg(not(target_os = "linux"))]
+#[cfg(not(any(target_os = "linux", target_os = "macos")))]
 type Native = ();
 
 /// Linux: native capture in a hidden view (canvases, images, video
 /// included); elsewhere the in-page capture of the viewport.
 async fn open_native(w: f64, h: f64) -> Native {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     {
         match crate::bridge::active_url().await {
             Some(url) => crate::capture::Capture::open(&url, w, h).await.ok(),
             None => None,
         }
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     {
         let _ = (w, h);
     }
@@ -214,11 +214,11 @@ async fn open_native(w: f64, h: f64) -> Native {
 
 /// The graphic at `t` as a PNG.
 async fn grab(native: &Native, w: f64, h: f64, t: f64) -> Result<Vec<u8>, String> {
-    #[cfg(target_os = "linux")]
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     if let Some(c) = native {
         return c.frame(t).await;
     }
-    #[cfg(not(target_os = "linux"))]
+    #[cfg(not(any(target_os = "linux", target_os = "macos")))]
     let _ = native;
     crate::bridge::seek(t);
     let url = crate::bridge::snapshot(w, h).await?;

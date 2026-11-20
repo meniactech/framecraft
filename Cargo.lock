@@ -1419,11 +1419,17 @@ dependencies = [
 name = "framecraft-app"
 version = "0.3.0"
 dependencies = [
+ "block2",
  "cairo-rs",
  "dioxus",
  "framecraft-core",
  "gtk",
  "javascriptcore-rs",
+ "objc2",
+ "objc2-app-kit",
+ "objc2-foundation",
+ "objc2-web-kit",
+ "png 0.18.1",
  "rfd",
  "serde_json",
  "tokio",
