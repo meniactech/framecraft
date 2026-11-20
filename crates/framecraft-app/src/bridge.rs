@@ -646,18 +646,36 @@ if (!window.__fc) {
   }, true);
 
   // Status bar hints: the tooltip (or label) of what the pointer is over.
+  // As in FRAME, the hovered element's `title` is parked (moved to
+  // data-fc-title) so the native tooltip does not show the same text
+  // again; it is put back when the pointer leaves. A title Dioxus set
+  // meanwhile wins over the parked one.
   fc.hint = '';
-  const hintOf = (el) => {
-    if (!el || !el.closest || el.closest('.status-bar')) return '';
-    const t = el.closest('[title], [aria-label]');
-    if (!t) return '';
-    return (t.getAttribute('title') || t.getAttribute('aria-label') || '').trim();
+  let parked = null;
+  const unpark = () => {
+    if (!parked) return;
+    const t = parked.dataset.fcTitle;
+    if (t != null && !parked.hasAttribute('title')) parked.setAttribute('title', t);
+    delete parked.dataset.fcTitle;
+    parked = null;
   };
+  const labeled = (el) => (!el || !el.closest || el.closest('.status-bar')) ? null : el.closest('[title], [data-fc-title], [aria-label]');
+  const hintOf = (t) => t ? (t.getAttribute('title') || t.dataset.fcTitle || t.getAttribute('aria-label') || '').trim() : '';
   document.addEventListener('pointerover', (e) => {
-    const h = hintOf(e.target);
+    const t = labeled(e.target);
+    const h = hintOf(t);
+    if (t !== parked) {
+      unpark();
+      if (t && h && t.hasAttribute('title')) {
+        t.dataset.fcTitle = t.getAttribute('title');
+        t.removeAttribute('title');
+        parked = t;
+      }
+    }
     if (h !== fc.hint) { fc.hint = h; fc.emit({ type: 'hint', text: h }); }
   }, true);
   document.addEventListener('pointerleave', () => {
+    unpark();
     if (fc.hint) { fc.hint = ''; fc.emit({ type: 'hint', text: '' }); }
   });
 
