@@ -166,6 +166,8 @@ pub fn PalettesTab(ui: Ui) -> Element {
     let active = all.active().map(|p| p.id.clone());
     let count = all.palettes.len();
     let full = count >= MAX_PALETTES;
+    // The palette whose ✕ was pressed: FRAME asks before deleting.
+    let mut confirm = use_signal(|| None::<String>);
     let edit = move |f: Box<dyn FnOnce(&mut framecraft_core::palettes::UserPalettes)>| {
         let mut next = ui.palettes.peek().clone();
         f(&mut next);
@@ -181,11 +183,20 @@ pub fn PalettesTab(ui: Ui) -> Element {
                     onclick: move |_| {
                         edit(
                             Box::new(|u| {
+                                // FRAME's starter colors.
+                                let colors = ["#6D28D9", "#8B5CF6", "#262626", "#F8FAFC", "#DC2626"]
+                                    .into_iter()
+                                    .map(|hex| PaletteColor {
+                                        hex: hex.into(),
+                                        alpha: 100.0,
+                                        label: None,
+                                    })
+                                    .collect();
                                 u.add_copy(
                                     &Palette {
                                         id: String::new(),
-                                        name: "Palette".into(),
-                                        colors: Vec::new(),
+                                        name: "New palette".into(),
+                                        colors,
                                     },
                                 );
                             }),
@@ -236,14 +247,28 @@ pub fn PalettesTab(ui: Ui) -> Element {
                                             "Set active"
                                         }
                                     }
-                                    button {
-                                        class: "key-button",
-                                        title: "Delete palette",
-                                        onclick: move |_| {
-                                            let id = i3.clone();
-                                            edit(Box::new(move |u| u.palettes.retain(|p| p.id != id)))
-                                        },
-                                        "✕"
+                                    if confirm().as_deref() == Some(id.as_str()) {
+                                        button {
+                                            class: "danger",
+                                            title: "Delete this palette for good",
+                                            onclick: move |_| {
+                                                confirm.set(None);
+                                                let id = i3.clone();
+                                                edit(Box::new(move |u| u.palettes.retain(|p| p.id != id)))
+                                            },
+                                            "Delete?"
+                                        }
+                                        button { onclick: move |_| confirm.set(None), "Keep" }
+                                    } else {
+                                        button {
+                                            class: "key-button",
+                                            title: "Delete palette",
+                                            onclick: {
+                                                let id = id.clone();
+                                                move |_| confirm.set(Some(id.clone()))
+                                            },
+                                            "✕"
+                                        }
                                     }
                                 }
                                 div { class: "swatches",
@@ -303,7 +328,7 @@ pub fn PalettesTab(ui: Ui) -> Element {
                                                         if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
                                                             p.colors
                                                                 .push(PaletteColor {
-                                                                    hex: "#FFFFFF".into(),
+                                                                    hex: "#94A3B8".into(),
                                                                     alpha: 100.0,
                                                                     label: None,
                                                                 });
