@@ -526,6 +526,12 @@ fn pointer_move(ui: Ui, ev: &Value) {
         }
         Mode::Resize(h) => {
             let (x, y, w, hh) = resize(&d.start, &d.parent, h, d.from, p, shift, alt);
+            // FRAME: a free resize snaps the moved edges to the guides.
+            let (x, y, w, hh) = if shift || alt {
+                (x, y, w, hh)
+            } else {
+                snap_resize(ui, id, &d.start, h, (x, y, w, hh))
+            };
             let mut cmds = vec![
                 set(id, "x", t, x, auto),
                 set(id, "y", t, y, auto),
@@ -615,6 +621,48 @@ fn pointer_move(ui: Ui, ev: &Value) {
 
 /// A moved layer's position snapped to the shown guides (FRAME: edges and
 /// centre within 10 scene px). Only layers without a parent snap.
+/// Snap for a free resize (FRAME): with Snap on, the edges the handle moves
+/// go to the shown guides and rulers within 10 px. Only for top-level
+/// layers that are not rotated or scaled (their box is the scene box).
+fn snap_resize(
+    ui: Ui,
+    id: &str,
+    start: &Pose,
+    handle: Handle,
+    b: (f64, f64, f64, f64),
+) -> (f64, f64, f64, f64) {
+    use framecraft_core::manipulate::{guide_targets, snap_resize_edges};
+    let g = *ui.guides.peek();
+    if !g.snap || start.rotation != 0.0 || start.scale_x != 1.0 || start.scale_y != 1.0 {
+        return b;
+    }
+    let editor = ui.editor.peek();
+    let Some(e) = editor.as_ref() else {
+        return b;
+    };
+    let doc = e.doc();
+    let top_level = doc
+        .items
+        .iter()
+        .find(|i| i.id == id)
+        .is_some_and(|i| i.parent_id.clone().flatten().is_none());
+    if !top_level {
+        return b;
+    }
+    let s = &doc.scene;
+    let tx = guide_targets(
+        &g,
+        s.width,
+        s.custom_rulers_v.as_deref().unwrap_or_default(),
+    );
+    let ty = guide_targets(
+        &g,
+        s.height,
+        s.custom_rulers_h.as_deref().unwrap_or_default(),
+    );
+    snap_resize_edges(b, handle, &tx, &ty, 10.0)
+}
+
 fn snap_move(ui: Ui, id: &str, start: &Pose, (x, y): Vec2) -> Vec2 {
     use framecraft_core::manipulate::{guide_targets, snap_to_guides};
     let g = *ui.guides.peek();

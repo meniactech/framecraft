@@ -369,6 +369,41 @@ impl Default for GuideToggles {
 /// Where the shown guides are along one axis, in scene px (FRAME's
 /// `activeGuideTargetsPx`). `span` is the scene's width or height;
 /// `rulers` the custom rulers on that axis, in percent.
+/// FRAME's edge snap for a free resize: the edges the handle moves
+/// (`handle.x` / `handle.y`: -1 left / top, 1 right / bottom, 0 none) go to
+/// the nearest target within `threshold`; the opposite edges stay.
+pub fn snap_resize_edges(
+    (x, y, w, h): (f64, f64, f64, f64),
+    handle: Handle,
+    tx: &[f64],
+    ty: &[f64],
+    threshold: f64,
+) -> (f64, f64, f64, f64) {
+    let near = |v: f64, targets: &[f64]| {
+        targets
+            .iter()
+            .copied()
+            .filter(|t| (t - v).abs() <= threshold)
+            .min_by(|a, b| (a - v).abs().total_cmp(&(b - v).abs()))
+    };
+    let (mut left, mut top, mut right, mut bottom) = (x, y, x + w, y + h);
+    match handle.x {
+        -1 => left = near(left, tx).filter(|l| *l < right - 1.0).unwrap_or(left),
+        1 => right = near(right, tx).filter(|r| *r > left + 1.0).unwrap_or(right),
+        _ => {}
+    }
+    match handle.y {
+        -1 => top = near(top, ty).filter(|t| *t < bottom - 1.0).unwrap_or(top),
+        1 => {
+            bottom = near(bottom, ty)
+                .filter(|b| *b > top + 1.0)
+                .unwrap_or(bottom)
+        }
+        _ => {}
+    }
+    (left, top, right - left, bottom - top)
+}
+
 pub fn guide_targets(g: &GuideToggles, span: f64, rulers: &[f64]) -> Vec<f64> {
     let mut pct: Vec<f64> = Vec::new();
     if g.center {
@@ -543,6 +578,45 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[test]
+    fn resize_edges_snap_as_frame() {
+        let tx = [960.0, 1728.0];
+        let ty = [540.0];
+        // The right edge (1725) snaps to 1728; the left one stays.
+        assert_eq!(
+            snap_resize_edges(
+                (100.0, 100.0, 1625.0, 200.0),
+                Handle { x: 1, y: 0 },
+                &tx,
+                &ty,
+                10.0
+            ),
+            (100.0, 100.0, 1628.0, 200.0)
+        );
+        // Top-left handle: left 955 → 960, top 545 → 540, far edges stay.
+        assert_eq!(
+            snap_resize_edges(
+                (955.0, 545.0, 100.0, 100.0),
+                Handle { x: -1, y: -1 },
+                &tx,
+                &ty,
+                10.0
+            ),
+            (960.0, 540.0, 95.0, 105.0)
+        );
+        // Out of reach: unchanged.
+        assert_eq!(
+            snap_resize_edges(
+                (0.0, 0.0, 500.0, 500.0),
+                Handle { x: 1, y: 1 },
+                &tx,
+                &ty,
+                10.0
+            ),
+            (0.0, 0.0, 500.0, 500.0)
+        );
     }
 
     #[test]
