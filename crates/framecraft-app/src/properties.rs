@@ -268,15 +268,7 @@ pub fn Properties(ui: Ui) -> Element {
     let id = item.map(|i| i.id.clone());
     let item_ref = item.cloned();
     let board_hook = doc.scene.ionboard_hook_enabled == Some(true);
-    // The project's own fonts first in the font list (FRAME: uploaded
-    // fonts join the built-in ones).
-    let project_fonts: Vec<String> = ed
-        .project
-        .media
-        .fonts
-        .iter()
-        .map(framecraft_core::media::font_family)
-        .collect();
+
     let heading = match item {
         Some(_) if multi => format!("{many} layers"),
         Some(i) if !matches!(tab, Tab::Scene | Tab::Script | Tab::Export) => i.name.clone(),
@@ -352,14 +344,6 @@ pub fn Properties(ui: Ui) -> Element {
             if tab == Tab::Modifiers && !multi {
                 if let Some(item) = id.clone() {
                     ModifierStack { ui, item, cards, addable }
-                }
-            }
-            datalist { id: "fc-fonts",
-                for family in project_fonts {
-                    option { value: "{family}", "Project font" }
-                }
-                for family in schema::builtin_font_families() {
-                    option { value: "{family}" }
                 }
             }
             }
@@ -467,14 +451,49 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         Kind::TextArea => rsx! {
             textarea { value: "{text}", onchange: move |evt| set(Value::from(evt.value())) }
         },
-        Kind::Font => rsx! {
-            input {
-                r#type: "text",
-                list: "fc-fonts",
-                value: "{text}",
-                onchange: move |evt| set(Value::from(evt.value().trim())),
+        Kind::Font => {
+            // FRAME's font menu: the project's fonts, then the built-in ones.
+            let project: Vec<String> = ui
+                .editor
+                .read()
+                .as_ref()
+                .map(|e| {
+                    e.project
+                        .media
+                        .fonts
+                        .iter()
+                        .map(framecraft_core::media::font_family)
+                        .collect()
+                })
+                .unwrap_or_default();
+            let builtin: Vec<&str> = schema::builtin_font_families().collect();
+            let current = text.trim().to_string();
+            let known = current.is_empty()
+                || project.iter().any(|f| f.eq_ignore_ascii_case(&current))
+                || builtin.iter().any(|f| f.eq_ignore_ascii_case(&current));
+            rsx! {
+                select { onchange: move |evt| set(Value::from(evt.value())),
+                    if !known {
+                        option { value: "{current}", selected: true, "{current} (not available)" }
+                    }
+                    if current.is_empty() {
+                        option { value: "", selected: true, "Default" }
+                    }
+                    if !project.is_empty() {
+                        optgroup { label: "Project fonts",
+                            for f in project {
+                                option { value: "{f}", selected: f.eq_ignore_ascii_case(&current), "{f}" }
+                            }
+                        }
+                    }
+                    optgroup { label: "Built-in",
+                        for f in builtin {
+                            option { value: "{f}", selected: f.eq_ignore_ascii_case(&current), "{f}" }
+                        }
+                    }
+                }
             }
-        },
+        }
         Kind::Text | Kind::TextOrNumber => rsx! {
             input { r#type: "text", value: "{text}", onchange: move |evt| set(Value::from(evt.value())) }
         },
