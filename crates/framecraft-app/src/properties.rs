@@ -55,6 +55,14 @@ fn shown(p: &Property, item: &Value) -> bool {
         "gradientCenter" => fill == "gradient" && gradient != "linear",
         p if p.starts_with("gradient") => fill == "gradient",
         p if p.starts_with("bgImage") => fill == "image",
+        // The old per-layer shadow: FRAME has only the Shadow modifier now,
+        // so the group shows only on layers that still carry one.
+        p if p.starts_with("shadow.") => {
+            let sh = &item["shadow"];
+            ["x", "y", "blur"]
+                .iter()
+                .any(|k| sh[k].as_f64().is_some_and(|v| v != 0.0))
+        }
         _ => true,
     }
 }
