@@ -27,6 +27,27 @@ fn sha256(bytes: &[u8]) -> String {
         .collect()
 }
 
+/// FrameCraft's deliberate changes to FRAME's runtime: `(ours, FRAME's)`.
+/// The runtime is compared with these undone, so the rest of it still has
+/// to match FRAME byte for byte.
+const RUNTIME_PATCHES: &[(&str, &str)] = &[(
+    "      // Only an animated width is written each frame: without keys the\r\n      // layer's own CSS has it, including a 4-sided border (FrameCraft).\r\n      if (Array.isArray(track.timeline.borderWidth) && track.timeline.borderWidth.length > 0) {\r\n        node.style.borderWidth = borderWidth + 'px';\r\n      }\r\n",
+    "      node.style.borderWidth = borderWidth + 'px';\r\n",
+)];
+
+/// The runtime as FRAME ships it (FrameCraft's patches undone).
+fn unpatched(path: &str, bytes: &[u8]) -> Vec<u8> {
+    if !path.ends_with("ionframe-spx-runtime.mjs") {
+        return bytes.to_vec();
+    }
+    let mut text = String::from_utf8(bytes.to_vec()).unwrap();
+    for (ours, frame) in RUNTIME_PATCHES {
+        assert!(text.contains(ours), "runtime patch not found: {ours}");
+        text = text.replacen(ours, frame, 1);
+    }
+    text.into_bytes()
+}
+
 /// Differences between a package and FRAME's package in `dir`: hashes for
 /// every file, and for HTML pages the line comparison of `common`.
 fn compare(pkg: &Package, dir: &Path) -> Vec<String> {
@@ -41,7 +62,7 @@ fn compare(pkg: &Package, dir: &Path) -> Vec<String> {
                 let diffs = common::html_diffs(&want_html, std::str::from_utf8(bytes).unwrap());
                 out.extend(diffs.into_iter().map(|d| format!("{path}: {d}")));
             }
-            Some(w) if w["sha256"] != sha256(bytes) => out.push(format!(
+            Some(w) if w["sha256"] != sha256(&unpatched(path, bytes)) => out.push(format!(
                 "{path}: content differs (size {} vs {})",
                 bytes.len(),
                 w["size"]

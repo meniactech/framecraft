@@ -1603,7 +1603,11 @@ export function initIonFrameSpx(data) {
         modifierTransform
       ].filter(Boolean).join(' ');
       node.style.opacity = String(opacity);
-      node.style.borderWidth = borderWidth + 'px';
+      // Only an animated width is written each frame: without keys the
+      // layer's own CSS has it, including a 4-sided border (FrameCraft).
+      if (Array.isArray(track.timeline.borderWidth) && track.timeline.borderWidth.length > 0) {
+        node.style.borderWidth = borderWidth + 'px';
+      }
       if (track.base.svgTint || node.getAttribute('data-ion-svg-tint') === '1') {
         const wrap = node.firstElementChild;
         if (wrap && wrap.style) {
