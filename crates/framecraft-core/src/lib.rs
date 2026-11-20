@@ -30,6 +30,7 @@ pub mod polygon;
 pub mod preview;
 pub mod profile;
 pub mod project;
+pub mod psd;
 pub mod ramp;
 pub mod resolutions;
 pub mod schema;

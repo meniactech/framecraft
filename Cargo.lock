@@ -1434,6 +1434,7 @@ dependencies = [
 name = "framecraft-core"
 version = "0.3.0"
 dependencies = [
+ "png 0.18.1",
  "serde",
  "serde_json",
  "sha2 0.11.0",

@@ -12,6 +12,8 @@ rust-version.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 zip = { version = "7.3.0", default-features = false, features = ["deflate"] }
+# Encoding PSD layers as PNG (already in the dependency tree).
+png = "0.18.1"
 
 [dev-dependencies]
 sha2 = "0.11.0"

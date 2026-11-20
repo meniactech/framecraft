@@ -29,6 +29,7 @@ enum Act {
     AddSvg,
     AddMedia(&'static str),
     InsertComponent,
+    ImportPsd,
     MakeComponent,
     Zoom(f64),
     Fit,
@@ -94,6 +95,7 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
         layers.push(item(label, "", act, open));
     }
     layers.push(Item::Sep);
+    layers.push(item("Photoshop file (PSD)…", "", Act::ImportPsd, open));
     layers.push(item("Insert Component…", "", Act::InsertComponent, open));
     layers.push(item("Make Component…", "", Act::MakeComponent, has_sel));
 
@@ -139,6 +141,7 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
                 item("Save", "Ctrl+S", Act::Save, open),
                 item("Save as…", "Ctrl+Shift+S", Act::SaveAs, open),
                 Item::Sep,
+                item("Import Photoshop file (PSD)…", "", Act::ImportPsd, open),
                 item("Export…", "", Act::Export, open),
                 item("Export FRAME pack…", "", Act::ExportPack, open),
                 Item::Sep,
@@ -249,6 +252,7 @@ fn run(ui: Ui, act: Act) {
         Act::AddImage => ui.open_media("images", PickTarget::NewLayer),
         Act::AddSvg => ui.open_media("shapes", PickTarget::NewLayer),
         Act::AddMedia(cat) => ui.open_media(cat, PickTarget::NewLayer),
+        Act::ImportPsd => ui.import_psd(),
         Act::InsertComponent => {
             let mut open = ui.component_library;
             open.set(true);

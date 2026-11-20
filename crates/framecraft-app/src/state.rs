@@ -1354,6 +1354,77 @@ impl Ui {
     }
 }
 
+impl Ui {
+    /// Layer → Photoshop file (PSD)…: each layer of the file becomes an
+    /// image layer (its pixels in the project's media) under one Empty
+    /// named after the file, groups as Empties; one undo step.
+    pub fn import_psd(self) {
+        if self.editor.peek().is_none() {
+            return;
+        }
+        spawn_forever(async move {
+            let mut ui = self;
+            let Some(handle) = rfd::AsyncFileDialog::new()
+                .set_title("Import a Photoshop file (layers become image layers)")
+                .add_filter("Photoshop", &["psd"])
+                .pick_file()
+                .await
+            else {
+                return;
+            };
+            let path = handle.path().to_path_buf();
+            let file = path.file_name().map_or("Photoshop.psd".to_string(), |n| {
+                n.to_string_lossy().into_owned()
+            });
+            let psd = match std::fs::read(&path)
+                .map_err(|e| e.to_string())
+                .and_then(|b| framecraft_core::psd::parse(&b))
+            {
+                Ok(p) => p,
+                Err(e) => {
+                    ui.set_status(format!("Could not import {file}: {e}"));
+                    return;
+                }
+            };
+            let mut stored: Vec<(String, Vec<u8>)> = Vec::new();
+            let items = {
+                let mut editor = ui.editor.write();
+                let Some(e) = editor.as_mut() else { return };
+                framecraft_core::psd::to_items(&psd, &file, |name, png| {
+                    let entry = framecraft_core::media::import(
+                        &mut e.project.media.pack,
+                        name,
+                        png.clone(),
+                    )
+                    .ok()?;
+                    stored.push((entry.url.clone(), png));
+                    Some(entry.url)
+                })
+            };
+            for (url, bytes) in stored {
+                STORE.with(|s| s.borrow_mut().add_to_library(&url, bytes));
+            }
+            let layers = items.len().saturating_sub(1);
+            let root = items.first().map(|i| i.id.clone());
+            let commands: Vec<Box<dyn Command>> = items
+                .into_iter()
+                .map(|item| {
+                    Box::new(framecraft_core::commands::AddItem { item }) as Box<dyn Command>
+                })
+                .collect();
+            ui.execute(&framecraft_core::commands::Batch {
+                label: format!("Import {file}"),
+                commands,
+            });
+            ui.select_layer(root);
+            ui.set_status(format!(
+                "Imported {file}: {layers} layer(s) at {}×{}",
+                psd.width, psd.height
+            ));
+        });
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::follow_move;
