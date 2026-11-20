@@ -478,3 +478,14 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .ruler-handle:hover { background: rgba(113, 113, 122, .95); }
 .ruler-handle.v { top: -18px; width: 24px; height: 16px; transform: translateX(-50%); border-radius: 0 0 4px 4px; cursor: ew-resize; }
 .ruler-handle.h { left: -18px; width: 16px; height: 24px; transform: translateY(-50%); border-radius: 0 4px 4px 0; cursor: ns-resize; }
+/* FRAME's numeric pill: label | value in one rounded box */
+.field.num { grid-template-columns: minmax(0, 1fr) 22px; }
+.pill { display: grid; grid-template-columns: minmax(0, 1fr) minmax(3rem, 84px); height: 26px; min-width: 0;
+  border: 1px solid #525252; border-radius: 9999px; overflow: hidden; background: var(--panel); }
+.pill .field-label { display: flex; align-items: center; padding: 0 10px; font-size: 11px; letter-spacing: .02em; }
+.pill .scrub { cursor: ew-resize; user-select: none; -webkit-user-select: none; }
+.pill .scrub:hover { background: rgba(255, 255, 255, .06); }
+.field .pill input { height: 100%; border: 0; border-left: 1px solid #525252; border-radius: 0; background: var(--bg);
+  text-align: center; padding: 0 4px; font-variant-numeric: tabular-nums; outline: none; -webkit-appearance: textfield; appearance: textfield; }
+.pill input::-webkit-outer-spin-button, .pill input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+.field .pill input:focus { background: #000; }

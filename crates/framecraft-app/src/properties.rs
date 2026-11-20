@@ -690,6 +690,32 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             }
         };
     }
+    if let Kind::Number { min, max, step } = prop.kind {
+        // FRAME's numeric pill (label | value). Dragging the label left or
+        // right scrubs the value (Shift ×10, Alt ×0.1) as one undo step:
+        // the bridge sends `change` events on the input meanwhile.
+        let label = prop.label;
+        return rsx! {
+            {dialog}
+            label { class: "field num",
+                div { class: "pill",
+                    span {
+                        class: "field-label scrub",
+                        title: if help.is_empty() { "Drag to change, click to type".to_string() } else { format!("{help}\n\nDrag to change, click to type") },
+                        "data-step": "{step}",
+                        "data-min": "{min}",
+                        "data-max": "{max}",
+                        onpointerdown: move |_| ui.begin_gesture(format!("Change {label}")),
+                        onpointerup: move |_| ui.end_gesture(),
+                        onpointercancel: move |_| ui.end_gesture(),
+                        "{prop.label}"
+                    }
+                    {input}
+                }
+                {key_button}
+            }
+        };
+    }
     if matches!(prop.kind, Kind::Color) {
         // A div, not a label: clicks in the color popover must not be
         // forwarded to the color chip.

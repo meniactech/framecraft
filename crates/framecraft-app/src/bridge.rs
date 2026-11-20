@@ -601,6 +601,50 @@ if (!window.__fc) {
     hd.addEventListener('pointercancel', up);
   }, true);
 
+  // Number pills: drag the label (.scrub) to change the value, 1 step per
+  // pixel (Shift ×10, Alt ×0.1). Each new value is a `change` event on the
+  // input, so Rust sees it like typing; the label's own pointerdown/up
+  // (Dioxus handlers) make the drag one undo step.
+  document.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || !e.target || !e.target.closest) return;
+    const lab = e.target.closest('.scrub');
+    if (!lab) return;
+    const input = lab.parentElement && lab.parentElement.querySelector('input');
+    if (!input) return;
+    const num = (s) => { const v = parseFloat(s); return Number.isFinite(v) ? v : null; };
+    const step = num(lab.dataset.step) || 1;
+    const min = num(lab.dataset.min), max = num(lab.dataset.max);
+    const start = num(input.value) || 0;
+    const decimals = (String(step).split('.')[1] || '').length;
+    const x0 = e.clientX;
+    let moved = false, last = null;
+    lab.setPointerCapture(e.pointerId);
+    const move = (ev) => {
+      const dx = ev.clientX - x0;
+      if (!moved && Math.abs(dx) < 3) return;
+      moved = true;
+      const k = ev.shiftKey ? 10 : (ev.altKey ? 0.1 : 1);
+      let v = start + Math.round(dx) * step * k;
+      if (min !== null) v = Math.max(min, v);
+      if (max !== null) v = Math.min(max, v);
+      v = +v.toFixed(Math.min(6, decimals + (ev.altKey ? 1 : 0)));
+      if (v === last) return;
+      last = v;
+      input.value = String(v);
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+    };
+    const up = () => {
+      lab.removeEventListener('pointermove', move);
+      lab.removeEventListener('pointerup', up);
+      lab.removeEventListener('pointercancel', up);
+      // A drag is not a click: do not focus the input afterwards.
+      if (moved) lab.addEventListener('click', (ev) => { ev.preventDefault(); ev.stopPropagation(); }, { capture: true, once: true });
+    };
+    lab.addEventListener('pointermove', move);
+    lab.addEventListener('pointerup', up);
+    lab.addEventListener('pointercancel', up);
+  }, true);
+
   // Status bar hints: the tooltip (or label) of what the pointer is over.
   fc.hint = '';
   const hintOf = (el) => {
