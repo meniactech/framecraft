@@ -1417,7 +1417,7 @@ dependencies = [
 
 [[package]]
 name = "framecraft-app"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "cairo-rs",
  "dioxus",
@@ -1432,7 +1432,7 @@ dependencies = [
 
 [[package]]
 name = "framecraft-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
