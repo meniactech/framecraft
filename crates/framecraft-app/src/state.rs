@@ -52,10 +52,12 @@ impl Editor {
 }
 
 /// What replaces the open project (asked about when it has unsaved changes).
-#[derive(Clone, Copy, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Switch {
     New,
     Open,
+    /// A recent project.
+    Path(PathBuf),
 }
 
 /// Shared UI state, handed to components as one copyable value.
@@ -119,6 +121,8 @@ pub struct Ui {
     pub switch_prompt: Signal<Option<Switch>>,
     /// A newer FrameCraft release (status bar notice).
     pub update: Signal<Option<crate::updates::Update>>,
+    /// Recent projects (File menu), newest first.
+    pub recent: Signal<Vec<PathBuf>>,
     /// Help → "keys" (shortcuts) or "about".
     pub help_dialog: Signal<Option<&'static str>>,
     /// Add → Insert Component… is open.
@@ -192,6 +196,7 @@ impl Ui {
             switch_prompt: use_signal(|| None),
             update: use_signal(|| None),
             help_dialog: use_signal(|| None),
+            recent: use_signal(crate::recent::load),
             dirty: use_signal(|| false),
             hint: use_signal(String::new),
             ramp_event: use_signal(|| None),
@@ -267,11 +272,6 @@ impl Ui {
         }
     }
 
-    /// A new, unsaved project with one empty graphic.
-    /// New: asks where to create the project folder first, then creates
-    /// and saves it there, so autosave and recovery work from the start
-    /// and imported media go straight into its `media/` folder. The
-    /// project is named after the folder.
     /// New, after asking about unsaved changes.
     pub fn new_project(self) {
         self.guard(Switch::New);
@@ -280,6 +280,11 @@ impl Ui {
     /// Open…, after asking about unsaved changes.
     pub fn open_dialog(self) {
         self.guard(Switch::Open);
+    }
+
+    /// A recent project, after asking about unsaved changes.
+    pub fn open_recent(self, path: PathBuf) {
+        self.guard(Switch::Path(path));
     }
 
     /// Replacing the open project with unsaved changes asks first.
@@ -297,6 +302,7 @@ impl Ui {
         match s {
             Switch::New => self.new_project_now(),
             Switch::Open => self.open_dialog_now(),
+            Switch::Path(p) => self.open(p),
         }
     }
 
@@ -366,6 +372,7 @@ impl Ui {
     }
 
     fn install(mut self, mut project: Project, verb: &str) {
+        crate::recent::add(self, &project.path);
         project.palette_colors = self.palettes.peek().active_css();
         let warnings = project.warnings.len();
         self.set_status(format!(
@@ -514,6 +521,7 @@ impl Ui {
         match result {
             Some(Ok(())) => {
                 self.dirty.set(false);
+                crate::recent::add(self, &dir);
                 self.set_status(format!("Saved {}", dir.display()));
             }
             Some(Err(e)) => {

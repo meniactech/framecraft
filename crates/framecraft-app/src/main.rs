@@ -26,6 +26,7 @@ mod preview;
 mod project;
 mod project_view;
 mod properties;
+mod recent;
 mod script_editor;
 mod state;
 mod timeline;
@@ -333,8 +334,9 @@ fn SwitchPrompt(ui: Ui, next: crate::state::Switch) -> Element {
         .is_some_and(|e| e.project.folder.is_some());
     let what = match next {
         crate::state::Switch::New => "a new project",
-        crate::state::Switch::Open => "another project",
+        crate::state::Switch::Open | crate::state::Switch::Path(_) => "another project",
     };
+    let next2 = next.clone();
     rsx! {
         div { class: "modal-backdrop",
             div { class: "modal motion-dialog small",
@@ -351,7 +353,7 @@ fn SwitchPrompt(ui: Ui, next: crate::state::Switch) -> Element {
                         title: "Go on and lose the unsaved changes (the autosave copy stays, and is offered when this project is opened again)",
                         onclick: move |_| {
                             prompt.set(None);
-                            ui.continue_switch(next);
+                            ui.continue_switch(next.clone());
                         },
                         "Don't save"
                     }
@@ -360,6 +362,7 @@ fn SwitchPrompt(ui: Ui, next: crate::state::Switch) -> Element {
                         onclick: move |_| {
                             prompt.set(None);
                             if has_folder {
+                                let next = next2.clone();
                                 spawn_forever(async move {
                                     if ui.save_now().await {
                                         ui.continue_switch(next);

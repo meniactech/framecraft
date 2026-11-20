@@ -39,6 +39,8 @@ enum Act {
     Motions,
     TimelineFit,
     Shortcuts,
+    Recent(usize),
+    ClearRecent,
     About,
     Link(&'static str),
 }
@@ -129,6 +131,10 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
             vec![
                 item("New…", "Ctrl+N", Act::New, true),
                 item("Open…", "Ctrl+O", Act::Open, true),
+            ]
+            .into_iter()
+            .chain(recent_items(ui))
+            .chain([
                 Item::Sep,
                 item("Save", "Ctrl+S", Act::Save, open),
                 item("Save as…", "Ctrl+Shift+S", Act::SaveAs, open),
@@ -137,7 +143,8 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
                 item("Export FRAME pack…", "", Act::ExportPack, open),
                 Item::Sep,
                 item("Project view", "Tab", Act::ProjectView, open),
-            ],
+            ])
+            .collect(),
         ),
         (
             "Edit",
@@ -197,8 +204,29 @@ fn menus(ui: Ui) -> Vec<(&'static str, Vec<Item>)> {
     ]
 }
 
+/// File menu: the recent projects under Open…, and Clear.
+fn recent_items(ui: Ui) -> Vec<Item> {
+    let list = (ui.recent)();
+    if list.is_empty() {
+        return Vec::new();
+    }
+    let mut items = vec![Item::Sep];
+    for (i, p) in list.iter().enumerate() {
+        items.push(item(crate::recent::label(p), "", Act::Recent(i), true));
+    }
+    items.push(item("Clear recent", "", Act::ClearRecent, true));
+    items
+}
+
 fn run(ui: Ui, act: Act) {
     match act {
+        Act::Recent(i) => {
+            let path = ui.recent.peek().get(i).cloned();
+            if let Some(p) = path {
+                ui.open_recent(p);
+            }
+        }
+        Act::ClearRecent => crate::recent::clear(ui),
         Act::New => ui.new_project(),
         Act::Open => ui.open_dialog(),
         Act::Save => ui.save(),
