@@ -343,7 +343,8 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .easing-tile { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 8px 4px; font-size: 11px; }
 .easing-tile.active { border-color: var(--accent); background: #262626; }
 .easing-tile img { width: 36px; height: 36px; border-radius: 4px; }
-.plate { position: absolute; inset: 0; pointer-events: none; }
+.plate { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.plate-fill { position: absolute; inset: 0; transform-origin: center; }
 .plate-source { margin: 4px 0; }
 .plate-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 6px; margin-bottom: 8px; }
 .plate-tile { display: flex; flex-direction: column; gap: 3px; padding: 4px; font-size: 11px; text-align: left; }

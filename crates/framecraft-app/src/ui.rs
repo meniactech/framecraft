@@ -158,9 +158,13 @@ pub fn Viewport(ui: Ui) -> Element {
                     style: if open { "display:block;width:{w * zoom}px;height:{h * zoom}px;transform:translate({px}px,{py}px);--z:{zoom};" } else { "display:none;width:0;height:0;transform:none;--z:1;" },
                     // Editor-only plate behind the graphic (Scene → Plates).
                     if let Some((bg, opacity, blur)) = plate {
-                        div {
-                            class: "plate",
-                            style: "background:{bg};opacity:{opacity};filter:blur({blur * zoom}px);",
+                        // FRAME: a blurred plate is scaled up a little inside a
+                        // clipping box, so its soft edges stay outside the scene.
+                        div { class: "plate", style: "opacity:{opacity};",
+                            div {
+                                class: "plate-fill",
+                                style: if blur > 0.0 { "background:{bg};filter:blur({blur * zoom}px);transform:scale(1.06);" } else { "background:{bg};filter:none;transform:none;" },
+                            }
                         }
                     }
                     iframe { id: FRAME_A, style: "{frame_style}" }
