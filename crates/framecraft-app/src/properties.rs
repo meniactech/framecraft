@@ -47,8 +47,12 @@ fn as_text(v: &Value) -> String {
 /// Fill fields that only matter for one fill type.
 fn shown(p: &Property, item: &Value) -> bool {
     let fill = item["backgroundType"].as_str().unwrap_or("solid");
+    let gradient = item["gradientType"].as_str().unwrap_or("linear");
     match p.path {
         "bg_color" => fill == "solid",
+        // FRAME: the angle for linear and conic, the center for the others.
+        "gradientAngle" => fill == "gradient" && matches!(gradient, "linear" | "conic"),
+        "gradientCenter" => fill == "gradient" && gradient != "linear",
         p if p.starts_with("gradient") => fill == "gradient",
         p if p.starts_with("bgImage") => fill == "image",
         _ => true,
@@ -223,7 +227,12 @@ pub fn Properties(ui: Ui) -> Element {
                 animated,
                 modifier: None,
                 options: Vec::new(),
-                context: Value::Null,
+                // The center pad previews the layer's own gradient.
+                context: if matches!(p.kind, Kind::GradientCenter) {
+                    item_json.clone()
+                } else {
+                    Value::Null
+                },
             }
         })
         .collect();
@@ -448,6 +457,9 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
         Kind::ChartPoints => rsx! {
             ChartPoints { ui, value: field.value.clone(), set }
+        },
+        Kind::GradientCenter => rsx! {
+            GradientCenter { value: field.value.clone(), item: field.context.clone(), set }
         },
         Kind::ValueRamp => rsx! {
             ValueRamp { ui, path: prop.path, value: field.value.clone(), set }
@@ -2402,6 +2414,123 @@ fn ResolutionPreset(ui: Ui) -> Element {
                 option { value: "custom", selected: current == "custom", "Custom" }
             }
             span {}
+        }
+    }
+}
+
+/// FRAME's gradient center control: a chip with the gradient that opens a
+/// pad; drag on the pad (or type X / Y in %) to move the center. The drag
+/// previews live and writes one change on release.
+#[component]
+fn GradientCenter(value: Value, item: Value, set: Callback<Value>) -> Element {
+    use framecraft_core::model::RampColor;
+    const PAD_W: f64 = 220.0;
+    const PAD_H: f64 = 124.0;
+    let mut open = use_signal(|| false);
+    let mut at = use_signal(|| (0.0_f64, 0.0_f64));
+    let mut live = use_signal(|| None::<(f64, f64)>);
+    let saved = (
+        value["x"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0),
+        value["y"].as_f64().unwrap_or(0.5).clamp(0.0, 1.0),
+    );
+    let (cx, cy) = live().unwrap_or(saved);
+    let stops: Option<Vec<RampColor>> = serde_json::from_value(item["gradientRamp"].clone()).ok();
+    let stops = framecraft_core::ramp::normalize_color_ramp(stops.as_deref());
+    let kind = item["gradientType"]
+        .as_str()
+        .unwrap_or("circle")
+        .to_string();
+    let angle = item["gradientAngle"].as_f64().unwrap_or(90.0);
+    let bg = framecraft_core::export::css::gradient_css(&stops, &kind, angle, (cx, cy));
+    let write = move |x: f64, y: f64| {
+        let r = |v: f64| (v.clamp(0.0, 1.0) * 1000.0).round() / 1000.0;
+        set(json!({ "x": r(x), "y": r(y) }));
+    };
+    let pick = move |e: Event<PointerData>| {
+        let p = e.element_coordinates();
+        ((p.x / PAD_W).clamp(0.0, 1.0), (p.y / PAD_H).clamp(0.0, 1.0))
+    };
+    rsx! {
+        div { class: "gradient-center",
+            button {
+                class: "gradient-center-chip",
+                r#type: "button",
+                title: "Set gradient center",
+                style: "background-image:{bg};",
+                onclick: move |evt| {
+                    evt.prevent_default();
+                    let p = evt.client_coordinates();
+                    at.set((p.x, p.y));
+                    open.toggle();
+                },
+            }
+            span { class: "dim", "{(cx * 100.0).round()} %, {(cy * 100.0).round()} %" }
+        }
+        if open() {
+            div { class: "popover-catcher", onclick: move |_| open.set(false) }
+            div {
+                class: "color-popover gradient-center-pop",
+                style: "left:min(calc(100vw - 256px), max(8px, {at().0 - 20.0}px));top:min(calc(100vh - 230px), {at().1 + 16.0}px);",
+                div {
+                    class: "gradient-pad",
+                    style: "width:{PAD_W}px;height:{PAD_H}px;background-image:{bg};",
+                    onpointerdown: move |e| {
+                        let p = pick(e);
+                        live.set(Some(p));
+                    },
+                    onpointermove: move |e| {
+                        if live.peek().is_some() && !e.held_buttons().is_empty() {
+                            let p = pick(e);
+                            live.set(Some(p));
+                        }
+                    },
+                    onpointerup: move |_| {
+                        if let Some((x, y)) = live.take() {
+                            write(x, y);
+                        }
+                    },
+                    onpointerleave: move |_| {
+                        if let Some((x, y)) = live.take() {
+                            write(x, y);
+                        }
+                    },
+                    span { class: "crosshair", style: "left:{cx * 100.0}%;top:{cy * 100.0}%;" }
+                }
+                div { class: "gradient-readouts",
+                    label {
+                        "X "
+                        input {
+                            r#type: "number",
+                            min: "0",
+                            max: "100",
+                            step: "1",
+                            value: "{(cx * 100.0).round()}",
+                            onchange: move |evt| {
+                                if let Ok(v) = evt.value().trim().parse::<f64>() {
+                                    write(v / 100.0, cy);
+                                }
+                            },
+                        }
+                        " %"
+                    }
+                    label {
+                        "Y "
+                        input {
+                            r#type: "number",
+                            min: "0",
+                            max: "100",
+                            step: "1",
+                            value: "{(cy * 100.0).round()}",
+                            onchange: move |evt| {
+                                if let Ok(v) = evt.value().trim().parse::<f64>() {
+                                    write(cx, v / 100.0);
+                                }
+                            },
+                        }
+                        " %"
+                    }
+                }
+            }
         }
     }
 }

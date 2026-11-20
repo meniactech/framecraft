@@ -132,6 +132,8 @@ pub enum Kind {
     SvgToPolygon,
     /// Custom ruler positions in percent (0–100) of the scene.
     Rulers,
+    /// A radial / conic gradient's center (`{x, y}`, 0–1), FRAME's pad.
+    GradientCenter,
 }
 
 /// Where a property's value lives.
@@ -647,6 +649,16 @@ pub const PROPERTIES: &[Property] = &[
         "gradientAngle",
         "Angle",
         num(-360.0, 360.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Fill",
+        "gradientCenter",
+        "Center",
+        Kind::GradientCenter,
         Item,
         None,
         Layer
