@@ -138,7 +138,6 @@ pub fn Viewport(ui: Ui) -> Element {
                     }
                 }
                 button { onclick: move |_| { spawn(fit(ui)); }, "Fit" }
-                span { class: "dim", "{w}×{h}" }
                 div { class: "spacer" }
                 button {
                     class: if px_rulers { "active" } else { "" },
