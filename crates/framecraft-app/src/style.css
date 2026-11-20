@@ -61,7 +61,12 @@ button:disabled { opacity: .45; cursor: default; }
 
 .properties { background: var(--panel); border-left: 1px solid var(--line); display: flex; min-height: 0; overflow: hidden; }
 .prop-body { flex: 1; min-width: 0; padding: 12px; overflow: auto; }
-.properties h3 { margin: 4px 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--dim); }
+/* FRAME's sections: a divider line and room above each title (the first
+   one under the layer name has none). */
+.properties h3 { margin: 18px 0 10px; padding-top: 16px; border-top: 1px solid rgba(64, 64, 64, .8);
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .06em; color: var(--dim);
+  display: flex; align-items: center; gap: 6px; }
+.properties .layer-name + h3 { margin-top: 4px; padding-top: 0; border-top: 0; }
 .layer-name { margin: 0 0 12px; font-weight: 600; }
 .field { display: grid; grid-template-columns: 80px 1fr 16px; align-items: center; gap: 8px; margin-bottom: 6px; }
 .field input, .properties textarea {
