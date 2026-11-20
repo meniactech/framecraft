@@ -30,10 +30,16 @@ fn sha256(bytes: &[u8]) -> String {
 /// FrameCraft's deliberate changes to FRAME's runtime: `(ours, FRAME's)`.
 /// The runtime is compared with these undone, so the rest of it still has
 /// to match FRAME byte for byte.
-const RUNTIME_PATCHES: &[(&str, &str)] = &[(
-    "      // Only an animated width is written each frame: without keys the\r\n      // layer's own CSS has it, including a 4-sided border (FrameCraft).\r\n      if (Array.isArray(track.timeline.borderWidth) && track.timeline.borderWidth.length > 0) {\r\n        node.style.borderWidth = borderWidth + 'px';\r\n      }\r\n",
-    "      node.style.borderWidth = borderWidth + 'px';\r\n",
-)];
+const RUNTIME_PATCHES: &[(&str, &str)] = &[
+    (
+        "      // Only an animated width is written each frame: without keys the\r\n      // layer's own CSS has it, including a 4-sided border (FrameCraft).\r\n      if (Array.isArray(track.timeline.borderWidth) && track.timeline.borderWidth.length > 0) {\r\n        node.style.borderWidth = borderWidth + 'px';\r\n      }\r\n",
+        "      node.style.borderWidth = borderWidth + 'px';\r\n",
+    ),
+    (
+        "    const img = new Image();\r\n    // FrameCraft's preview: load sprites with CORS so the canvas stays\r\n    // readable (renders and snapshots); exports opened from disk keep FRAME's way.\r\n    if (location.protocol === 'framecraft:' || location.host === 'framecraft.preview') img.crossOrigin = 'anonymous';\r\n",
+        "    const img = new Image();\r\n",
+    ),
+];
 
 /// The runtime as FRAME ships it (FrameCraft's patches undone).
 fn unpatched(path: &str, bytes: &[u8]) -> Vec<u8> {

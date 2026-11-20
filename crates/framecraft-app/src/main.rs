@@ -92,6 +92,19 @@ fn main() {
 fn App() -> Element {
     let ui = Ui::new();
 
+    // Linux: wry registers the preview scheme as secure only; CORS too, so
+    // images loaded with crossOrigin (particle sprites) keep canvases
+    // readable for renders and snapshots.
+    #[cfg(target_os = "linux")]
+    use_hook(|| {
+        use dioxus::desktop::wry::WebViewExtUnix;
+        use webkit2gtk::{SecurityManagerExt, WebContextExt, WebViewExt};
+        let webview = dioxus::desktop::window().webview.webview();
+        if let Some(sm) = webview.context().and_then(|c| c.security_manager()) {
+            sm.register_uri_scheme_as_cors_enabled(SCHEME);
+        }
+    });
+
     // A newer FrameCraft on GitHub (at most one request a day).
     use_hook(move || {
         spawn_forever(updates::check(ui));
