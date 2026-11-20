@@ -50,6 +50,13 @@ impl Editor {
     }
 }
 
+/// What replaces the open project (asked about when it has unsaved changes).
+#[derive(Clone, Copy, PartialEq, Debug)]
+pub enum Switch {
+    New,
+    Open,
+}
+
 /// Shared UI state, handed to components as one copyable value.
 #[derive(Clone, Copy, PartialEq)]
 pub struct Ui {
@@ -102,6 +109,8 @@ pub struct Ui {
     pub user_components: Signal<framecraft_core::components::UserComponents>,
     /// Make Component waiting for its name.
     pub pending_component: Signal<Option<crate::components::PendingComponent>>,
+    /// New / Open waiting for an answer about unsaved changes.
+    pub switch_prompt: Signal<Option<Switch>>,
     /// Add → Insert Component… is open.
     pub component_library: Signal<bool>,
     /// The script editor is open.
@@ -168,6 +177,7 @@ impl Ui {
                     .unwrap_or_default()
             }),
             pending_component: use_signal(|| None),
+            switch_prompt: use_signal(|| None),
             dirty: use_signal(|| false),
             hint: use_signal(String::new),
             ramp_event: use_signal(|| None),
@@ -248,7 +258,35 @@ impl Ui {
     /// and saves it there, so autosave and recovery work from the start
     /// and imported media go straight into its `media/` folder. The
     /// project is named after the folder.
+    /// New, after asking about unsaved changes.
     pub fn new_project(self) {
+        self.guard(Switch::New);
+    }
+
+    /// Open…, after asking about unsaved changes.
+    pub fn open_dialog(self) {
+        self.guard(Switch::Open);
+    }
+
+    /// Replacing the open project with unsaved changes asks first.
+    fn guard(self, s: Switch) {
+        if *self.dirty.peek() && self.editor.peek().is_some() {
+            let mut prompt = self.switch_prompt;
+            prompt.set(Some(s));
+        } else {
+            self.continue_switch(s);
+        }
+    }
+
+    /// Goes on with New / Open (the answer was given, or nothing to lose).
+    pub fn continue_switch(self, s: Switch) {
+        match s {
+            Switch::New => self.new_project_now(),
+            Switch::Open => self.open_dialog_now(),
+        }
+    }
+
+    fn new_project_now(self) {
         let start = self
             .editor
             .peek()
@@ -541,7 +579,7 @@ impl Ui {
     }
 
     /// The open dialog: a FrameCraft project (its project.json) or a FRAME pack.
-    pub fn open_dialog(self) {
+    fn open_dialog_now(self) {
         spawn(async move {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("Open project")

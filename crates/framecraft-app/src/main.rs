@@ -188,6 +188,9 @@ fn App() -> Element {
             if close_prompt() {
                 ClosePrompt { ui, open: close_prompt }
             }
+            if let Some(next) = (ui.switch_prompt)() {
+                SwitchPrompt { ui, next }
+            }
             script_editor::ScriptEditor { ui }
         }
     }
@@ -282,6 +285,62 @@ fn ClosePrompt(ui: Ui, open: Signal<bool>) -> Element {
                             }
                         },
                         if has_folder { "Save and close" } else { "Save as…" }
+                    }
+                }
+            }
+        }
+    }
+}
+
+/// New / Open with unsaved changes: save first, go on without saving, or
+/// stay (the close prompt's choices).
+#[component]
+fn SwitchPrompt(ui: Ui, next: crate::state::Switch) -> Element {
+    let mut prompt = ui.switch_prompt;
+    let has_folder = ui
+        .editor
+        .read()
+        .as_ref()
+        .is_some_and(|e| e.project.folder.is_some());
+    let what = match next {
+        crate::state::Switch::New => "a new project",
+        crate::state::Switch::Open => "another project",
+    };
+    rsx! {
+        div { class: "modal-backdrop",
+            div { class: "modal motion-dialog small",
+                div { class: "modal-head",
+                    div {
+                        span { class: "panel-title", "Unsaved changes" }
+                        p { class: "dim", "This project has changes that are not saved. Save them before opening {what}?" }
+                    }
+                }
+                div { class: "motion-foot",
+                    span {}
+                    button { onclick: move |_| prompt.set(None), "Cancel" }
+                    button {
+                        title: "Go on and lose the unsaved changes (the autosave copy stays, and is offered when this project is opened again)",
+                        onclick: move |_| {
+                            prompt.set(None);
+                            ui.continue_switch(next);
+                        },
+                        "Don't save"
+                    }
+                    button {
+                        class: "active",
+                        onclick: move |_| {
+                            prompt.set(None);
+                            if has_folder {
+                                spawn(async move {
+                                    if ui.save_now().await {
+                                        ui.continue_switch(next);
+                                    }
+                                });
+                            } else {
+                                ui.save_as();
+                            }
+                        },
+                        if has_folder { "Save" } else { "Save as…" }
                     }
                 }
             }
