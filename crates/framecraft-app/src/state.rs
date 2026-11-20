@@ -7,6 +7,7 @@ use crate::interact::{Drag, Geom};
 use crate::preview::STORE;
 use crate::project::Project;
 use crate::timeline::TlView;
+use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
 use framecraft_core::commands::{AddItem, Change, Command, DeleteItems, DuplicateItems, History};
 use framecraft_core::keys::{CopiedKey, KeyRef};
@@ -298,7 +299,7 @@ impl Ui {
             .and_then(|f| f.parent().map(PathBuf::from))
             .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
             .unwrap_or_else(|| PathBuf::from("."));
-        spawn(async move {
+        spawn_forever(async move {
             let ui = self;
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("New FrameCraft project: choose a name and where to create it")
@@ -385,12 +386,12 @@ impl Ui {
         self.time.set(0.0);
         self.playing.set(false);
         self.rebuild();
-        spawn(async move {
+        spawn_forever(async move {
             tokio::time::sleep(Duration::from_millis(150)).await;
             crate::ui::fit(self).await;
         });
         if debug() {
-            spawn(async {
+            spawn_forever(async {
                 tokio::time::sleep(Duration::from_millis(3000)).await;
                 eprintln!("[bridge] {:?}", bridge::stats().await);
             });
@@ -407,7 +408,7 @@ impl Ui {
             .and_then(|e| e.project.folder.clone());
         match folder {
             Some(_) => {
-                spawn(async move {
+                spawn_forever(async move {
                     self.save_now().await;
                 });
             }
@@ -468,7 +469,7 @@ impl Ui {
         else {
             return;
         };
-        spawn(async move {
+        spawn_forever(async move {
             let file = format!(
                 "{}.framecraft",
                 framecraft_core::export::names::file_base_name(&name, "Project")
@@ -559,7 +560,7 @@ impl Ui {
                 return;
             }
         };
-        spawn(async move {
+        spawn_forever(async move {
             let file = format!(
                 "{}.frameproject.zip",
                 framecraft_core::export::names::file_base_name(&name, "project")
@@ -583,7 +584,7 @@ impl Ui {
 
     /// The open dialog: a FrameCraft project (its project.json) or a FRAME pack.
     fn open_dialog_now(self) {
-        spawn(async move {
+        spawn_forever(async move {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("Open project")
                 .add_filter("FrameCraft project or FRAME pack", &["json", "zip"])
@@ -677,7 +678,7 @@ impl Ui {
 
     /// FRAME's Import Pack: a graphic pack (`.framepack.zip`) into this project.
     pub fn import_graphic_pack(self) {
-        spawn(async move {
+        spawn_forever(async move {
             let picked = rfd::AsyncFileDialog::new()
                 .set_title("Import graphic pack")
                 .add_filter("FRAME graphic pack", &["zip"])
@@ -743,7 +744,7 @@ impl Ui {
                 return;
             }
         };
-        spawn(async move {
+        spawn_forever(async move {
             let file = format!(
                 "{}.framepack.zip",
                 framecraft_core::export::names::file_base_name(&name, "graphic")
@@ -1261,7 +1262,7 @@ impl Ui {
         self.playing.set(true);
         let now = *self.time.peek();
         let from = if now >= duration { 0.0 } else { now };
-        spawn(async move {
+        spawn_forever(async move {
             let stopped_at = bridge::play(from, duration).await;
             let (mut time, mut playing) = (self.time, self.playing);
             if let Some(t) = stopped_at {

@@ -27,6 +27,7 @@ mod state;
 mod timeline;
 mod ui;
 
+use dioxus::core::spawn_forever;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
 use dioxus::prelude::*;
 use outliner::Outliner;
@@ -275,7 +276,7 @@ fn ClosePrompt(ui: Ui, open: Signal<bool>) -> Element {
                         onclick: move |_| {
                             open.set(false);
                             if has_folder {
-                                spawn(async move {
+                                spawn_forever(async move {
                                     if ui.save_now().await {
                                         close_now();
                                     }
@@ -331,7 +332,7 @@ fn SwitchPrompt(ui: Ui, next: crate::state::Switch) -> Element {
                         onclick: move |_| {
                             prompt.set(None);
                             if has_folder {
-                                spawn(async move {
+                                spawn_forever(async move {
                                     if ui.save_now().await {
                                         ui.continue_switch(next);
                                     }

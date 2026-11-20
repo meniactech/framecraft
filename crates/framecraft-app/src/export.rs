@@ -5,6 +5,7 @@
 //! anything is written; files go where the save dialog says.
 
 use crate::state::Ui;
+use dioxus::core::spawn_forever;
 use dioxus::prelude::*;
 use framecraft_core::export::names::file_base_name;
 use std::path::PathBuf;
@@ -100,7 +101,7 @@ pub fn export_suite(ui: Ui, ograf: bool) {
     };
     let mut missing = pkg.missing.clone();
     missing.dedup();
-    spawn(async move {
+    spawn_forever(async move {
         save_as(ui, file, bytes, folder).await;
         if !missing.is_empty() {
             let mut status = ui.status;
@@ -167,7 +168,7 @@ pub fn ExportTab(ui: Ui) -> Element {
                 let file = format!("{}.png", file_base_name(&graphic, "frame"));
                 let folder = folder.clone();
                 busy.set(true);
-                spawn(async move {
+                spawn_forever(async move {
                     let shot = crate::bridge::snapshot(w, h).await;
                     busy.set(false);
                     let mut status = ui.status;
@@ -216,7 +217,7 @@ pub fn ExportTab(ui: Ui) -> Element {
                 missing,
             };
             if p.missing.is_empty() {
-                spawn(save_as(ui, p.file, p.bytes, folder.clone()));
+                spawn_forever(save_as(ui, p.file, p.bytes, folder.clone()));
             } else {
                 pending.set(Some(p));
             }
@@ -250,7 +251,7 @@ pub fn ExportTab(ui: Ui) -> Element {
                         class: "active",
                         onclick: move |_| {
                             if let Some(p) = pending.take() {
-                                spawn(save_as(ui, p.file, p.bytes, folder2.clone()));
+                                spawn_forever(save_as(ui, p.file, p.bytes, folder2.clone()));
                             }
                         },
                         "Export anyway"
