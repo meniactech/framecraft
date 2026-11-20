@@ -67,9 +67,27 @@ fn main() {
             STYLE.replace("framecraft://preview", ORIGIN)
         ))
         .with_custom_protocol(SCHEME, |_, request| {
-            let found = preview::is_preview_host(request.uri().host())
-                .then(|| STORE.with(|s| s.borrow().lookup(request.uri().path())))
-                .flatten();
+            // This runs inside WebKit: a panic here aborts the whole app, so
+            // nothing may panic. A busy store answers "not found"; any other
+            // panic is caught (its message still prints) and answered 500.
+            let caught = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                preview::is_preview_host(request.uri().host())
+                    .then(|| {
+                        STORE.with(|s| {
+                            s.try_borrow()
+                                .ok()
+                                .and_then(|store| store.lookup(request.uri().path()))
+                        })
+                    })
+                    .flatten()
+            }));
+            let Ok(found) = caught else {
+                eprintln!("[preview] request failed: {}", request.uri());
+                return Response::builder()
+                    .status(500)
+                    .body(Vec::new().into())
+                    .unwrap_or_default();
+            };
             if debug() {
                 let status = found.as_ref().map_or("404".to_string(), |(b, m)| {
                     format!("200 {m} {} bytes", b.len())
@@ -83,7 +101,7 @@ fn main() {
                     .body(bytes.into()),
                 None => Response::builder().status(404).body(Vec::new().into()),
             };
-            response.expect("valid response")
+            response.unwrap_or_default()
         });
     dioxus::LaunchBuilder::desktop()
         .with_cfg(config)
