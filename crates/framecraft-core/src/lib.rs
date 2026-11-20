@@ -31,6 +31,7 @@ pub mod preview;
 pub mod profile;
 pub mod project;
 pub mod ramp;
+pub mod resolutions;
 pub mod schema;
 pub mod script;
 pub mod selection;

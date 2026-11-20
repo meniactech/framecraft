@@ -306,6 +306,9 @@ pub fn Properties(ui: Ui) -> Element {
                         }
                     }
                 }
+                if tab == Tab::Scene && f.prop.path == "width" {
+                    ResolutionPreset { ui }
+                }
                 FieldRow { ui, field: f.clone(), item: id.clone() }
             }
             if tab == Tab::Scene && ui.editor.read().is_some() {
@@ -2349,6 +2352,56 @@ pub fn ColorButton(
                 },
                 on_palette: None,
             }
+        }
+    }
+}
+
+/// FRAME's resolution presets above Width / Height: picking one sets both
+/// (one undo step); "Custom" when the size matches none.
+#[component]
+fn ResolutionPreset(ui: Ui) -> Element {
+    use framecraft_core::commands::{Batch, Command, FieldTarget, SetField, Update};
+    use framecraft_core::resolutions::{GROUPS, PRESETS, find};
+    let Some((w, h)) = ui
+        .editor
+        .read()
+        .as_ref()
+        .map(|e| (e.doc().scene.width, e.doc().scene.height))
+    else {
+        return rsx! {};
+    };
+    let current = find(w, h).map_or("custom", |p| p.id);
+    rsx! {
+        label { class: "field",
+            span { class: "field-label", title: "The viewport and exports use these dimensions immediately.", "Preset" }
+            select {
+                onchange: move |evt| {
+                    let Some(p) = PRESETS.iter().find(|p| p.id == evt.value()) else {
+                        return;
+                    };
+                    let set = |path: &str, v: u32| -> Box<dyn Command> {
+                        Box::new(SetField {
+                            target: FieldTarget::Scene,
+                            path: path.into(),
+                            value: Value::from(v),
+                            update: Update::Rebuild,
+                        })
+                    };
+                    ui.execute(&Batch {
+                        label: format!("Resolution {}", p.label),
+                        commands: vec![set("width", p.width), set("height", p.height)],
+                    });
+                },
+                for (g , glabel) in GROUPS.iter().copied() {
+                    optgroup { label: "{glabel}",
+                        for p in PRESETS.iter().filter(|p| p.group == g) {
+                            option { value: "{p.id}", selected: p.id == current, "{p.label} ({p.width} × {p.height})" }
+                        }
+                    }
+                }
+                option { value: "custom", selected: current == "custom", "Custom" }
+            }
+            span {}
         }
     }
 }
