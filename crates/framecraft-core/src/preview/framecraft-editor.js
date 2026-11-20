@@ -273,6 +273,24 @@
         .catch(function (err) { restore(); reply({ error: String((err && err.message) || err) }); });
       return;
     }
+    if (m.action === 'script-cue') {
+      // A Script cue during editor playback: the graphic's function.
+      var text;
+      try {
+        var host = window.__ionframeScripts;
+        var fn = host && host[m.fn];
+        if (typeof fn === 'function') {
+          fn({ cueId: m.cueId, label: m.label });
+          text = 'Script cue called ' + m.fn + '()';
+        } else {
+          text = 'Script cue: no function ' + m.fn + ' in the graphic\'s script';
+        }
+      } catch (err) {
+        text = 'Script cue ' + m.fn + '() failed: ' + String((err && err.message) || err);
+      }
+      if (event.source) event.source.postMessage({ type: 'framecraft-editor', action: 'cue-log', text: text }, '*');
+      return;
+    }
     if (m.action === 'hit') {
       if (event.source) event.source.postMessage({ type: 'framecraft-editor', action: 'hits', ids: hits(m.x, m.y), seq: m.seq }, '*');
       return;

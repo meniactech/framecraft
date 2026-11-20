@@ -1301,8 +1301,39 @@ impl Ui {
                     .min_by(f64::total_cmp)
             })
             .unwrap_or(duration);
+        // API and Script cues up to the stop point, fired as the playhead
+        // passes them (their time plus delay, as pauses).
+        let cues = self
+            .editor
+            .peek()
+            .as_ref()
+            .map_or(serde_json::Value::Null, |e| {
+                use framecraft_core::model::CueKind;
+                serde_json::Value::Array(
+                    e.doc()
+                        .timeline
+                        .scene_cues
+                        .iter()
+                        .flatten()
+                        .filter(|c| matches!(c.kind, CueKind::ApiCall | CueKind::Script))
+                        .map(|c| {
+                            serde_json::json!({
+                                "id": c.id,
+                                "kind": if c.kind == CueKind::ApiCall { "api" } else { "script" },
+                                "at": c.time + c.delay_ms.unwrap_or(0.0).max(0.0),
+                                "label": c.label,
+                                "url": c.api_url,
+                                "method": c.api_method,
+                                "body": c.api_body,
+                                "fn": c.script_fn,
+                            })
+                        })
+                        .filter(|c| c["at"].as_f64().is_some_and(|t| t <= stop))
+                        .collect(),
+                )
+            });
         spawn_forever(async move {
-            let stopped_at = bridge::play(from, stop).await;
+            let stopped_at = bridge::play(from, stop, &cues).await;
             let (mut time, mut playing) = (self.time, self.playing);
             if let Some(t) = stopped_at {
                 time.set(t);

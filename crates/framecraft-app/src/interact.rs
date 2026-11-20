@@ -253,6 +253,11 @@ pub fn on_event(ui: Ui, ev: Value) {
                 eprintln!("{}", ev["text"].as_str().unwrap_or(""));
             }
         }
+        // API / Script cue results during playback.
+        Some("cue") => {
+            let mut status = ui.status;
+            status.set(ev["text"].as_str().unwrap_or("").to_string());
+        }
         Some("hint") => {
             let mut hint = ui.hint;
             let text = ev["text"].as_str().unwrap_or("").to_string();

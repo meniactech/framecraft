@@ -111,6 +111,8 @@ if (!window.__fc) {
       if (m.ok) fc.applied++; else fc.failed++;
     } else if (m.type === 'framecraft-editor' && m.action === 'geometry') {
       if (fc.active && e.source === fc.active.contentWindow) fc.emit({ type: 'geometry', items: m.items || [] });
+    } else if (m.type === 'framecraft-editor' && m.action === 'cue-log') {
+      fc.emit({ type: 'cue', text: String(m.text || '') });
     } else if (m.type === 'framecraft-editor' && m.action === 'hits') {
       if (fc.down && m.seq === fc.down.seq) fc.releaseDown(m.ids || []);
     }
@@ -820,14 +822,39 @@ if (!window.__fc) {
     // Not while the user is typing a time there.
     if (l && document.activeElement !== l) l.value = fc.fmtTime(t);
   };
-  fc.play = (from, duration, onStop) => {
+  // API and Script cues the playhead passes (FRAME's editor): an API cue
+  // sends its request from here, a Script cue calls the graphic's
+  // window.__ionframeScripts[name] in the preview. Each fires once a pass.
+  fc.fireCue = (c) => {
+    const name = c.label || c.id;
+    if (c.kind === 'api') {
+      if (!c.url) { fc.emit({ type: 'cue', text: 'API cue "' + name + '" skipped (no URL)' }); return; }
+      const method = c.method || 'POST';
+      const opts = { method };
+      if (method === 'POST') {
+        opts.headers = { 'Content-Type': 'application/json' };
+        opts.body = (c.body || '').trim() ? c.body : '{}';
+      }
+      fetch(c.url, opts)
+        .then((r) => fc.emit({ type: 'cue', text: 'API cue "' + name + '" → ' + r.status + (r.ok ? ' OK' : '') }))
+        .catch((e) => fc.emit({ type: 'cue', text: 'API cue "' + name + '" failed: ' + (e && e.message || e) }));
+    } else if (c.kind === 'script') {
+      if (!c.fn) { fc.emit({ type: 'cue', text: 'Script cue "' + name + '" skipped (no function name)' }); return; }
+      fc.post({ type: 'framecraft-editor', action: 'script-cue', fn: c.fn, cueId: c.id, label: c.label || '' });
+    }
+  };
+  fc.play = (from, duration, onStop, cues) => {
     fc.stop(false);
     const start = performance.now();
     fc.playing = true;
     fc.onStop = onStop;
+    const pending = (cues || []).filter((c) => c.at > from).sort((a, b) => a.at - b.at);
+    let prev = from;
     const tick = (now) => {
       if (!fc.playing) return;
       const t = Math.min(duration, from + (now - start));
+      while (pending.length && pending[0].at <= t && pending[0].at > prev) fc.fireCue(pending.shift());
+      prev = t;
       fc.seek(t);
       fc.drawPlayhead(t);
       if (t >= duration) { fc.stop(true); return; }
@@ -885,9 +912,9 @@ pub fn stop(report: bool) {
 
 /// Plays from `from_ms` and resolves with the time playback stopped at
 /// (`None` when a scrub stopped it).
-pub async fn play(from_ms: f64, duration_ms: f64) -> Option<f64> {
+pub async fn play(from_ms: f64, duration_ms: f64, cues: &Value) -> Option<f64> {
     let mut eval = document::eval(&format!(
-        "await new Promise((done) => window.__fc.play({from_ms}, {duration_ms}, (t) => {{ dioxus.send(t); done(); }}));"
+        "await new Promise((done) => window.__fc.play({from_ms}, {duration_ms}, (t) => {{ dioxus.send(t); done(); }}, {cues}));"
     ));
     eval.recv::<Option<f64>>().await.ok().flatten()
 }
