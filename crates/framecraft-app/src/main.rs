@@ -27,6 +27,7 @@ mod project;
 mod project_view;
 mod properties;
 mod recent;
+mod render;
 mod script_editor;
 mod state;
 mod timeline;

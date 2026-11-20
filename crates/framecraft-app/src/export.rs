@@ -293,6 +293,7 @@ pub fn ExportTab(ui: Ui) -> Element {
                 if busy() { "Rendering…" } else { "Export PNG…" }
             }
         }
+        crate::render::RenderSection { ui }
         h3 { "Whole project" }
         p { class: "dim", "All {count} graphic(s) of {project} in one package, sharing scripts, assets and fonts." }
         div { class: "export-row",

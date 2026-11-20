@@ -566,3 +566,5 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .keys-table kbd { font: inherit; font-size: 11px; padding: 1px 6px; border: 1px solid var(--line); border-radius: 4px; background: var(--bg); white-space: nowrap; }
 .header .unsaved { background: none; border-color: transparent; color: var(--key); font-size: 12px; }
 .header .unsaved:hover { border-color: var(--line); }
+.render-progress { display: flex; align-items: center; gap: 8px; }
+.render-progress progress { width: 120px; }

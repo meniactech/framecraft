@@ -121,6 +121,8 @@ pub struct Ui {
     pub switch_prompt: Signal<Option<Switch>>,
     /// A newer FrameCraft release (status bar notice).
     pub update: Signal<Option<crate::updates::Update>>,
+    /// A running video render (Properties → Export → Video).
+    pub render: Signal<Option<crate::render::Progress>>,
     /// Recent projects (File menu), newest first.
     pub recent: Signal<Vec<PathBuf>>,
     /// Help → "keys" (shortcuts) or "about".
@@ -197,6 +199,7 @@ impl Ui {
             update: use_signal(|| None),
             help_dialog: use_signal(|| None),
             recent: use_signal(crate::recent::load),
+            render: use_signal(|| None),
             dirty: use_signal(|| false),
             hint: use_signal(String::new),
             ramp_event: use_signal(|| None),
