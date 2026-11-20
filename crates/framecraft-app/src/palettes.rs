@@ -250,19 +250,24 @@ pub fn PalettesTab(ui: Ui) -> Element {
                                     for (ci , c) in p.colors.iter().cloned().enumerate() {
                                         {
                                             let (ia, ib) = (id.clone(), id.clone());
-                                            let hex = swatch_css(&c.hex, 100.0);
                                             let tip = c.label.clone().unwrap_or_else(|| c.hex.clone());
                                             rsx! {
                                                 span { class: "swatch-edit", title: "{tip}",
-                                                    input {
-                                                        r#type: "color",
-                                                        value: "{hex}",
-                                                        onchange: move |evt| {
-                                                            let (id, v) = (ia.clone(), evt.value().to_uppercase());
+                                                    crate::properties::ColorButton {
+                                                        ui,
+                                                        value: swatch_css(&c.hex, c.alpha),
+                                                        title: "{tip}",
+                                                        on_change: move |css: String| {
+                                                            // Palette colors keep hex and alpha (0–100) apart.
+                                                            let Some(rgba) = framecraft_core::color::parse(&css) else {
+                                                                return;
+                                                            };
+                                                            let id = ia.clone();
                                                             edit(
                                                                 Box::new(move |u| {
                                                                     if let Some(p) = u.palettes.iter_mut().find(|p| p.id == id) {
-                                                                        p.colors[ci].hex = v;
+                                                                        p.colors[ci].hex = rgba.hex().to_uppercase();
+                                                                        p.colors[ci].alpha = (rgba.a * 100.0).round().clamp(0.0, 100.0);
                                                                     }
                                                                 }),
                                                             )

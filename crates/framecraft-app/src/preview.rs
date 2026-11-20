@@ -111,9 +111,7 @@ impl PreviewFiles {
         } else {
             &self.builtin
         };
-        let bytes = dirs
-            .iter()
-            .find_map(|d| std::fs::read(d.join(&rel)).ok())?;
+        let bytes = dirs.iter().find_map(|d| std::fs::read(d.join(&rel)).ok())?;
         Some((bytes, mime_type(&rel)))
     }
 

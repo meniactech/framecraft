@@ -341,11 +341,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         .as_ref()
         .is_some_and(|e| e.doc().scene.ionboard_hook_enabled == Some(true));
     let help = schema::help(prop.path, board_hook).unwrap_or("");
-    let mut stock_open = use_signal(|| false);
-    let mut picker_open = use_signal(|| false);
-    // Where the color chip was clicked: the popover is placed there on the
-    // window, so the scrolling panel does not clip it.
-    let mut picker_at = use_signal(|| (0.0_f64, 0.0_f64));
     let default = if field.modifier.is_some() {
         modifiers::field_default(prop.group, prop.path)
     } else {
@@ -367,94 +362,16 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 }
             }
         }
-        Kind::Color => {
-            // The active palette's colors, as FRAME's color picker shows them.
-            let swatches: Vec<(String, String)> = ui
-                .palettes
-                .read()
-                .active()
-                .map(|p| {
-                    p.colors
-                        .iter()
-                        .map(|c| {
-                            let tip = [
-                                c.label.clone().unwrap_or_default(),
-                                p.name.clone(),
-                                c.hex.clone(),
-                            ]
-                            .into_iter()
-                            .filter(|s| !s.is_empty())
-                            .collect::<Vec<_>>()
-                            .join(" · ");
-                            (framecraft_core::palettes::swatch_css(&c.hex, c.alpha), tip)
-                        })
-                        .collect()
-                })
-                .unwrap_or_default();
-            let palette_name = ui
-                .palettes
-                .read()
-                .active()
-                .map(|p| p.name.clone())
-                .unwrap_or_default();
-            rsx! {
-                div { class: "color-field",
-                    button {
-                        class: "color-chip",
-                        title: "Pick a color",
-                        style: "--sw: {text};",
-                        onclick: move |evt| {
-                            let p = evt.client_coordinates();
-                            picker_at.set((p.x, p.y));
-                            picker_open.toggle();
-                        },
-                    }
-                    input {
-                        r#type: "text",
-                        value: "{text}",
-                        onchange: move |evt| set(Value::from(evt.value().trim())),
-                    }
-                    if picker_open() {
-                        // A click outside closes it (FRAME); a drag that
-                        // leaves the popover keeps going.
-                        div {
-                            class: "popover-catcher",
-                            onclick: move |_| picker_open.set(false),
-                        }
-                        div {
-                            class: "color-popover",
-                            style: "left:min(calc(100vw - 276px), max(8px, {picker_at().0 - 20.0}px));top:min(calc(100vh - 350px), {picker_at().1 + 16.0}px);",
-                            // FRAME: the active palette first, then stock.
-                            if !swatches.is_empty() {
-                                div { class: "palette-label", "{palette_name}" }
-                                div { class: "swatches",
-                                    for (css , tip) in swatches {
-                                        button {
-                                            class: "swatch-btn",
-                                            title: "{tip}",
-                                            style: "--sw: {css};",
-                                            onclick: move |_| {
-                                                picker_open.set(false);
-                                                set(Value::from(css.clone()));
-                                            },
-                                        }
-                                    }
-                                }
-                            }
-                            button {
-                                class: "stock-btn",
-                                onclick: move |_| {
-                                    picker_open.set(false);
-                                    stock_open.set(true);
-                                },
-                                "Select from stock palette…"
-                            }
-                            RgbaSliders { value: text.clone(), set }
-                        }
-                    }
+        Kind::Color => rsx! {
+            div { class: "color-field",
+                ColorButton { ui, value: text.clone(), on_change: move |c: String| set(Value::from(c)) }
+                input {
+                    r#type: "text",
+                    value: "{text}",
+                    onchange: move |evt| set(Value::from(evt.value().trim())),
                 }
             }
-        }
+        },
         Kind::Choice(options) => {
             let mut options: Vec<(String, String)> = options
                 .iter()
@@ -518,7 +435,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
             ValueRamp { ui, path: prop.path, value: field.value.clone(), set }
         },
         Kind::ColorList => rsx! {
-            ColorList { value: field.value.clone(), set }
+            ColorList { ui, value: field.value.clone(), set }
         },
         Kind::ClipStart => rsx! {
             input {
@@ -652,23 +569,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         },
     };
 
-    // Outside the row's <label>: clicks in a dialog must not reach the
-    // label's color input.
-    let dialog = if stock_open() {
-        rsx! {
-            crate::palettes::StockPaletteDialog {
-                on_close: move |_| stock_open.set(false),
-                on_color: move |c: framecraft_core::palettes::PaletteColor| {
-                    stock_open.set(false);
-                    set(Value::from(framecraft_core::palettes::swatch_css(&c.hex, c.alpha)));
-                },
-                on_palette: None,
-            }
-        }
-    } else {
-        rsx! {}
-    };
-
     let wide = matches!(
         prop.kind,
         Kind::Ramp
@@ -683,7 +583,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
     if wide {
         // A div, not a label: these hold several inputs and buttons.
         return rsx! {
-            {dialog}
             div { class: "field wide",
                 span { class: "field-label", title: "{help}", "{prop.label}" }
                 {input}
@@ -696,7 +595,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         // the bridge sends `change` events on the input meanwhile.
         let label = prop.label;
         return rsx! {
-            {dialog}
             label { class: "field num",
                 div { class: "pill",
                     span {
@@ -720,7 +618,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         // A div, not a label: clicks in the color popover must not be
         // forwarded to the color chip.
         return rsx! {
-            {dialog}
             div { class: "field",
                 span { class: "field-label", title: "{help}", "{prop.label}" }
                 {input}
@@ -729,7 +626,6 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         };
     }
     rsx! {
-        {dialog}
         label { class: "field",
             span { class: "field-label", title: "{help}", "{prop.label}" }
             {input}
@@ -860,7 +756,6 @@ fn Ramp(ui: Ui, path: &'static str, value: Value, set: Callback<Value>) -> Eleme
         .join(", ");
     let fill = format!("background: linear-gradient(90deg, {gradient});");
     let current = stops.get(sel).cloned().unwrap_or((0.0, "#ffffff".into()));
-    let hex = color::parse(&current.1).map_or("#ffffff".to_string(), |c| c.hex());
     let alpha = color::parse(&current.1).map_or(100.0, |c| (c.a * 100.0).round());
     let pct = number_to_string(round3(current.0 * 100.0));
     let (s_color, s_alpha, s_pos, s_text, s_remove) = (
@@ -928,15 +823,13 @@ fn Ramp(ui: Ui, path: &'static str, value: Value, set: Callback<Value>) -> Eleme
             }
             div { class: "ramp-stop",
                 span { class: "dim", "Stop" }
-                input {
-                    r#type: "color",
-                    value: "{hex}",
+                ColorButton {
+                    ui,
+                    value: stops.get(sel).map(|s| s.1.clone()).unwrap_or_default(),
                     title: "Stop color",
-                    onchange: move |evt| {
+                    on_change: move |c: String| {
                         let mut list = s_color.clone();
-                        if let Some(s) = list.get_mut(sel)
-                            && let Some(c) = color::with_rgb(&s.1, &evt.value())
-                        {
+                        if let Some(s) = list.get_mut(sel) {
                             s.1 = c;
                             write(list);
                         }
@@ -1010,7 +903,6 @@ fn ChartPoints(ui: Ui, value: Value, set: Callback<Value>) -> Element {
                     let (a, b, c, d, e) = (points.clone(), points.clone(), points.clone(), points.clone(), points.clone());
                     let fallback = DEFAULT_CHART_COLORS[i % DEFAULT_CHART_COLORS.len()];
                     let color = p["color"].as_str().unwrap_or(fallback).to_string();
-                    let hex = color::parse(&color).map_or("#000000".to_string(), |c| c.hex());
                     let label = p["label"].as_str().unwrap_or("").to_string();
                     let val = as_text(&p["value"]);
                     let live = p["liveVariableId"].as_str().unwrap_or("").to_string();
@@ -1043,16 +935,11 @@ fn ChartPoints(ui: Ui, value: Value, set: Callback<Value>) -> Element {
                                     }
                                 },
                             }
-                            input {
-                                r#type: "color",
-                                value: "{hex}",
+                            ColorButton {
+                                ui,
+                                value: color.clone(),
                                 title: "Color",
-                                onchange: move |evt| {
-                                    let current = c[i]["color"].as_str().unwrap_or(fallback).to_string();
-                                    if let Some(v) = color::with_rgb(&current, &evt.value()) {
-                                        edit(c.clone(), "color", Value::from(v));
-                                    }
-                                },
+                                on_change: move |v: String| edit(c.clone(), "color", Value::from(v)),
                             }
                             if board {
                                 input {
@@ -1279,7 +1166,7 @@ fn ValueRamp(ui: Ui, path: &'static str, value: Value, set: Callback<Value>) -> 
 
 /// A list of colors (particle palette).
 #[component]
-fn ColorList(value: Value, set: Callback<Value>) -> Element {
+fn ColorList(ui: Ui, value: Value, set: Callback<Value>) -> Element {
     let colors: Vec<String> = value
         .as_array()
         .map(|a| {
@@ -1293,18 +1180,15 @@ fn ColorList(value: Value, set: Callback<Value>) -> Element {
             for (i , c) in colors.iter().cloned().enumerate() {
                 {
                     let (l1, l2) = (colors.clone(), colors.clone());
-                    let hex = color::parse(&c).map_or("#000000".to_string(), |x| x.hex());
                     rsx! {
                         div { class: "swatch",
-                            input {
-                                r#type: "color",
-                                value: "{hex}",
-                                onchange: move |evt| {
+                            ColorButton {
+                                ui,
+                                value: c.clone(),
+                                on_change: move |v: String| {
                                     let mut l = l1.clone();
-                                    if let Some(v) = color::with_rgb(&l[i], &evt.value()) {
-                                        l[i] = v;
-                                        set(json!(l));
-                                    }
+                                    l[i] = v;
+                                    set(json!(l));
                                 },
                             }
                             button {
@@ -2302,6 +2186,112 @@ fn Rulers(value: Value, set: Callback<Value>) -> Element {
                     },
                     "Sort"
                 }
+            }
+        }
+    }
+}
+
+/// FRAME's color picker on a chip: the active palette, stock palettes and
+/// the RGBA sliders in a popover placed where the chip was clicked (on the
+/// window, so scrolling panels do not clip it). `on_change` gets a CSS
+/// color (`#rrggbb`, or `rgba(…)` with alpha).
+#[component]
+pub fn ColorButton(
+    ui: Ui,
+    value: String,
+    on_change: Callback<String>,
+    #[props(default = "Pick a color".to_string(), into)] title: String,
+) -> Element {
+    let mut open = use_signal(|| false);
+    let mut stock = use_signal(|| false);
+    let mut at = use_signal(|| (0.0_f64, 0.0_f64));
+    let (palette_name, swatches): (String, Vec<(String, String)>) = ui
+        .palettes
+        .read()
+        .active()
+        .map(|p| {
+            let list = p
+                .colors
+                .iter()
+                .map(|c| {
+                    let tip = [
+                        c.label.clone().unwrap_or_default(),
+                        p.name.clone(),
+                        c.hex.clone(),
+                    ]
+                    .into_iter()
+                    .filter(|s| !s.is_empty())
+                    .collect::<Vec<_>>()
+                    .join(" · ");
+                    (framecraft_core::palettes::swatch_css(&c.hex, c.alpha), tip)
+                })
+                .collect();
+            (p.name.clone(), list)
+        })
+        .unwrap_or_default();
+    let set = use_callback(move |v: Value| {
+        if let Some(c) = v.as_str() {
+            on_change(c.to_string());
+        }
+    });
+    rsx! {
+        button {
+            class: "color-chip",
+            r#type: "button",
+            title: "{title}",
+            style: "--sw: {value};",
+            onclick: move |evt| {
+                evt.prevent_default();
+                let p = evt.client_coordinates();
+                at.set((p.x, p.y));
+                open.toggle();
+            },
+        }
+        if open() {
+            // A click outside closes it (FRAME); a drag that leaves the
+            // popover keeps going.
+            div { class: "popover-catcher", onclick: move |_| open.set(false) }
+            div {
+                class: "color-popover",
+                style: "left:min(calc(100vw - 276px), max(8px, {at().0 - 20.0}px));top:min(calc(100vh - 350px), {at().1 + 16.0}px);",
+                // FRAME: the active palette first, then stock.
+                if !swatches.is_empty() {
+                    div { class: "palette-label", "{palette_name}" }
+                    div { class: "swatches",
+                        for (css , tip) in swatches {
+                            button {
+                                class: "swatch-btn",
+                                r#type: "button",
+                                title: "{tip}",
+                                style: "--sw: {css};",
+                                onclick: move |_| {
+                                    open.set(false);
+                                    on_change(css.clone());
+                                },
+                            }
+                        }
+                    }
+                }
+                button {
+                    class: "stock-btn",
+                    r#type: "button",
+                    onclick: move |_| {
+                        open.set(false);
+                        stock.set(true);
+                    },
+                    "Select from stock palette…"
+                }
+                RgbaSliders { value: value.clone(), set }
+            }
+        }
+        if stock() {
+            crate::palettes::StockPaletteDialog {
+                on_close: move |_| stock.set(false),
+                on_color: move |c: framecraft_core::palettes::PaletteColor| {
+                    stock.set(false);
+                    on_change(framecraft_core::palettes::swatch_css(&c.hex, c.alpha));
+                },
+                on_palette: None,
             }
         }
     }
