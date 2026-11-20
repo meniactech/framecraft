@@ -1,0 +1,2 @@
+// The Windows .exe icon (packaging/icons/render.py makes the .ico).
+1 ICON "../../packaging/icons/framecraft.ico"

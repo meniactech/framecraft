@@ -53,10 +53,27 @@ use ui::{Header, Viewport};
 
 const STYLE: &str = include_str!("style.css");
 
+/// The app icon for the window and taskbar (packaging/icons, rendered from
+/// the master SVG by render.py). macOS takes the .app bundle's icon instead.
+fn window_icon() -> Option<dioxus::desktop::tao::window::Icon> {
+    let bytes: &[u8] = include_bytes!("../../../packaging/icons/framecraft-256.png");
+    let mut decoder = png::Decoder::new(std::io::Cursor::new(bytes));
+    decoder.set_transformations(png::Transformations::EXPAND | png::Transformations::ALPHA);
+    let mut reader = decoder.read_info().ok()?;
+    let mut buf = vec![0; reader.output_buffer_size()?];
+    let info = reader.next_frame(&mut buf).ok()?;
+    if info.color_type != png::ColorType::Rgba || info.bit_depth != png::BitDepth::Eight {
+        return None;
+    }
+    buf.truncate(info.buffer_size());
+    dioxus::desktop::tao::window::Icon::from_rgba(buf, info.width, info.height).ok()
+}
+
 fn main() {
     let window = WindowBuilder::new()
         .with_title("FrameCraft")
-        .with_inner_size(LogicalSize::new(1440.0, 900.0));
+        .with_inner_size(LogicalSize::new(1440.0, 900.0))
+        .with_window_icon(window_icon());
     let config = Config::new().with_window(window);
     // No menu bar for now, except on macOS: there copy, paste and Quit in
     // text fields come from the app's Edit menu (Dioxus's default one).

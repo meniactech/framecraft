@@ -26,6 +26,17 @@ lipo -create -output "$app/Contents/MacOS/framecraft" \
 cp -R assets "$app/Contents/Resources/assets"
 cp LICENSE THIRD_PARTY.md "$app/Contents/Resources/"
 
+# App icon: an .icns from the rendered PNGs (packaging/icons/render.py).
+iconset="target/dist/FrameCraft.iconset"
+rm -rf "$iconset"
+mkdir -p "$iconset"
+for s in 16 32 128 256 512; do
+  cp "packaging/icons/framecraft-$s.png" "$iconset/icon_${s}x${s}.png"
+  cp "packaging/icons/framecraft-$((s * 2)).png" "$iconset/icon_${s}x${s}@2x.png"
+done
+iconutil -c icns "$iconset" -o "$app/Contents/Resources/FrameCraft.icns"
+rm -rf "$iconset"
+
 cat > "$app/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -35,6 +46,7 @@ cat > "$app/Contents/Info.plist" <<PLIST
   <key>CFBundleDisplayName</key><string>FrameCraft</string>
   <key>CFBundleIdentifier</key><string>tech.meniac.framecraft</string>
   <key>CFBundleExecutable</key><string>framecraft</string>
+  <key>CFBundleIconFile</key><string>FrameCraft</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>$version</string>
   <key>CFBundleVersion</key><string>$version</string>
