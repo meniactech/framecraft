@@ -54,7 +54,7 @@ pub fn Header(ui: Ui) -> Element {
     rsx! {
         div { class: "header",
             span { class: "brand", "FrameCraft" }
-            button { title: "A new project with one empty graphic", onclick: move |_| ui.new_project(), "New" }
+            button { title: "A new project with one empty graphic: asks where to create its folder", onclick: move |_| ui.new_project(), "New…" }
             button {
                 title: "Open a FrameCraft project (its project.json) or a FRAME pack (.frameproject.zip / .framepack.zip)",
                 onclick: move |_| ui.open_dialog(),

@@ -146,7 +146,7 @@ impl Ui {
             geometry: use_signal(Vec::new),
             drag: use_signal(|| None),
             status: use_signal(|| {
-                "Open a project or a FRAME pack (Open…), or start one (New)".to_string()
+                "Open a project or a FRAME pack (Open…), or start one (New…)".to_string()
             }),
             tab: use_signal(|| Tab::Transform),
             keys: use_signal(Vec::new),
@@ -244,10 +244,53 @@ impl Ui {
     }
 
     /// A new, unsaved project with one empty graphic.
+    /// New: asks where to create the project folder first, then creates
+    /// and saves it there, so autosave and recovery work from the start
+    /// and imported media go straight into its `media/` folder. The
+    /// project is named after the folder.
     pub fn new_project(self) {
-        self.install(Project::new_empty("Untitled"), "New project");
-        let mut dirty = self.dirty;
-        dirty.set(true);
+        let start = self
+            .editor
+            .peek()
+            .as_ref()
+            .and_then(|e| e.project.folder.clone())
+            .and_then(|f| f.parent().map(PathBuf::from))
+            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .unwrap_or_else(|| PathBuf::from("."));
+        spawn(async move {
+            let ui = self;
+            let picked = rfd::AsyncFileDialog::new()
+                .set_title("New FrameCraft project: choose a name and where to create it")
+                .set_directory(&start)
+                .set_file_name("Untitled.framecraft")
+                .save_file()
+                .await;
+            let Some(h) = picked else {
+                ui.set_status("New project cancelled".to_string());
+                return;
+            };
+            let mut dir = h.path().to_path_buf();
+            if dir.extension().is_none() {
+                dir.set_extension("framecraft");
+            }
+            let has_files =
+                dir.is_dir() && std::fs::read_dir(&dir).is_ok_and(|mut d| d.next().is_some());
+            if has_files {
+                ui.set_status(format!(
+                    "{} already exists and has files in it; choose another name",
+                    dir.display()
+                ));
+                return;
+            }
+            let name = dir
+                .file_stem()
+                .and_then(|s| s.to_str())
+                .filter(|s| !s.trim().is_empty())
+                .unwrap_or("Untitled")
+                .to_string();
+            ui.install(Project::new_empty(&name), "New project");
+            ui.save_into(dir);
+        });
     }
 
     /// Restores (`true`) or discards the autosave copy found when opening.
