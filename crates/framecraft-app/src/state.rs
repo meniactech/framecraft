@@ -117,6 +117,8 @@ pub struct Ui {
     pub time_format: Signal<framecraft_core::timecode::Format>,
     /// New / Open waiting for an answer about unsaved changes.
     pub switch_prompt: Signal<Option<Switch>>,
+    /// A newer FrameCraft release (status bar notice).
+    pub update: Signal<Option<crate::updates::Update>>,
     /// Add → Insert Component… is open.
     pub component_library: Signal<bool>,
     /// The script editor is open.
@@ -186,6 +188,7 @@ impl Ui {
             }),
             pending_component: use_signal(|| None),
             switch_prompt: use_signal(|| None),
+            update: use_signal(|| None),
             dirty: use_signal(|| false),
             hint: use_signal(String::new),
             ramp_event: use_signal(|| None),

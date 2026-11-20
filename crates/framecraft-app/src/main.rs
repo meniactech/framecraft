@@ -29,6 +29,7 @@ mod script_editor;
 mod state;
 mod timeline;
 mod ui;
+mod updates;
 
 use dioxus::core::spawn_forever;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
@@ -87,6 +88,11 @@ fn main() {
 #[component]
 fn App() -> Element {
     let ui = Ui::new();
+
+    // A newer FrameCraft on GitHub (at most one request a day).
+    use_hook(move || {
+        spawn_forever(updates::check(ui));
+    });
 
     // A pack given on the command line opens at start.
     use_hook(move || {

@@ -393,6 +393,14 @@ pub fn StatusBar(ui: Ui) -> Element {
     rsx! {
         footer { class: "status-bar",
             span { class: "{class}", "{text}" }
+            if let Some(u) = (ui.update)() {
+                button {
+                    class: "update-note",
+                    title: "Open the FrameCraft {u.version} release page in your browser",
+                    onclick: move |_| crate::updates::open(&u.url),
+                    "Update {u.version} available"
+                }
+            }
             span { class: "status-info",
                 if let Some((selected, count, res, fps)) = info {
                     span { class: "status-sel", title: "Selected layer", "{selected}" }

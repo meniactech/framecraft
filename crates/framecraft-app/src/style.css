@@ -538,3 +538,7 @@ input, textarea { -webkit-user-select: text; user-select: text; }
 .tl-zoom { display: inline-flex; align-items: center; gap: 4px; }
 .tl-zoom input[type=range] { width: 90px; }
 .tl-zoom .zoom-label { width: 40px; font-variant-numeric: tabular-nums; }
+/* Update notice (status bar) and its setting (Project view) */
+.update-note { padding: 0 8px; height: 18px; font-size: 11px; line-height: 1; border-radius: 9999px;
+  background: rgba(139, 92, 246, .8); border-color: #ddd6fe; color: #fff; }
+.update-toggle { display: inline-flex; align-items: center; gap: 6px; margin-left: auto; margin-right: 12px; font-size: 12px; }

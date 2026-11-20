@@ -65,6 +65,7 @@ pub fn ProjectView(ui: Ui) -> Element {
                         "{name}"
                     }
                 }
+                UpdateToggle {}
                 button { class: "active", title: "Back to the editor (Tab)", onclick: move |_| open.set(false), "Back to editor" }
             }
             div { class: "project-body",
@@ -346,6 +347,29 @@ fn GraphicCard(
                     }
                 }
             }
+        }
+    }
+}
+
+/// "Check for updates": FrameCraft asks GitHub for a newer release at
+/// start (at most once a day).
+#[component]
+fn UpdateToggle() -> Element {
+    let mut on = use_signal(crate::updates::enabled);
+    rsx! {
+        label {
+            class: "update-toggle dim",
+            title: "At start (at most once a day) FrameCraft asks GitHub whether a newer release exists, and says so in the status bar. Nothing about you or your projects is sent.",
+            input {
+                r#type: "checkbox",
+                checked: on(),
+                onchange: move |_| {
+                    let next = !on();
+                    on.set(next);
+                    crate::updates::set_enabled(next);
+                },
+            }
+            "Check for updates"
         }
     }
 }

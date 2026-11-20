@@ -130,3 +130,23 @@ pub fn save_time_format(f: framecraft_core::timecode::Format) {
         );
     }
 }
+
+/// One saved setting (data folder's layout.json).
+pub fn setting(key: &str) -> Option<Value> {
+    load().and_then(|l| l.get(key).cloned())
+}
+
+/// Saves one setting with the others.
+pub fn set_setting(key: &str, value: Value) {
+    let mut layout = load().unwrap_or_default();
+    layout.insert(key.into(), value);
+    if let Some(p) = path() {
+        if let Some(dir) = p.parent() {
+            let _ = std::fs::create_dir_all(dir);
+        }
+        let _ = std::fs::write(
+            p,
+            serde_json::to_vec_pretty(&Value::Object(layout)).unwrap_or_default(),
+        );
+    }
+}
