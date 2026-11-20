@@ -1283,8 +1283,26 @@ impl Ui {
         self.playing.set(true);
         let now = *self.time.peek();
         let from = if now >= duration { 0.0 } else { now };
+        // FRAME: playback stops at the next pause cue (its time plus delay);
+        // Play again carries on from there.
+        let stop = self
+            .editor
+            .peek()
+            .as_ref()
+            .and_then(|e| {
+                e.doc()
+                    .timeline
+                    .scene_cues
+                    .iter()
+                    .flatten()
+                    .filter(|c| c.kind == framecraft_core::model::CueKind::Pause)
+                    .map(|c| c.time + c.delay_ms.unwrap_or(0.0).max(0.0))
+                    .filter(|t| *t > from + 0.5 && *t < duration)
+                    .min_by(f64::total_cmp)
+            })
+            .unwrap_or(duration);
         spawn_forever(async move {
-            let stopped_at = bridge::play(from, duration).await;
+            let stopped_at = bridge::play(from, stop).await;
             let (mut time, mut playing) = (self.time, self.playing);
             if let Some(t) = stopped_at {
                 time.set(t);
