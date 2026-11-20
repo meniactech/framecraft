@@ -102,8 +102,16 @@ impl PreviewFiles {
         if rel.split('/').any(|p| p == ".." || p.is_empty()) {
             return None;
         }
-        let bytes = self
-            .builtin
+        // Before any project is open, the app's own icons still come from
+        // the built-in folders.
+        let fallback;
+        let dirs = if self.builtin.is_empty() {
+            fallback = crate::project::builtin_dirs();
+            &fallback
+        } else {
+            &self.builtin
+        };
+        let bytes = dirs
             .iter()
             .find_map(|d| std::fs::read(d.join(&rel)).ok())?;
         Some((bytes, mime_type(&rel)))
