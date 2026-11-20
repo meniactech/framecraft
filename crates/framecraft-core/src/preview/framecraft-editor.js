@@ -203,8 +203,44 @@
         return;
       }
       var root = document.getElementById('gfx') || document.body;
-      // A thumbnail (`thumb: [w, h]`) is a small JPEG on black; else a full PNG.
-      var shot = m.thumb
+      // WebKit paints images that html-to-image makes from canvases
+      // (particles, charts, lightning, patterns) before they are decoded,
+      // so they came out empty. Stand an already decoded <img> of each
+      // canvas in its place for the capture, then put the canvases back.
+      var swaps = [];
+      var canvases = root.querySelectorAll('canvas');
+      var decoding = [];
+      for (var ci = 0; ci < canvases.length; ci++) {
+        var cv = canvases[ci];
+        var url;
+        try { url = cv.toDataURL('image/png'); } catch (err) { continue; }
+        if (!url || url === 'data:,') continue;
+        var img = document.createElement('img');
+        img.src = url;
+        img.className = cv.className;
+        img.style.cssText = cv.style.cssText;
+        var cs = window.getComputedStyle(cv);
+        img.style.width = cs.width;
+        img.style.height = cs.height;
+        img.style.display = cs.display === 'none' ? 'none' : (cs.display === 'inline' ? 'inline-block' : cs.display);
+        decoding.push(img.decode ? img.decode().catch(function () {}) : Promise.resolve());
+        swaps.push([cv, img, cv.style.display]);
+      }
+      var restore = function () {
+        for (var si = 0; si < swaps.length; si++) {
+          var sw = swaps[si];
+          if (sw[1].parentNode) sw[1].parentNode.removeChild(sw[1]);
+          sw[0].style.display = sw[2];
+        }
+      };
+      var capture = function () {
+        for (var si = 0; si < swaps.length; si++) {
+          var sw = swaps[si];
+          sw[0].parentNode.insertBefore(sw[1], sw[0]);
+          sw[0].style.display = 'none';
+        }
+        // A thumbnail (`thumb: [w, h]`) is a small JPEG on black; else a full PNG.
+        return m.thumb
         ? window.htmlToImage.toJpeg(root, {
             width: m.width,
             height: m.height,
@@ -216,9 +252,11 @@
             cacheBust: false
           })
         : window.htmlToImage.toPng(root, { width: m.width, height: m.height, pixelRatio: 1, cacheBust: false });
-      shot
-        .then(function (url) { reply({ dataUrl: url }); })
-        .catch(function (err) { reply({ error: String((err && err.message) || err) }); });
+      };
+      Promise.all(decoding)
+        .then(capture)
+        .then(function (url) { restore(); reply({ dataUrl: url }); })
+        .catch(function (err) { restore(); reply({ error: String((err && err.message) || err) }); });
       return;
     }
     if (m.action === 'hit') {
