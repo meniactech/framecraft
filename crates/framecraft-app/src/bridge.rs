@@ -252,8 +252,9 @@ if (!window.__fc) {
     const key = t.closest('.tl-key');
     const cue = t.closest('.tl-cue');
     const span = t.closest('.tl-span');
+    const tween = key ? null : t.closest('.tl-move');
     const surface = t.closest('.tl-lanes .track');
-    if (!key && !cue && !span && !surface) return;
+    if (!key && !cue && !span && !tween && !surface) return;
     e.preventDefault();
     const d = { x: e.clientX, y: e.clientY, pointer: e.pointerId, moved: false, delta: 0, els: [] };
     if (key) {
@@ -264,6 +265,16 @@ if (!window.__fc) {
     } else if (cue) {
       tlEmit({ action: 'cue-down', id: cue.dataset.cue });
       Object.assign(d, { kind: 'cue', id: cue.dataset.cue, primary: parseFloat(cue.dataset.time), els: [cue] });
+    } else if (tween) {
+      // FRAME: the tween's keys get selected and slide together.
+      const times = (tween.dataset.keys || '').split(' ').map(parseFloat).filter((n) => !isNaN(n));
+      const row = tween.closest('.tl-row');
+      const same = (a, b) => Math.abs(a - b) < 1e-6;
+      const els = row ? [...row.querySelectorAll('.tl-key')].filter((el) => times.some((t) => same(t, parseFloat(el.dataset.time)))) : [];
+      if (row) for (const m of row.querySelectorAll('.tl-move')) if (m.dataset.keys === tween.dataset.keys) els.push(m);
+      const info = { item: tween.dataset.item, lane: tween.dataset.lane, times, primary: parseFloat(tween.dataset.start) };
+      tlEmit(Object.assign({ action: 'tween-down' }, info));
+      Object.assign(d, { kind: 'tween', primary: info.primary, info, els });
     } else if (span) {
       const row = span.closest('.tl-row');
       Object.assign(d, { kind: 'span', item: span.dataset.item, primary: parseFloat(span.dataset.start),
@@ -311,6 +322,8 @@ if (!window.__fc) {
       else if (!d.extra) tlEmit(Object.assign({ action: 'key-click' }, d.k));
     } else if (d.kind === 'cue') {
       if (d.moved) tlEmit({ action: 'cue-drag', id: d.id, delta: d.delta, primary: d.primary });
+    } else if (d.kind === 'tween') {
+      if (d.moved) tlEmit(Object.assign({ action: 'tween-drag', delta: d.delta }, d.info));
     } else if (d.kind === 'span') {
       if (d.moved) tlEmit({ action: 'span-drag', item: d.item, delta: d.delta, primary: d.primary });
     } else if (d.kind === 'box') {

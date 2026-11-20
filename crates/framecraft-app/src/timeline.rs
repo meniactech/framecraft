@@ -94,8 +94,10 @@ enum Row {
         lane: &'static str,
         value: Option<f64>,
         keys: Vec<LaneKey>,
-        /// Spans where the value changes (between keys of different value).
-        moves: Vec<(f64, f64)>,
+        /// Spans where the value changes (between keys of different value),
+        /// each with the times of its whole tween (FRAME: dragging a span
+        /// slides every key linked by value changes).
+        moves: Vec<(f64, f64, String)>,
         key_here: bool,
     },
     Cues {
@@ -171,10 +173,24 @@ fn lane_rows(doc: &Document, item: &Item, time: f64, sel: &[KeyRef]) -> Vec<Row>
                 .and_then(|t| t.properties.get(lane))
                 .cloned()
                 .unwrap_or_default();
-            let moves = keys
-                .windows(2)
-                .filter(|w| (w[0].value - w[1].value).abs() > 1e-9)
-                .map(|w| (w[0].time, w[1].time))
+            let differ = |i: usize| (keys[i].value - keys[i + 1].value).abs() > 1e-9;
+            let moves = (0..keys.len().saturating_sub(1))
+                .filter(|&i| differ(i))
+                .map(|i| {
+                    let (mut lo, mut hi) = (i, i + 1);
+                    while lo > 0 && differ(lo - 1) {
+                        lo -= 1;
+                    }
+                    while hi + 1 < keys.len() && differ(hi) {
+                        hi += 1;
+                    }
+                    let times = keys[lo..=hi]
+                        .iter()
+                        .map(|k| k.time.to_string())
+                        .collect::<Vec<_>>()
+                        .join(" ");
+                    (keys[i].time, keys[i + 1].time, times)
+                })
                 .collect();
             Row::Lane {
                 item: item.id.clone(),
@@ -440,8 +456,16 @@ fn RowView(ui: Ui, row: Row, px: f64, width: f64) -> Element {
                         }
                     }
                     div { class: "track", style: "width:{width}px;",
-                        for (a , b) in moves {
-                            div { class: "tl-move", style: "left:{a * px}px;width:{(b - a) * px}px;" }
+                        for (a , b , times) in moves {
+                            div {
+                                class: "tl-move",
+                                style: "left:{a * px}px;width:{(b - a) * px}px;",
+                                title: "Drag to slide this tween",
+                                "data-item": "{item}",
+                                "data-lane": "{lane}",
+                                "data-start": "{a}",
+                                "data-keys": "{times}",
+                            }
                         }
                         for k in keys {
                             div {
@@ -906,6 +930,29 @@ pub fn on_event(ui: Ui, ev: &Value) {
                 keys.insert(0, first);
             }
             retime(ui, keys, delta, true);
+        }
+        // FRAME: a tween bar selects its keys, and dragging slides them.
+        Some("tween-down") | Some("tween-drag") => {
+            let (Some(item), Some(lane)) = (ev["item"].as_str(), ev["lane"].as_str()) else {
+                return;
+            };
+            let start = ev["primary"].as_f64().unwrap_or(0.0);
+            let mut keys: Vec<KeyRef> = ev["times"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .filter_map(Value::as_f64)
+                .map(|t| KeyRef::new(item, lane, t))
+                .collect();
+            if ev["action"].as_str() == Some("tween-down") {
+                sel.set(keys);
+                return;
+            }
+            if let Some(i) = keys.iter().position(|k| same_time(k.time, start)) {
+                let first = keys.remove(i);
+                keys.insert(0, first);
+            }
+            retime(ui, keys, ev["delta"].as_f64().unwrap_or(0.0), true);
         }
         Some("span-drag") => {
             let Some(item) = ev["item"].as_str() else {

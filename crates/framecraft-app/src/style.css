@@ -184,7 +184,11 @@ body.row-dragging, body.row-dragging * { cursor: grabbing !important; }
   transform: rotate(45deg); cursor: grab; border: 1px solid rgba(0,0,0,.35); z-index: 1;
 }
 .tl-key.selected { background: #fff; border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent); }
-.tl-move { position: absolute; top: 11px; height: 2px; background: rgba(245, 185, 66, .45); pointer-events: none; }
+/* A tween bar (FRAME): grab it to slide the tween's keys; a taller
+   invisible hit area around the thin line. */
+.tl-move { position: absolute; top: 10px; height: 4px; background: rgba(245, 185, 66, .45); border-radius: 2px; cursor: grab; }
+.tl-move::before { content: ""; position: absolute; left: 0; right: 0; top: -6px; bottom: -6px; }
+.tl-move:hover { background: rgba(245, 185, 66, .85); }
 .tl-span { position: absolute; top: 6px; height: 12px; background: rgba(255, 255, 255, .25); border: 1px solid rgba(255, 255, 255, .55); border-radius: 3px; cursor: grab; }
 .tl-cue { position: absolute; top: 6px; width: 12px; height: 12px; margin-left: -6px; transform: rotate(45deg); cursor: grab; border: 1px solid rgba(255,255,255,.6); z-index: 1; }
 .tl-cue.pause { background: #fbbf24; }
