@@ -9,6 +9,9 @@
 //! Run with an optional pack path: `cargo run -p framecraft-app -- my.frameproject.zip`
 //! `FRAMECRAFT_DEBUG=1` logs preview requests, edits and bridge activity.
 
+// Windows: a release build is a GUI program (no console window next to it).
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 mod bridge;
 mod components;
 mod export;
@@ -31,7 +34,7 @@ use dioxus::core::spawn_forever;
 use dioxus::desktop::{Config, LogicalSize, WindowBuilder, wry::http::Response};
 use dioxus::prelude::*;
 use outliner::Outliner;
-use preview::{HOST, SCHEME, STORE};
+use preview::{ORIGIN, SCHEME, STORE};
 use properties::Properties;
 use state::{Ui, debug};
 use std::path::PathBuf;
@@ -44,12 +47,21 @@ fn main() {
     let window = WindowBuilder::new()
         .with_title("FrameCraft")
         .with_inner_size(LogicalSize::new(1440.0, 900.0));
-    let config = Config::new()
-        .with_window(window)
-        .with_menu(None)
-        .with_custom_head(format!("<style>{STYLE}</style>"))
+    let config = Config::new().with_window(window);
+    // No menu bar for now, except on macOS: there copy, paste and Quit in
+    // text fields come from the app's Edit menu (Dioxus's default one).
+    let config = if cfg!(target_os = "macos") {
+        config
+    } else {
+        config.with_menu(None)
+    };
+    let config = config
+        .with_custom_head(format!(
+            "<style>{}</style>",
+            STYLE.replace("framecraft://preview", ORIGIN)
+        ))
         .with_custom_protocol(SCHEME, |_, request| {
-            let found = (request.uri().host() == Some(HOST))
+            let found = preview::is_preview_host(request.uri().host())
                 .then(|| STORE.with(|s| s.borrow().lookup(request.uri().path())))
                 .flatten();
             if debug() {

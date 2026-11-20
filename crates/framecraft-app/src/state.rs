@@ -301,7 +301,7 @@ impl Ui {
             .as_ref()
             .and_then(|e| e.project.folder.clone())
             .and_then(|f| f.parent().map(PathBuf::from))
-            .or_else(|| std::env::var_os("HOME").map(PathBuf::from))
+            .or_else(crate::project::home_dir)
             .unwrap_or_else(|| PathBuf::from("."));
         spawn_forever(async move {
             let ui = self;

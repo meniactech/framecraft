@@ -53,6 +53,15 @@ pub struct Project {
     pub palette_colors: Vec<String>,
 }
 
+/// The user's home folder (`HOME`, or `USERPROFILE` on Windows).
+pub fn home_dir() -> Option<PathBuf> {
+    ["HOME", "USERPROFILE"]
+        .iter()
+        .filter_map(std::env::var_os)
+        .find(|v| !v.is_empty())
+        .map(PathBuf::from)
+}
+
 /// FrameCraft's data folder (user palettes and libraries):
 /// `~/.local/share/framecraft` on Linux (or `$XDG_DATA_HOME/framecraft`),
 /// `%APPDATA%\FrameCraft` on Windows, `~/Library/Application Support/FrameCraft`
@@ -159,6 +168,8 @@ pub fn builtin_dirs() -> Vec<PathBuf> {
     {
         dirs.push(exe_dir.join("assets"));
         dirs.push(exe_dir.join("../share/framecraft/assets"));
+        // macOS app bundle: Contents/MacOS/framecraft, Contents/Resources/assets.
+        dirs.push(exe_dir.join("../Resources/assets"));
     }
     dirs.push(Path::new(env!("CARGO_MANIFEST_DIR")).join("../../assets"));
     if let Some(dir) = std::env::var_os("FRAMECRAFT_BUILTIN_DIR") {
@@ -315,7 +326,7 @@ impl Project {
             media: Vec::new(),
             thumbnail: None,
         };
-        let home = std::env::var_os("HOME").map_or_else(|| PathBuf::from("."), PathBuf::from);
+        let home = home_dir().unwrap_or_else(|| PathBuf::from("."));
         Self {
             path: home.join(format!("{name}.framecraft")),
             folder: None,
@@ -728,7 +739,7 @@ mod tests {
                 );
                 let mut files = crate::preview::PreviewFiles::default();
                 let url = files.publish(pkg);
-                let path = url.strip_prefix("framecraft://preview").unwrap();
+                let path = url.strip_prefix(crate::preview::ORIGIN).unwrap();
                 assert!(files.lookup(path).is_some(), "{url} not served");
                 assert!(
                     files

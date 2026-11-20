@@ -1,12 +1,16 @@
 # Pushing a version tag (v0.2.0, …) builds the installers and publishes
-# them as a GitHub release: Linux .deb and AppImage for now; Windows and
-# macOS follow. Before tagging: set the version in Cargo.toml and write
+# them as a GitHub release: Linux .deb and AppImage, a Windows zip and a
+# macOS app. Before tagging: set the version in Cargo.toml and write
 # docs/releases/<tag>.md (the release notes).
+#
+# "Run workflow" (Actions tab) builds the same packages without publishing
+# them; they are kept as the run's artifacts, for trying a build first.
 name: Release
 
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
 
 permissions:
   contents: write
@@ -15,9 +19,21 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  linux-deb:
-    # The oldest supported Ubuntu with WebKitGTK 4.1, so the package also
-    # installs on older systems.
+  version:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Version matches the tag, release notes exist
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
+          test "v$v" = "$GITHUB_REF_NAME" || { echo "Cargo.toml version $v does not match tag $GITHUB_REF_NAME"; exit 1; }
+          test -f "docs/releases/$GITHUB_REF_NAME.md" || { echo "docs/releases/$GITHUB_REF_NAME.md (release notes) is missing"; exit 1; }
+
+  linux:
+    needs: version
+    # The oldest supported Ubuntu with WebKitGTK 4.1, so the packages also
+    # run on older systems.
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -27,21 +43,62 @@ jobs:
           sudo apt-get install -y libwebkit2gtk-4.1-dev libgtk-3-dev libxdo-dev libsoup-3.0-dev libjavascriptcoregtk-4.1-dev
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
-      - name: Version matches the tag
-        run: |
-          v="$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -n1)"
-          test "v$v" = "$GITHUB_REF_NAME" || { echo "Cargo.toml version $v does not match tag $GITHUB_REF_NAME"; exit 1; }
       - name: Build .deb
         run: packaging/linux/build-deb.sh
       # Runs without installing; bundles WebKitGTK and GTK from this
       # Ubuntu 22.04 runner (downloads linuxdeploy and its GTK plugin).
       - name: Build AppImage
         run: packaging/linux/build-appimage.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux
+          path: |
+            target/dist/*.deb
+            target/dist/*.AppImage
+
+  windows:
+    needs: version
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build zip
+        shell: pwsh
+        run: packaging/windows/build-zip.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows
+          path: target/dist/*.zip
+
+  macos:
+    needs: version
+    runs-on: macos-14
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Build app
+        run: packaging/macos/build-app.sh
+      - uses: actions/upload-artifact@v4
+        with:
+          name: macos
+          path: target/dist/*.zip
+
+  # One job creates the release with every package, after all builds.
+  publish:
+    needs: [linux, windows, macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
       # Release notes: docs/releases/<tag>.md, then GitHub's commit list.
       - uses: softprops/action-gh-release@v2
         with:
-          files: |
-            target/dist/*.deb
-            target/dist/*.AppImage
+          files: dist/*
           body_path: docs/releases/${{ github.ref_name }}.md
           generate_release_notes: true

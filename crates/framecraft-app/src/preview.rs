@@ -18,6 +18,19 @@ use std::rc::Rc;
 pub const SCHEME: &str = "framecraft";
 /// Host part of preview URLs.
 pub const HOST: &str = "preview";
+/// Where preview URLs start. WebView2 (Windows) does not take custom
+/// schemes: wry serves them as `http://<scheme>.<host>/` there.
+pub const ORIGIN: &str = if cfg!(windows) {
+    "http://framecraft.preview"
+} else {
+    "framecraft://preview"
+};
+
+/// Whether a request's host is the preview's (`preview`, or
+/// `framecraft.preview` on Windows).
+pub fn is_preview_host(host: Option<&str>) -> bool {
+    matches!(host, Some(h) if h == HOST || h == "framecraft.preview")
+}
 
 /// The latest packages by revision. Two are kept: while a rebuilt preview
 /// loads in the hidden frame, the visible one may still request files.
@@ -41,7 +54,7 @@ pub fn library_url(url: &str) -> String {
     }
     let path = url.split(['?', '#']).next().unwrap_or("");
     format!(
-        "{SCHEME}://{HOST}/library/{}",
+        "{ORIGIN}/library/{}",
         percent_encode_path(path.trim_start_matches('/'))
     )
 }
@@ -69,11 +82,7 @@ impl PreviewFiles {
         if self.packages.len() > 2 {
             self.packages.remove(0);
         }
-        format!(
-            "{SCHEME}://{HOST}/{}/{}",
-            self.revision,
-            percent_encode_path(&entry)
-        )
+        format!("{ORIGIN}/{}/{}", self.revision, percent_encode_path(&entry))
     }
 
     /// Replaces the media the library serves.
@@ -209,8 +218,8 @@ mod tests {
         let mut files = PreviewFiles::default();
         files.set_library([("/media/images/a b.png".to_string(), vec![7])], Vec::new());
         let url = library_url("/media/images/a b.png?v=1");
-        assert_eq!(url, "framecraft://preview/library/media/images/a%20b.png");
-        let path = url.trim_start_matches("framecraft://preview");
+        assert_eq!(url, format!("{ORIGIN}/library/media/images/a%20b.png"));
+        let path = url.trim_start_matches(ORIGIN);
         assert_eq!(files.lookup(path), Some((vec![7], "image/png")));
         assert_eq!(files.lookup("/library/../etc/passwd"), None);
     }
