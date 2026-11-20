@@ -1424,7 +1424,6 @@ dependencies = [
  "rfd",
  "serde_json",
  "tokio",
- "webkit2gtk",
 ]
 
 [[package]]

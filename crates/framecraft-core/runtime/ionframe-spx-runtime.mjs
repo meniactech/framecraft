@@ -2793,9 +2793,6 @@ export function initIonFrameSpx(data) {
     const url = row && typeof row.spriteUrl === 'string' ? row.spriteUrl.trim() : '';
     if (!url || !row.id) continue;
     const img = new Image();
-    // FrameCraft's preview: load sprites with CORS so the canvas stays
-    // readable (renders and snapshots); exports opened from disk keep FRAME's way.
-    if (location.protocol === 'framecraft:' || location.host === 'framecraft.preview') img.crossOrigin = 'anonymous';
     img.onload = () => {
       particleSprites[row.id] = img;
     };
