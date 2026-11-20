@@ -355,6 +355,7 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
         .as_ref()
         .is_some_and(|e| e.doc().scene.ionboard_hook_enabled == Some(true));
     let help = schema::help(prop.path, board_hook).unwrap_or("");
+    let mut confirm_remove = use_signal(|| false);
     let default = if field.modifier.is_some() {
         modifiers::field_default(prop.group, prop.path)
     } else {
@@ -557,24 +558,65 @@ fn FieldRow(ui: Ui, field: Field, item: Option<String>) -> Element {
                 .or_else(|| field.value.as_bool().map(|b| f64::from(u8::from(b))))
                 .or(default)
                 .unwrap_or(0.0);
+            // The channel's keys, for removing the whole channel.
+            let times: Vec<f64> = ui
+                .editor
+                .read()
+                .as_ref()
+                .and_then(|e| framecraft_core::timeline::lane_keys(e.doc(), &id, lane))
+                .map(|k| k.iter().map(|k| k.time).collect())
+                .unwrap_or_default();
+            let n = times.len();
+            let id2 = id.clone();
             rsx! {
-                button {
-                    class: if animated { "key-button animated" } else { "key-button" },
-                    title: if animated {
-                        "Animated. Click to set a keyframe at the playhead. With Auto-key off, editing shifts the whole animation."
-                    } else {
-                        "Click to animate: sets the first keyframe at the playhead."
-                    },
-                    onclick: move |_| {
-                        ui.execute(&SetKeyframe {
-                            item: id.clone(),
-                            lane: lane.to_string(),
-                            time_ms: (ui.time)(),
-                            value,
-                            easing: None,
-                        });
-                    },
-                    if animated { "◆" } else { "◇" }
+                span { class: "key-tools", onmouseleave: move |_| confirm_remove.set(false),
+                    button {
+                        class: if animated { "key-button animated" } else { "key-button" },
+                        title: if animated {
+                            "Animated. Click to set a keyframe at the playhead. With Auto-key off, editing shifts the whole animation."
+                        } else {
+                            "Click to animate: sets the first keyframe at the playhead."
+                        },
+                        onclick: move |evt| {
+                            evt.prevent_default();
+                            ui.execute(&SetKeyframe {
+                                item: id.clone(),
+                                lane: lane.to_string(),
+                                time_ms: (ui.time)(),
+                                value,
+                                easing: None,
+                            });
+                        },
+                        if animated { "◆" } else { "◇" }
+                    }
+                    if animated && n > 0 {
+                        if confirm_remove() {
+                            button {
+                                class: "danger key-remove-confirm",
+                                title: "Remove this animation channel: its {n} key(s) go and the value at the playhead stays",
+                                onclick: move |evt| {
+                                    evt.prevent_default();
+                                    confirm_remove.set(false);
+                                    let keys = times
+                                        .iter()
+                                        .map(|t| framecraft_core::keys::KeyRef::new(&id2, lane, *t))
+                                        .collect();
+                                    ui.execute(&framecraft_core::keys::RemoveKeys { keys });
+                                },
+                                "Delete {n}?"
+                            }
+                        } else {
+                            button {
+                                class: "key-button key-remove",
+                                title: "Remove this animation channel ({n} key(s))",
+                                onclick: move |evt| {
+                                    evt.prevent_default();
+                                    confirm_remove.set(true);
+                                },
+                                "✕"
+                            }
+                        }
+                    }
                 }
             }
         }
