@@ -148,7 +148,7 @@ impl Command for SetNumber {
         set_number(item_mut(doc, &self.item)?, &self.field, self.value)?;
         // The pivot is the layer's CSS transform-origin, not an animated
         // value: the layer itself has to be redrawn.
-        if matches!(self.field.as_str(), "pivotX" | "pivotY") {
+        if matches!(self.field.as_str(), "pivotX" | "pivotY" | "borderWidth") {
             return Ok(Change::Layer(vec![self.item.clone()]));
         }
         Ok(Change::Pose)

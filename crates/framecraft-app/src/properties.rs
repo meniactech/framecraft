@@ -326,7 +326,13 @@ pub fn Properties(ui: Ui) -> Element {
                 if tab == Tab::Scene && f.prop.path == "width" {
                     ResolutionPreset { ui }
                 }
-                FieldRow { ui, field: f.clone(), item: id.clone() }
+                if f.prop.path == "borderWidthMode" {
+                    if let Some(item) = id.clone() {
+                        BorderMode { ui, item }
+                    }
+                } else {
+                    FieldRow { ui, field: f.clone(), item: id.clone() }
+                }
             }
             if tab == Tab::Scene && ui.editor.read().is_some() {
                 Plates { ui }
@@ -2539,6 +2545,64 @@ fn GradientCenter(value: Value, item: Value, set: Callback<Value>) -> Element {
                     }
                 }
             }
+        }
+    }
+}
+
+/// FRAME's Border Mode: Single, or 4-sided (top, right, bottom, left).
+/// Switching copies the widths over (single → all four sides; sides → the
+/// top one), as one undo step.
+#[component]
+fn BorderMode(ui: Ui, item: String) -> Element {
+    use framecraft_core::commands::{Batch, Command, FieldTarget, SetField, Update};
+    let Some((sides, width, widths)) = ui.editor.read().as_ref().and_then(|e| {
+        let i = e.doc().items.iter().find(|i| i.id == item)?;
+        Some((
+            i.border_width_mode.as_deref() == Some("sides"),
+            i.border_width,
+            i.border_widths,
+        ))
+    }) else {
+        return rsx! {};
+    };
+    let id = item.clone();
+    rsx! {
+        label { class: "field",
+            span { class: "field-label", title: "Single: one width for every side (animatable). 4-sided: top, right, bottom and left apart.", "Mode" }
+            select {
+                onchange: move |evt| {
+                    let to_sides = evt.value() == "sides";
+                    if to_sides == sides {
+                        return;
+                    }
+                    let set = |path: &str, value: Value| -> Box<dyn Command> {
+                        Box::new(SetField {
+                            target: FieldTarget::Item(id.clone()),
+                            path: path.into(),
+                            value,
+                            update: Update::Layer,
+                        })
+                    };
+                    let commands = if to_sides {
+                        vec![
+                            set("borderWidths", json!(widths.unwrap_or([width; 4]))),
+                            set("borderWidthMode", json!("sides")),
+                        ]
+                    } else {
+                        vec![
+                            set("borderWidth", json!(widths.map_or(width, |w| w[0]))),
+                            set("borderWidthMode", json!("single")),
+                        ]
+                    };
+                    ui.execute(&Batch {
+                        label: if to_sides { "4-sided border".into() } else { "Single border".into() },
+                        commands,
+                    });
+                },
+                option { value: "single", selected: !sides, "Single" }
+                option { value: "sides", selected: sides, "4-sided" }
+            }
+            span {}
         }
     }
 }

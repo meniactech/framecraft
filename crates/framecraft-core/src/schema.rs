@@ -735,8 +735,58 @@ pub const PROPERTIES: &[Property] = &[
     p!(
         Look,
         "Border",
+        "borderWidthMode",
+        "Mode",
+        Kind::Choice(&[("single", "Single"), ("sides", "4-sided")]),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Border",
         "borderWidth",
         "Width",
+        num(0.0, 1000.0, 1.0),
+        Item,
+        Some("borderWidth"),
+        Layer
+    ),
+    p!(
+        Look,
+        "Border",
+        "borderWidths.0",
+        "Top",
+        num(0.0, 1000.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Border",
+        "borderWidths.1",
+        "Right",
+        num(0.0, 1000.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Border",
+        "borderWidths.2",
+        "Bottom",
+        num(0.0, 1000.0, 1.0),
+        Item,
+        None,
+        Layer
+    ),
+    p!(
+        Look,
+        "Border",
+        "borderWidths.3",
+        "Left",
         num(0.0, 1000.0, 1.0),
         Item,
         None,
@@ -2025,6 +2075,14 @@ impl Property {
         }
         let shape = item.shape_type;
         match self.path {
+            // FRAME: polygons and paths have their own stroke, no 4-sided mode.
+            "borderWidthMode" => !matches!(shape, Some(ShapeType::Polygon | ShapeType::Path)),
+            // In 4-sided mode the sides are the width.
+            "borderWidth" => item.border_width_mode.as_deref() != Some("sides"),
+            p if p.starts_with("borderWidths.") => {
+                item.border_width_mode.as_deref() == Some("sides")
+                    && !matches!(shape, Some(ShapeType::Polygon | ShapeType::Path))
+            }
             p if p.starts_with("borderRadius") => {
                 is_filled(item)
                     && !matches!(
@@ -2268,6 +2326,10 @@ mod tests {
         box_particles.particle_emitter_shape = Some("box".into());
         box_particles.particle_color_mode = Some("paletteCycle".into());
         d.items.push(box_particles);
+        let mut sided = new_layer(NewLayer::Box, None);
+        sided.border_width_mode = Some("sides".into());
+        sided.border_widths = Some([1.0, 2.0, 3.0, 4.0]);
+        d.items.push(sided);
         for kind in ["stripes", "dots", "grid"] {
             let mut pattern = new_layer(NewLayer::Pattern, None);
             pattern.pattern_kind = Some(kind.into());
